@@ -6,16 +6,31 @@
 class Features
 {
 public:
+	static constexpr auto kAimbotInterval = chrono::milliseconds(2);
+	static constexpr auto kTriggerInterval = chrono::milliseconds(2);
 
-	void InitAimbot()
+	void InitAimbotThread()
 	{
-		thread([&]()
+		thread([this]()
 		{
 			while (Globals::Running)
 			{
-				this_thread::sleep_for(chrono::milliseconds(1));
+				this_thread::sleep_for(kAimbotInterval);
 
-				aim.Update();
+				aim.UpdateAimbot();
+			}
+		}).detach();
+	}
+
+	void InitTriggerbotThread()
+	{
+		thread([this]()
+		{
+			while (Globals::Running)
+			{
+				this_thread::sleep_for(kTriggerInterval);
+
+				aim.UpdateTriggerbot();
 			}
 		}).detach();
 	}
@@ -28,7 +43,8 @@ public:
 
 	bool Init()
 	{
-		//InitAimbot();
+		InitAimbotThread();
+		InitTriggerbotThread();
 
 		return true;
 	}

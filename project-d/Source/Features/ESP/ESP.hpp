@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <array>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -73,6 +74,21 @@ struct C4Snapshot
     bool OnScreen = false;
 };
 
+struct TriggerBoneSnapshot
+{
+    uint64_t Pawn = 0;
+    int Team = 0;
+    int Health = 0;
+    int LifeState = 0;
+    bool IsVisible = false;
+    ImVec2 BoxMin{};
+    ImVec2 BoxMax{};
+
+    static constexpr std::size_t BoneCount = 17;
+    std::array<BonePoint, BoneCount> Bones{};
+    std::array<bool, BoneCount> BoneValid{};
+};
+
 class ESP
 {
 private:
@@ -116,6 +132,7 @@ private:
     void RenderWatermark(ImDrawList* drawList) const;
     void RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, ImU32 color) const;
+    void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
 
     void EnsureSamplerStarted();
@@ -170,6 +187,10 @@ private:
     std::chrono::steady_clock::time_point m_LastFreezeEndTick{};
 
 public:
+    bool IsPawnVisibleCached(uint64_t pawn) const;
+    std::unordered_set<uint64_t> GetVisiblePawnSetSnapshot() const;
+    std::vector<TriggerBoneSnapshot> GetTriggerBoneSnapshots() const;
+
     void Update(ImDrawList* drawList)
     {
         TIMER("ESP render");

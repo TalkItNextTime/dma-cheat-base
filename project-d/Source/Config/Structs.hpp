@@ -1,75 +1,302 @@
 #pragma once
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+#include "imgui/imgui.h"
 
 namespace Structs
 {
+    enum AimWeaponGroup : int
+    {
+        AimWeapon_Pistol = 0,
+        AimWeapon_Smg,
+        AimWeapon_Shotgun,
+        AimWeapon_Rifle,
+        AimWeapon_Sniper,
+        AimWeapon_Lmg,
+        AimWeapon_Count
+    };
+
+    inline constexpr std::array<const char*, AimWeapon_Count> AimWeaponGroupNames = {
+        "Pistol",
+        "SMG",
+        "Shotgun",
+        "Rifle",
+        "Sniper",
+        "LMG"
+    };
+
+    enum AimTargetStrategy : int
+    {
+        AimStrategy_Crosshair = 0,
+        AimStrategy_Distance,
+        AimStrategy_Hybrid
+    };
+
+    inline constexpr std::array<const char*, 3> AimTargetStrategyNames = {
+        "Crosshair Closest",
+        "Distance Closest",
+        "Hybrid"
+    };
+
+    enum AimHitGroupBit : std::uint32_t
+    {
+        AimHit_Head = 1u << 0,
+        AimHit_UpperChest = 1u << 1,
+        AimHit_Torso = 1u << 2,
+        AimHit_Pelvis = 1u << 3,
+        AimHit_Arms = 1u << 4,
+        AimHit_Legs = 1u << 5
+    };
+
+    inline constexpr std::array<const char*, 6> AimHitGroupNames = {
+        "Head",
+        "Upper Chest",
+        "Torso",
+        "Pelvis",
+        "Arms",
+        "Legs"
+    };
+
+    inline constexpr std::array<int, 17> AimBoneIds = {
+        0, 2, 4, 5, 6,
+        8, 9, 10,
+        13, 14, 15,
+        22, 23, 24,
+        25, 26, 27
+    };
+
+    inline constexpr std::array<const char*, 17> AimBoneNames = {
+        "Pelvis",
+        "Spine",
+        "Chest",
+        "Neck",
+        "Head",
+        "L Shoulder",
+        "L Elbow",
+        "L Hand",
+        "R Shoulder",
+        "R Elbow",
+        "R Hand",
+        "L Thigh",
+        "L Knee",
+        "L Foot",
+        "R Thigh",
+        "R Knee",
+        "R Foot"
+    };
+
+    inline constexpr int AimHeadBoneId = 6;
+    inline constexpr std::uint64_t AimAllBoneMask = (1ull << AimBoneIds.size()) - 1ull;
+    inline constexpr std::uint64_t AimDefaultAimbotBoneMask =
+        (1ull << 1) | // Spine
+        (1ull << 2) | // Chest
+        (1ull << 3) | // Neck
+        (1ull << 4);  // Head
+
+    inline constexpr int BoneSlotFromId(const int boneId)
+    {
+        for (size_t i = 0; i < AimBoneIds.size(); ++i)
+        {
+            if (AimBoneIds[i] == boneId)
+                return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    inline constexpr std::uint64_t BoneMaskFromBoneId(const int boneId)
+    {
+        const int slot = BoneSlotFromId(boneId);
+        if (slot < 0)
+            return 0ull;
+        return 1ull << static_cast<std::uint64_t>(slot);
+    }
+
+    enum TriggerDetectMode : int
+    {
+        TriggerDetect_BoneHitbox = 0,
+        TriggerDetect_CrosshairEntity
+    };
+
+    inline constexpr std::array<const char*, 2> TriggerDetectModeNames = {
+        "Bone Hitbox",
+        "Crosshair Entity"
+    };
+
+    enum TriggerSpecialWeapon : int
+    {
+        TriggerSpecial_Deagle = 0,
+        TriggerSpecial_Revolver,
+        TriggerSpecial_Count
+    };
+
+    inline constexpr std::array<const char*, TriggerSpecial_Count> TriggerSpecialWeaponNames = {
+        "Desert Eagle",
+        "R8 Revolver"
+    };
+
+    struct AimWeaponProfile
+    {
+        float Fov = 6.5f;
+        float Smooth = 16.0f;
+        float CurveStrength = 0.22f;
+
+        bool DynamicFov = true;
+        float DynamicFovDistanceScale = 1500.0f;
+        int TargetStrategy = AimStrategy_Crosshair;
+        int TargetSwitchDelayMs = 120;
+    };
+
+    struct TriggerWeaponProfile
+    {
+        float HitboxRadiusPx = 4.5f;
+        int PreFireDelayMs = 35;
+        int PostFireIntervalMs = 55;
+        int TimeoutForceFireMs = 0;
+        std::uint64_t BoneMask = AimAllBoneMask;
+    };
+
+    struct TriggerSpecialProfile
+    {
+        float HitboxRadiusPx = 4.5f;
+        int PreFireDelayMs = 35;
+        int PostFireIntervalMs = 425;
+        int TimeoutForceFireMs = 0;
+        int HoldFireMs = 8;
+        std::uint64_t BoneMask = AimAllBoneMask;
+    };
+
     struct KmboxConfig 
     {
-        bool Enabled;
-        std::string Ip;
-        unsigned short Port;
-        std::string Uuid;
+        bool Enabled = false;
+        std::string Ip{};
+        unsigned short Port = 0;
+        std::string Uuid{};
     };
 
     struct AimConfig 
     {
-        bool Trigger;
-        int TriggerKey;
-        int TriggerKeyMode;
-        int TriggerDelay;
+        bool Trigger = false;
+        int TriggerKey = 0;
+        int TriggerKeyMode = 1;
+        int TriggerDelay = 0;
+        bool TriggerSecondKeyEnabled = false;
+        int TriggerSecondKey = 0;
+        int TriggerSecondKeyMode = 1;
+        int TriggerMinIntervalMs = 35;
+        int TriggerDetectMode = TriggerDetect_BoneHitbox;
+        float TriggerUnifiedHitboxRadiusPx = 4.5f;
+        float TriggerHitboxScale = 1.0f;
+        float TriggerHitboxAddPx = 0.0f;
+        float TriggerHeadRadiusPx = 9.0f;
+        float TriggerHeadScale = 1.15f;
+        float TriggerTorsoScale = 1.20f;
+        float TriggerArmsScale = 0.90f;
+        float TriggerLegsScale = 1.00f;
+        bool TriggerHeadSphereDebug = true;
+        std::uint64_t TriggerBoneMask = AimAllBoneMask;
+        std::uint32_t TriggerHitGroupMask =
+            AimHit_Head |
+            AimHit_UpperChest |
+            AimHit_Torso |
+            AimHit_Pelvis |
+            AimHit_Arms |
+            AimHit_Legs;
 
-        bool Aimbot;
+        bool TriggerHitboxDebug = false;
+        ImVec4 TriggerHitboxDebugColor = ImVec4(1.0f, 0.55f, 0.2f, 0.9f);
+        ImVec4 TriggerHitboxDebugActiveColor = ImVec4(0.2f, 1.0f, 0.35f, 0.95f);
+        float TriggerHitboxDebugThickness = 1.0f;
 
-        bool DrawFov;
-        ImVec4 AimbotFovColor;
+        bool BlockTriggerWhenFlashed = false;
+        bool BlockAimbotWhenFlashed = false;
 
-        bool AimFriendly;
-        bool AimVisible;
+        bool Aimbot = false;
 
-        int AimbotKey;
-        int AimbotKeyMode;
-        float AimbotFov;
-        float AimbotSmooth;
+        bool DrawFov = false;
+        ImVec4 AimbotFovColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        bool DynamicFov = true;
+        float DynamicFovMinPx = 8.0f;
+
+        bool AimFriendly = false;
+        bool AimVisible = false;
+
+        int AimbotKey = 0;
+        int AimbotKeyMode = 1;
+        bool AimbotSecondKeyEnabled = false;
+        int AimbotSecondKey = 0;
+        int AimbotSecondKeyMode = 1;
+        std::uint64_t AimbotBoneMask = AimDefaultAimbotBoneMask;
+        std::uint32_t AimbotHitGroupMask = AimHit_Head | AimHit_UpperChest | AimHit_Torso;
+
+        float DeadzonePx = 1.2f;
+
+        bool GlobalRcsEnabled = false;
+        float GlobalRcsPitch = 1.6f;
+        float GlobalRcsYaw = 1.6f;
+
+        bool AimbotRcsEnabled = true;
+        float AimbotRcsPitch = 1.75f;
+        float AimbotRcsYaw = 1.75f;
+
+        bool FuseGlobalRcsWithAimbot = true;
+
+        // Legacy values remain for backward compatibility with old configs.
+        float AimbotFov = 6.5f;
+        float AimbotSmooth = 16.0f;
+
+        std::array<AimWeaponProfile, AimWeapon_Count> WeaponProfiles{};
+        int WeaponProfileEditorIndex = 0;
+
+        std::array<TriggerWeaponProfile, AimWeapon_Count> TriggerProfiles{};
+        int TriggerProfileEditorIndex = 0;
+
+        std::array<TriggerSpecialProfile, TriggerSpecial_Count> TriggerSpecialProfiles{};
+        int TriggerSpecialEditorIndex = 0;
     };
 
     struct VisualsConfig 
     {
-        bool Enabled;
-        bool VSync;
-        bool TeamCheck;
-        bool VisibleCheck;
+        bool Enabled = false;
+        bool VSync = false;
+        bool TeamCheck = false;
+        bool VisibleCheck = false;
 
-        bool Background;
+        bool Background = false;
 
-        bool Hitmarker;
-        ImVec4 HitmarkerColor;
+        bool Hitmarker = false;
+        ImVec4 HitmarkerColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        bool Watermark;
-        ImVec4 WatermarkColor;
+        bool Watermark = false;
+        ImVec4 WatermarkColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        bool Name;
-        ImVec4 NameColor;
+        bool Name = false;
+        ImVec4 NameColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        bool Box;
-        ImVec4 BoxColor;
-        ImVec4 BoxColorVisible;
+        bool Box = false;
+        ImVec4 BoxColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ImVec4 BoxColorVisible = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        bool Health;
-        bool Armor;
-        ImVec4 ArmorColor;
-        bool Money;
-        ImVec4 MoneyColor;
+        bool Health = false;
+        bool Armor = true;
+        ImVec4 ArmorColor = ImVec4(0.65f, 0.85f, 1.0f, 1.0f);
+        bool Money = true;
+        ImVec4 MoneyColor = ImVec4(0.65f, 1.0f, 0.65f, 1.0f);
 
-        bool Weapon;
-        ImVec4 WeaponColor;
+        bool Weapon = false;
+        ImVec4 WeaponColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        bool Bones;
-        ImVec4 BonesColor;
+        bool Bones = false;
+        ImVec4 BonesColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        ImVec4 BonesColorVisible = ImVec4(0.45f, 1.0f, 0.55f, 1.0f);
 
-        bool C4;
-        ImVec4 C4Color;
+        bool C4 = true;
+        ImVec4 C4Color = ImVec4(1.0f, 0.55f, 0.35f, 1.0f);
         float C4PanelPosX = 0.02f;
         float C4PanelPosY = 0.06f;
-        bool Defuser;
-        ImVec4 DefuserColor;
+        bool Defuser = true;
+        ImVec4 DefuserColor = ImVec4(1.0f, 0.82f, 0.2f, 1.0f);
     };
 }

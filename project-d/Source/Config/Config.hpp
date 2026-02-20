@@ -52,19 +52,113 @@ namespace Config
             j["Aim"]["TriggerKey"] = Aim.TriggerKey;
             j["Aim"]["TriggerKeyMode"] = Aim.TriggerKeyMode;
             j["Aim"]["TriggerDelay"] = Aim.TriggerDelay;
+            j["Aim"]["TriggerSecondKeyEnabled"] = Aim.TriggerSecondKeyEnabled;
+            j["Aim"]["TriggerSecondKey"] = Aim.TriggerSecondKey;
+            j["Aim"]["TriggerSecondKeyMode"] = Aim.TriggerSecondKeyMode;
+            j["Aim"]["TriggerMinIntervalMs"] = Aim.TriggerMinIntervalMs;
+            j["Aim"]["TriggerDetectMode"] = Aim.TriggerDetectMode;
+            j["Aim"]["TriggerUnifiedHitboxRadiusPx"] = Aim.TriggerUnifiedHitboxRadiusPx;
+            j["Aim"]["TriggerHitboxScale"] = Aim.TriggerHitboxScale;
+            j["Aim"]["TriggerHitboxAddPx"] = Aim.TriggerHitboxAddPx;
+            j["Aim"]["TriggerHeadRadiusPx"] = Aim.TriggerHeadRadiusPx;
+            j["Aim"]["TriggerHeadScale"] = Aim.TriggerHeadScale;
+            j["Aim"]["TriggerTorsoScale"] = Aim.TriggerTorsoScale;
+            j["Aim"]["TriggerArmsScale"] = Aim.TriggerArmsScale;
+            j["Aim"]["TriggerLegsScale"] = Aim.TriggerLegsScale;
+            j["Aim"]["TriggerHeadSphereDebug"] = Aim.TriggerHeadSphereDebug;
+            j["Aim"]["TriggerBoneMask"] = Aim.TriggerBoneMask;
+            j["Aim"]["TriggerHitGroupMask"] = Aim.TriggerHitGroupMask;
+            j["Aim"]["TriggerHitboxDebug"] = Aim.TriggerHitboxDebug;
+            j["Aim"]["TriggerHitboxDebugColor"] = { Aim.TriggerHitboxDebugColor.x, Aim.TriggerHitboxDebugColor.y, Aim.TriggerHitboxDebugColor.z, Aim.TriggerHitboxDebugColor.w };
+            j["Aim"]["TriggerHitboxDebugActiveColor"] = { Aim.TriggerHitboxDebugActiveColor.x, Aim.TriggerHitboxDebugActiveColor.y, Aim.TriggerHitboxDebugActiveColor.z, Aim.TriggerHitboxDebugActiveColor.w };
+            j["Aim"]["TriggerHitboxDebugThickness"] = Aim.TriggerHitboxDebugThickness;
+            j["Aim"]["BlockTriggerWhenFlashed"] = Aim.BlockTriggerWhenFlashed;
+            j["Aim"]["BlockAimbotWhenFlashed"] = Aim.BlockAimbotWhenFlashed;
 
             j["Aim"]["Aimbot"] = Aim.Aimbot;
 
             j["Aim"]["DrawFov"] = Aim.DrawFov;
             j["Aim"]["AimbotFovColor"] = { Aim.AimbotFovColor.x, Aim.AimbotFovColor.y, Aim.AimbotFovColor.z, Aim.AimbotFovColor.w };
+            j["Aim"]["DynamicFov"] = Aim.DynamicFov;
+            j["Aim"]["DynamicFovMinPx"] = Aim.DynamicFovMinPx;
 
             j["Aim"]["AimFriendly"] = Aim.AimFriendly;
             j["Aim"]["AimVisible"] = Aim.AimVisible;
 
             j["Aim"]["AimbotKey"] = Aim.AimbotKey;
             j["Aim"]["AimbotKeyMode"] = Aim.AimbotKeyMode;
+            j["Aim"]["AimbotSecondKeyEnabled"] = Aim.AimbotSecondKeyEnabled;
+            j["Aim"]["AimbotSecondKey"] = Aim.AimbotSecondKey;
+            j["Aim"]["AimbotSecondKeyMode"] = Aim.AimbotSecondKeyMode;
+            j["Aim"]["AimbotBoneMask"] = Aim.AimbotBoneMask;
+            j["Aim"]["AimbotHitGroupMask"] = Aim.AimbotHitGroupMask;
+
+            j["Aim"]["DeadzonePx"] = Aim.DeadzonePx;
+
+            j["Aim"]["GlobalRcsEnabled"] = Aim.GlobalRcsEnabled;
+            j["Aim"]["GlobalRcsPitch"] = Aim.GlobalRcsPitch;
+            j["Aim"]["GlobalRcsYaw"] = Aim.GlobalRcsYaw;
+
+            j["Aim"]["AimbotRcsEnabled"] = Aim.AimbotRcsEnabled;
+            j["Aim"]["AimbotRcsPitch"] = Aim.AimbotRcsPitch;
+            j["Aim"]["AimbotRcsYaw"] = Aim.AimbotRcsYaw;
+            j["Aim"]["FuseGlobalRcsWithAimbot"] = Aim.FuseGlobalRcsWithAimbot;
+
             j["Aim"]["AimbotFov"] = Aim.AimbotFov;
             j["Aim"]["AimbotSmooth"] = Aim.AimbotSmooth;
+            j["Aim"]["WeaponProfileEditorIndex"] = Aim.WeaponProfileEditorIndex;
+            j["Aim"]["TriggerProfileEditorIndex"] = Aim.TriggerProfileEditorIndex;
+            j["Aim"]["TriggerSpecialEditorIndex"] = Aim.TriggerSpecialEditorIndex;
+
+            auto writeWeaponProfile = [&](const char* name, const Structs::AimWeaponProfile& profile)
+            {
+                nlohmann::json& out = j["Aim"]["WeaponProfiles"][name];
+                out["Fov"] = profile.Fov;
+                out["Smooth"] = profile.Smooth;
+                out["CurveStrength"] = profile.CurveStrength;
+                out["DynamicFov"] = profile.DynamicFov;
+                out["DynamicFovDistanceScale"] = profile.DynamicFovDistanceScale;
+                out["TargetStrategy"] = profile.TargetStrategy;
+                out["TargetSwitchDelayMs"] = profile.TargetSwitchDelayMs;
+            };
+
+            writeWeaponProfile("Pistol", Aim.WeaponProfiles[Structs::AimWeapon_Pistol]);
+            writeWeaponProfile("Smg", Aim.WeaponProfiles[Structs::AimWeapon_Smg]);
+            writeWeaponProfile("Shotgun", Aim.WeaponProfiles[Structs::AimWeapon_Shotgun]);
+            writeWeaponProfile("Rifle", Aim.WeaponProfiles[Structs::AimWeapon_Rifle]);
+            writeWeaponProfile("Sniper", Aim.WeaponProfiles[Structs::AimWeapon_Sniper]);
+            writeWeaponProfile("Lmg", Aim.WeaponProfiles[Structs::AimWeapon_Lmg]);
+
+            auto writeTriggerProfile = [&](const char* name, const Structs::TriggerWeaponProfile& profile)
+            {
+                nlohmann::json& out = j["Aim"]["TriggerProfiles"][name];
+                out["HitboxRadiusPx"] = profile.HitboxRadiusPx;
+                out["PreFireDelayMs"] = profile.PreFireDelayMs;
+                out["PostFireIntervalMs"] = profile.PostFireIntervalMs;
+                out["TimeoutForceFireMs"] = profile.TimeoutForceFireMs;
+                out["BoneMask"] = profile.BoneMask;
+            };
+
+            writeTriggerProfile("Pistol", Aim.TriggerProfiles[Structs::AimWeapon_Pistol]);
+            writeTriggerProfile("Smg", Aim.TriggerProfiles[Structs::AimWeapon_Smg]);
+            writeTriggerProfile("Shotgun", Aim.TriggerProfiles[Structs::AimWeapon_Shotgun]);
+            writeTriggerProfile("Rifle", Aim.TriggerProfiles[Structs::AimWeapon_Rifle]);
+            writeTriggerProfile("Sniper", Aim.TriggerProfiles[Structs::AimWeapon_Sniper]);
+            writeTriggerProfile("Lmg", Aim.TriggerProfiles[Structs::AimWeapon_Lmg]);
+
+            auto writeTriggerSpecial = [&](const char* name, const Structs::TriggerSpecialProfile& profile)
+            {
+                nlohmann::json& out = j["Aim"]["TriggerSpecialProfiles"][name];
+                out["HitboxRadiusPx"] = profile.HitboxRadiusPx;
+                out["PreFireDelayMs"] = profile.PreFireDelayMs;
+                out["PostFireIntervalMs"] = profile.PostFireIntervalMs;
+                out["TimeoutForceFireMs"] = profile.TimeoutForceFireMs;
+                out["HoldFireMs"] = profile.HoldFireMs;
+                out["BoneMask"] = profile.BoneMask;
+            };
+
+            writeTriggerSpecial("DesertEagle", Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Deagle]);
+            writeTriggerSpecial("R8Revolver", Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Revolver]);
 
             j["Kmbox"]["Enabled"] = Kmbox.Enabled;
             j["Kmbox"]["Ip"] = Kmbox.Ip;
@@ -95,6 +189,7 @@ namespace Config
             j["Visuals"]["WeaponColor"] = { Visuals.WeaponColor.x, Visuals.WeaponColor.y, Visuals.WeaponColor.z, Visuals.WeaponColor.w };
             j["Visuals"]["Bones"] = Visuals.Bones;
             j["Visuals"]["BonesColor"] = { Visuals.BonesColor.x, Visuals.BonesColor.y, Visuals.BonesColor.z, Visuals.BonesColor.w };
+            j["Visuals"]["BonesColorVisible"] = { Visuals.BonesColorVisible.x, Visuals.BonesColorVisible.y, Visuals.BonesColorVisible.z, Visuals.BonesColorVisible.w };
             j["Visuals"]["C4"] = Visuals.C4;
             j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
             j["Visuals"]["C4PanelPosX"] = Visuals.C4PanelPosX;
@@ -165,6 +260,7 @@ namespace Config
                 LoadConfigSection(j, "Aim", Aim);
                 LoadConfigSection(j, "Kmbox", Kmbox);
                 LoadConfigSection(j, "Visuals", Visuals);
+                LoadWeaponProfiles(j);
 
                 LOG_INFO("Loaded config from file: {}", filename);
                 return true;
@@ -192,6 +288,7 @@ namespace Config
                             LoadConfigSection(j, "Aim", Aim);
                             LoadConfigSection(j, "Kmbox", Kmbox);
                             LoadConfigSection(j, "Visuals", Visuals);
+                            LoadWeaponProfiles(j);
                             LOG_INFO("Loaded config from clipboard");
                             GlobalUnlock(clipboardData);
                             CloseClipboard();
@@ -242,21 +339,123 @@ namespace Config
 
                 j["Aim"]["Trigger"] = false;
                 j["Aim"]["TriggerKey"] = 0;
-                j["Aim"]["TriggerKeyMode"] = 0;
+                j["Aim"]["TriggerKeyMode"] = 1;
                 j["Aim"]["TriggerDelay"] = 0;
+                j["Aim"]["TriggerSecondKeyEnabled"] = false;
+                j["Aim"]["TriggerSecondKey"] = 0;
+                j["Aim"]["TriggerSecondKeyMode"] = 1;
+                j["Aim"]["TriggerMinIntervalMs"] = 35;
+                j["Aim"]["TriggerDetectMode"] = Structs::TriggerDetect_BoneHitbox;
+                j["Aim"]["TriggerUnifiedHitboxRadiusPx"] = 4.5f;
+                j["Aim"]["TriggerHitboxScale"] = 1.0f;
+                j["Aim"]["TriggerHitboxAddPx"] = 0.0f;
+                j["Aim"]["TriggerHeadRadiusPx"] = 9.0f;
+                j["Aim"]["TriggerHeadScale"] = 1.15f;
+                j["Aim"]["TriggerTorsoScale"] = 1.20f;
+                j["Aim"]["TriggerArmsScale"] = 0.90f;
+                j["Aim"]["TriggerLegsScale"] = 1.00f;
+                j["Aim"]["TriggerHeadSphereDebug"] = true;
+                j["Aim"]["TriggerBoneMask"] = Structs::AimAllBoneMask;
+                j["Aim"]["TriggerHitGroupMask"] =
+                    Structs::AimHit_Head |
+                    Structs::AimHit_UpperChest |
+                    Structs::AimHit_Torso |
+                    Structs::AimHit_Pelvis |
+                    Structs::AimHit_Arms |
+                    Structs::AimHit_Legs;
+                j["Aim"]["TriggerHitboxDebug"] = false;
+                j["Aim"]["TriggerHitboxDebugColor"] = { 1.0f, 0.55f, 0.2f, 0.9f };
+                j["Aim"]["TriggerHitboxDebugActiveColor"] = { 0.2f, 1.0f, 0.35f, 0.95f };
+                j["Aim"]["TriggerHitboxDebugThickness"] = 1.0f;
+                j["Aim"]["BlockTriggerWhenFlashed"] = false;
+                j["Aim"]["BlockAimbotWhenFlashed"] = false;
 
                 j["Aim"]["Aimbot"] = false;
 
                 j["Aim"]["DrawFov"] = false;
                 j["Aim"]["AimbotFovColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
+                j["Aim"]["DynamicFov"] = true;
+                j["Aim"]["DynamicFovMinPx"] = 8.0f;
 
                 j["Aim"]["AimFriendly"] = false;
                 j["Aim"]["AimVisible"] = false;
 
                 j["Aim"]["AimbotKey"] = 0;
-                j["Aim"]["AimbotKeyMode"] = 0;
-                j["Aim"]["AimbotFov"] = 0.0f;
-                j["Aim"]["AimbotSmooth"] = 0.0f;
+                j["Aim"]["AimbotKeyMode"] = 1;
+                j["Aim"]["AimbotSecondKeyEnabled"] = false;
+                j["Aim"]["AimbotSecondKey"] = 0;
+                j["Aim"]["AimbotSecondKeyMode"] = 1;
+                j["Aim"]["AimbotBoneMask"] = Structs::AimDefaultAimbotBoneMask;
+                j["Aim"]["AimbotHitGroupMask"] =
+                    Structs::AimHit_Head |
+                    Structs::AimHit_UpperChest |
+                    Structs::AimHit_Torso;
+                j["Aim"]["DeadzonePx"] = 1.2f;
+
+                j["Aim"]["GlobalRcsEnabled"] = false;
+                j["Aim"]["GlobalRcsPitch"] = 1.6f;
+                j["Aim"]["GlobalRcsYaw"] = 1.6f;
+
+                j["Aim"]["AimbotRcsEnabled"] = true;
+                j["Aim"]["AimbotRcsPitch"] = 1.75f;
+                j["Aim"]["AimbotRcsYaw"] = 1.75f;
+                j["Aim"]["FuseGlobalRcsWithAimbot"] = true;
+
+                j["Aim"]["AimbotFov"] = 6.5f;
+                j["Aim"]["AimbotSmooth"] = 16.0f;
+                j["Aim"]["WeaponProfileEditorIndex"] = 0;
+                j["Aim"]["TriggerProfileEditorIndex"] = 0;
+                j["Aim"]["TriggerSpecialEditorIndex"] = 0;
+
+                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, bool dynamicFov, float dynamicScale, int strategy, int switchDelay)
+                {
+                    nlohmann::json& p = j["Aim"]["WeaponProfiles"][name];
+                    p["Fov"] = fov;
+                    p["Smooth"] = smooth;
+                    p["CurveStrength"] = curve;
+                    p["DynamicFov"] = dynamicFov;
+                    p["DynamicFovDistanceScale"] = dynamicScale;
+                    p["TargetStrategy"] = strategy;
+                    p["TargetSwitchDelayMs"] = switchDelay;
+                };
+
+                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, true, 1350.0f, Structs::AimStrategy_Crosshair, 100);
+                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, true, 1450.0f, Structs::AimStrategy_Crosshair, 90);
+                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, true, 900.0f, Structs::AimStrategy_Distance, 75);
+                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, true, 1650.0f, Structs::AimStrategy_Crosshair, 120);
+                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, true, 2200.0f, Structs::AimStrategy_Crosshair, 160);
+                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, true, 1700.0f, Structs::AimStrategy_Hybrid, 130);
+
+                auto writeDefaultTriggerProfile = [&](const char* name, float hitboxPx, int preDelay, int postDelay, int timeoutMs, std::uint64_t boneMask)
+                {
+                    nlohmann::json& p = j["Aim"]["TriggerProfiles"][name];
+                    p["HitboxRadiusPx"] = hitboxPx;
+                    p["PreFireDelayMs"] = preDelay;
+                    p["PostFireIntervalMs"] = postDelay;
+                    p["TimeoutForceFireMs"] = timeoutMs;
+                    p["BoneMask"] = boneMask;
+                };
+
+                writeDefaultTriggerProfile("Pistol", 4.8f, 45, 90, 0, Structs::AimAllBoneMask);
+                writeDefaultTriggerProfile("Smg", 4.4f, 30, 45, 0, Structs::AimAllBoneMask);
+                writeDefaultTriggerProfile("Shotgun", 6.2f, 20, 280, 0, Structs::AimAllBoneMask);
+                writeDefaultTriggerProfile("Rifle", 4.2f, 35, 65, 0, Structs::AimAllBoneMask);
+                writeDefaultTriggerProfile("Sniper", 3.8f, 45, 650, 0, Structs::AimAllBoneMask);
+                writeDefaultTriggerProfile("Lmg", 4.2f, 40, 70, 0, Structs::AimAllBoneMask);
+
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["HitboxRadiusPx"] = 4.7f;
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["PreFireDelayMs"] = 50;
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["PostFireIntervalMs"] = 425;
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["TimeoutForceFireMs"] = 0;
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["HoldFireMs"] = 8;
+                j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["BoneMask"] = Structs::AimAllBoneMask;
+
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["HitboxRadiusPx"] = 4.9f;
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["PreFireDelayMs"] = 55;
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["PostFireIntervalMs"] = 420;
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["TimeoutForceFireMs"] = 0;
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["HoldFireMs"] = 235;
+                j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["BoneMask"] = Structs::AimAllBoneMask;
 
                 j["Visuals"]["Enabled"] = false;
                 j["Visuals"]["TeamCheck"] = false;
@@ -282,6 +481,7 @@ namespace Config
                 j["Visuals"]["WeaponColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["Bones"] = false;
                 j["Visuals"]["BonesColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
+                j["Visuals"]["BonesColorVisible"] = { 0.45f, 1.0f, 0.55f, 1.0f };
                 j["Visuals"]["C4"] = true;
                 j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
                 j["Visuals"]["C4PanelPosX"] = 0.02f;
@@ -294,6 +494,283 @@ namespace Config
                 return true;
             }
             return false;
+        }
+
+        void LoadWeaponProfiles(const nlohmann::json& j)
+        {
+            if (!j.contains("Aim"))
+                return;
+
+            const auto& aimSection = j["Aim"];
+            const bool hasAimbotBoneMask = aimSection.contains("AimbotBoneMask");
+            const bool hasTriggerBoneMask = aimSection.contains("TriggerBoneMask");
+            const bool hasUnifiedTriggerRadius = aimSection.contains("TriggerUnifiedHitboxRadiusPx");
+            const bool hasHeadTriggerRadius = aimSection.contains("TriggerHeadRadiusPx");
+            const std::uint64_t legacyRootTriggerBoneMask = hasTriggerBoneMask
+                ? aimSection["TriggerBoneMask"].get<std::uint64_t>()
+                : 0ull;
+            if (aimSection.contains("WeaponProfiles"))
+            {
+                const auto& profileRoot = aimSection["WeaponProfiles"];
+
+                auto readAimProfile = [&](const char* name, Structs::AimWeaponProfile& profile) -> bool
+                {
+                    if (!profileRoot.contains(name))
+                        return false;
+
+                    const auto& node = profileRoot[name];
+                    if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
+                    if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("CurveStrength")) profile.CurveStrength = node["CurveStrength"].get<float>();
+                    if (node.contains("DynamicFov")) profile.DynamicFov = node["DynamicFov"].get<bool>();
+                    if (node.contains("DynamicFovDistanceScale")) profile.DynamicFovDistanceScale = node["DynamicFovDistanceScale"].get<float>();
+                    if (node.contains("TargetStrategy")) profile.TargetStrategy = node["TargetStrategy"].get<int>();
+                    if (node.contains("TargetSwitchDelayMs")) profile.TargetSwitchDelayMs = node["TargetSwitchDelayMs"].get<int>();
+                    return true;
+                };
+
+                Structs::AimWeaponProfile legacyDefault{};
+                const bool hasLegacyDefault = readAimProfile("Default", legacyDefault);
+
+                auto readAimProfileWithFallback = [&](const char* name, Structs::AimWeaponProfile& profile)
+                {
+                    if (!readAimProfile(name, profile) && hasLegacyDefault)
+                        profile = legacyDefault;
+                };
+
+                readAimProfileWithFallback("Pistol", Aim.WeaponProfiles[Structs::AimWeapon_Pistol]);
+                readAimProfileWithFallback("Smg", Aim.WeaponProfiles[Structs::AimWeapon_Smg]);
+                readAimProfileWithFallback("Shotgun", Aim.WeaponProfiles[Structs::AimWeapon_Shotgun]);
+                readAimProfileWithFallback("Rifle", Aim.WeaponProfiles[Structs::AimWeapon_Rifle]);
+                readAimProfileWithFallback("Sniper", Aim.WeaponProfiles[Structs::AimWeapon_Sniper]);
+                readAimProfileWithFallback("Lmg", Aim.WeaponProfiles[Structs::AimWeapon_Lmg]);
+            }
+            else
+            {
+                // Migrate legacy single profile values to all profiles.
+                for (Structs::AimWeaponProfile& profile : Aim.WeaponProfiles)
+                {
+                    profile.Fov = Aim.AimbotFov;
+                    profile.Smooth = Aim.AimbotSmooth;
+                }
+            }
+
+            if (aimSection.contains("TriggerProfiles"))
+            {
+                const auto& triggerRoot = aimSection["TriggerProfiles"];
+
+                auto readTriggerProfile = [&](const char* name, Structs::TriggerWeaponProfile& profile) -> bool
+                {
+                    if (!triggerRoot.contains(name))
+                        return false;
+
+                    const auto& node = triggerRoot[name];
+                    if (node.contains("HitboxRadiusPx")) profile.HitboxRadiusPx = node["HitboxRadiusPx"].get<float>();
+                    if (node.contains("PreFireDelayMs")) profile.PreFireDelayMs = node["PreFireDelayMs"].get<int>();
+                    if (node.contains("PostFireIntervalMs")) profile.PostFireIntervalMs = node["PostFireIntervalMs"].get<int>();
+                    if (node.contains("TimeoutForceFireMs")) profile.TimeoutForceFireMs = node["TimeoutForceFireMs"].get<int>();
+                    if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
+                    else if (legacyRootTriggerBoneMask != 0ull) profile.BoneMask = legacyRootTriggerBoneMask;
+                    return true;
+                };
+
+                Structs::TriggerWeaponProfile legacyDefault{};
+                const bool hasLegacyDefault = readTriggerProfile("Default", legacyDefault);
+
+                auto readTriggerProfileWithFallback = [&](const char* name, Structs::TriggerWeaponProfile& profile)
+                {
+                    if (!readTriggerProfile(name, profile) && hasLegacyDefault)
+                        profile = legacyDefault;
+                };
+
+                readTriggerProfileWithFallback("Pistol", Aim.TriggerProfiles[Structs::AimWeapon_Pistol]);
+                readTriggerProfileWithFallback("Smg", Aim.TriggerProfiles[Structs::AimWeapon_Smg]);
+                readTriggerProfileWithFallback("Shotgun", Aim.TriggerProfiles[Structs::AimWeapon_Shotgun]);
+                readTriggerProfileWithFallback("Rifle", Aim.TriggerProfiles[Structs::AimWeapon_Rifle]);
+                readTriggerProfileWithFallback("Sniper", Aim.TriggerProfiles[Structs::AimWeapon_Sniper]);
+                readTriggerProfileWithFallback("Lmg", Aim.TriggerProfiles[Structs::AimWeapon_Lmg]);
+            }
+            else
+            {
+                // Migrate legacy trigger delay/interval fields.
+                for (Structs::TriggerWeaponProfile& profile : Aim.TriggerProfiles)
+                {
+                    profile.PreFireDelayMs = (std::max)(0, Aim.TriggerDelay);
+                    profile.PostFireIntervalMs = (std::max)(0, Aim.TriggerMinIntervalMs);
+                    profile.BoneMask = legacyRootTriggerBoneMask != 0ull ? legacyRootTriggerBoneMask : Structs::AimAllBoneMask;
+                }
+            }
+
+            if (aimSection.contains("TriggerSpecialProfiles"))
+            {
+                const auto& specialRoot = aimSection["TriggerSpecialProfiles"];
+
+                auto readTriggerSpecial = [&](const char* name, Structs::TriggerSpecialProfile& profile)
+                {
+                    if (!specialRoot.contains(name))
+                        return;
+
+                    const auto& node = specialRoot[name];
+                    if (node.contains("HitboxRadiusPx")) profile.HitboxRadiusPx = node["HitboxRadiusPx"].get<float>();
+                    if (node.contains("PreFireDelayMs")) profile.PreFireDelayMs = node["PreFireDelayMs"].get<int>();
+                    if (node.contains("PostFireIntervalMs")) profile.PostFireIntervalMs = node["PostFireIntervalMs"].get<int>();
+                    if (node.contains("TimeoutForceFireMs")) profile.TimeoutForceFireMs = node["TimeoutForceFireMs"].get<int>();
+                    if (node.contains("HoldFireMs")) profile.HoldFireMs = node["HoldFireMs"].get<int>();
+                    if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
+                    else if (legacyRootTriggerBoneMask != 0ull) profile.BoneMask = legacyRootTriggerBoneMask;
+                };
+
+                readTriggerSpecial("DesertEagle", Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Deagle]);
+                readTriggerSpecial("R8Revolver", Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Revolver]);
+            }
+            else if (legacyRootTriggerBoneMask != 0ull)
+            {
+                for (Structs::TriggerSpecialProfile& profile : Aim.TriggerSpecialProfiles)
+                    profile.BoneMask = legacyRootTriggerBoneMask;
+            }
+
+            Aim.WeaponProfileEditorIndex = std::clamp(Aim.WeaponProfileEditorIndex, 0, Structs::AimWeapon_Count - 1);
+            Aim.TriggerProfileEditorIndex = std::clamp(Aim.TriggerProfileEditorIndex, 0, Structs::AimWeapon_Count - 1);
+            Aim.TriggerSpecialEditorIndex = std::clamp(Aim.TriggerSpecialEditorIndex, 0, Structs::TriggerSpecial_Count - 1);
+            Aim.TriggerDetectMode = std::clamp(Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1);
+
+            constexpr std::uint32_t kLegacyAllHitGroups =
+                Structs::AimHit_Head |
+                Structs::AimHit_UpperChest |
+                Structs::AimHit_Torso |
+                Structs::AimHit_Pelvis |
+                Structs::AimHit_Arms |
+                Structs::AimHit_Legs;
+
+            auto legacyHitGroupToBoneMask = [](const std::uint32_t legacyMask) -> std::uint64_t
+            {
+                auto legacyGroupOfBone = [](const int boneId) -> std::uint32_t
+                {
+                    switch (boneId)
+                    {
+                    case 6:
+                        return Structs::AimHit_Head;
+                    case 5:
+                        return Structs::AimHit_UpperChest;
+                    case 4:
+                    case 2:
+                        return Structs::AimHit_Torso;
+                    case 0:
+                        return Structs::AimHit_Pelvis;
+                    case 8:
+                    case 9:
+                    case 10:
+                    case 13:
+                    case 14:
+                    case 15:
+                        return Structs::AimHit_Arms;
+                    case 22:
+                    case 23:
+                    case 24:
+                    case 25:
+                    case 26:
+                    case 27:
+                        return Structs::AimHit_Legs;
+                    default:
+                        break;
+                    }
+
+                    return 0u;
+                };
+
+                std::uint64_t mask = 0ull;
+                for (const int boneId : Structs::AimBoneIds)
+                {
+                    if ((legacyMask & legacyGroupOfBone(boneId)) != 0u)
+                        mask |= Structs::BoneMaskFromBoneId(boneId);
+                }
+                return mask;
+            };
+
+            Aim.AimbotHitGroupMask &= kLegacyAllHitGroups;
+            Aim.TriggerHitGroupMask &= kLegacyAllHitGroups;
+            if (Aim.AimbotHitGroupMask == 0)
+                Aim.AimbotHitGroupMask = Structs::AimHit_Head;
+            if (Aim.TriggerHitGroupMask == 0)
+                Aim.TriggerHitGroupMask = kLegacyAllHitGroups;
+
+            if (!hasAimbotBoneMask)
+            {
+                const std::uint64_t migrated = legacyHitGroupToBoneMask(Aim.AimbotHitGroupMask);
+                Aim.AimbotBoneMask = migrated != 0ull ? migrated : Structs::AimDefaultAimbotBoneMask;
+            }
+            if (!hasTriggerBoneMask)
+            {
+                const std::uint64_t migrated = legacyHitGroupToBoneMask(Aim.TriggerHitGroupMask);
+                Aim.TriggerBoneMask = migrated != 0ull ? migrated : Structs::AimAllBoneMask;
+            }
+
+            Aim.AimbotBoneMask &= Structs::AimAllBoneMask;
+            Aim.TriggerBoneMask &= Structs::AimAllBoneMask;
+            if (Aim.AimbotBoneMask == 0ull)
+                Aim.AimbotBoneMask = Structs::AimDefaultAimbotBoneMask;
+            if (Aim.TriggerBoneMask == 0ull)
+                Aim.TriggerBoneMask = Structs::AimAllBoneMask;
+
+            if (!hasUnifiedTriggerRadius)
+            {
+                Aim.TriggerUnifiedHitboxRadiusPx = std::clamp(
+                    Aim.TriggerProfiles[Structs::AimWeapon_Rifle].HitboxRadiusPx,
+                    0.5f,
+                    40.0f
+                );
+            }
+            if (!hasHeadTriggerRadius)
+            {
+                Aim.TriggerHeadRadiusPx = std::clamp(
+                    Aim.TriggerUnifiedHitboxRadiusPx * 1.40f,
+                    0.5f,
+                    80.0f
+                );
+            }
+
+            Aim.TriggerUnifiedHitboxRadiusPx = std::clamp(Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
+            Aim.TriggerHitboxScale = std::clamp(Aim.TriggerHitboxScale, 0.25f, 3.0f);
+            Aim.TriggerHitboxAddPx = std::clamp(Aim.TriggerHitboxAddPx, -20.0f, 40.0f);
+            Aim.TriggerHeadRadiusPx = std::clamp(Aim.TriggerHeadRadiusPx, 0.5f, 80.0f);
+            Aim.TriggerHeadScale = std::clamp(Aim.TriggerHeadScale, 0.20f, 10.0f);
+            Aim.TriggerTorsoScale = std::clamp(Aim.TriggerTorsoScale, 0.20f, 10.0f);
+            Aim.TriggerArmsScale = std::clamp(Aim.TriggerArmsScale, 0.20f, 10.0f);
+            Aim.TriggerLegsScale = std::clamp(Aim.TriggerLegsScale, 0.20f, 10.0f);
+            Aim.TriggerHitboxDebugThickness = std::clamp(Aim.TriggerHitboxDebugThickness, 0.5f, 4.0f);
+
+            for (Structs::AimWeaponProfile& profile : Aim.WeaponProfiles)
+            {
+                profile.Fov = (std::max)(0.1f, profile.Fov);
+                profile.Smooth = (std::max)(1.0f, profile.Smooth);
+                profile.CurveStrength = std::clamp(profile.CurveStrength, 0.0f, 1.0f);
+                profile.DynamicFovDistanceScale = (std::max)(1.0f, profile.DynamicFovDistanceScale);
+                profile.TargetStrategy = std::clamp(profile.TargetStrategy, 0, (int)Structs::AimTargetStrategyNames.size() - 1);
+                profile.TargetSwitchDelayMs = (std::max)(0, profile.TargetSwitchDelayMs);
+            }
+
+            for (Structs::TriggerWeaponProfile& profile : Aim.TriggerProfiles)
+            {
+                profile.HitboxRadiusPx = std::clamp(profile.HitboxRadiusPx, 0.5f, 30.0f);
+                profile.PreFireDelayMs = std::clamp(profile.PreFireDelayMs, 0, 2000);
+                profile.PostFireIntervalMs = std::clamp(profile.PostFireIntervalMs, 0, 2000);
+                profile.TimeoutForceFireMs = std::clamp(profile.TimeoutForceFireMs, 0, 5000);
+                profile.BoneMask &= Structs::AimAllBoneMask;
+                if (profile.BoneMask == 0ull)
+                    profile.BoneMask = Aim.TriggerBoneMask;
+            }
+
+            for (Structs::TriggerSpecialProfile& profile : Aim.TriggerSpecialProfiles)
+            {
+                profile.HitboxRadiusPx = std::clamp(profile.HitboxRadiusPx, 0.5f, 30.0f);
+                profile.PreFireDelayMs = std::clamp(profile.PreFireDelayMs, 0, 2000);
+                profile.PostFireIntervalMs = std::clamp(profile.PostFireIntervalMs, 0, 3000);
+                profile.TimeoutForceFireMs = std::clamp(profile.TimeoutForceFireMs, 0, 5000);
+                profile.HoldFireMs = std::clamp(profile.HoldFireMs, 0, 1200);
+                profile.BoneMask &= Structs::AimAllBoneMask;
+                if (profile.BoneMask == 0ull)
+                    profile.BoneMask = Aim.TriggerBoneMask;
+            }
         }
 
         template<typename T>
@@ -312,19 +789,62 @@ namespace Config
                             else if (key == "TriggerKey") configSection.TriggerKey = value.get<int>();
                             else if (key == "TriggerKeyMode") configSection.TriggerKeyMode = value.get<int>();
 							else if (key == "TriggerDelay") configSection.TriggerDelay = value.get<int>();
+                            else if (key == "TriggerSecondKeyEnabled") configSection.TriggerSecondKeyEnabled = value.get<bool>();
+                            else if (key == "TriggerSecondKey") configSection.TriggerSecondKey = value.get<int>();
+                            else if (key == "TriggerSecondKeyMode") configSection.TriggerSecondKeyMode = value.get<int>();
+                            else if (key == "TriggerMinIntervalMs") configSection.TriggerMinIntervalMs = value.get<int>();
+                            else if (key == "TriggerDetectMode") configSection.TriggerDetectMode = value.get<int>();
+                            else if (key == "TriggerUnifiedHitboxRadiusPx") configSection.TriggerUnifiedHitboxRadiusPx = value.get<float>();
+                            else if (key == "TriggerHitboxScale") configSection.TriggerHitboxScale = value.get<float>();
+                            else if (key == "TriggerHitboxAddPx") configSection.TriggerHitboxAddPx = value.get<float>();
+                            else if (key == "TriggerHeadRadiusPx") configSection.TriggerHeadRadiusPx = value.get<float>();
+                            else if (key == "TriggerHeadScale") configSection.TriggerHeadScale = value.get<float>();
+                            else if (key == "TriggerTorsoScale") configSection.TriggerTorsoScale = value.get<float>();
+                            else if (key == "TriggerArmsScale") configSection.TriggerArmsScale = value.get<float>();
+                            else if (key == "TriggerLegsScale") configSection.TriggerLegsScale = value.get<float>();
+                            else if (key == "TriggerHeadSphereDebug") configSection.TriggerHeadSphereDebug = value.get<bool>();
+                            else if (key == "TriggerBoneMask") configSection.TriggerBoneMask = value.get<std::uint64_t>();
+                            else if (key == "TriggerHitGroupMask") configSection.TriggerHitGroupMask = value.get<std::uint32_t>();
+                            else if (key == "TriggerHitboxDebug") configSection.TriggerHitboxDebug = value.get<bool>();
+                            else if (key == "TriggerHitboxDebugColor") configSection.TriggerHitboxDebugColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "TriggerHitboxDebugActiveColor") configSection.TriggerHitboxDebugActiveColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "TriggerHitboxDebugThickness") configSection.TriggerHitboxDebugThickness = value.get<float>();
+                            else if (key == "BlockTriggerWhenFlashed") configSection.BlockTriggerWhenFlashed = value.get<bool>();
+                            else if (key == "BlockAimbotWhenFlashed") configSection.BlockAimbotWhenFlashed = value.get<bool>();
 
                             else if (key == "Aimbot") configSection.Aimbot = value.get<bool>();
 
                             else if (key == "DrawFov") configSection.DrawFov = value.get<bool>();
                             else if (key == "AimbotFovColor") configSection.AimbotFovColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "DynamicFov") configSection.DynamicFov = value.get<bool>();
+                            else if (key == "DynamicFovMinPx") configSection.DynamicFovMinPx = value.get<float>();
 
                             else if (key == "AimFriendly") configSection.AimFriendly = value.get<bool>();
                             else if (key == "AimVisible") configSection.AimVisible = value.get<bool>();
 
                             else if (key == "AimbotKey") configSection.AimbotKey = value.get<int>();
 							else if (key == "AimbotKeyMode") configSection.AimbotKeyMode = value.get<int>();
+                            else if (key == "AimbotSecondKeyEnabled") configSection.AimbotSecondKeyEnabled = value.get<bool>();
+                            else if (key == "AimbotSecondKey") configSection.AimbotSecondKey = value.get<int>();
+                            else if (key == "AimbotSecondKeyMode") configSection.AimbotSecondKeyMode = value.get<int>();
+                            else if (key == "AimbotBoneMask") configSection.AimbotBoneMask = value.get<std::uint64_t>();
+                            else if (key == "AimbotHitGroupMask") configSection.AimbotHitGroupMask = value.get<std::uint32_t>();
+                            else if (key == "DeadzonePx") configSection.DeadzonePx = value.get<float>();
+
+                            else if (key == "GlobalRcsEnabled") configSection.GlobalRcsEnabled = value.get<bool>();
+                            else if (key == "GlobalRcsPitch") configSection.GlobalRcsPitch = value.get<float>();
+                            else if (key == "GlobalRcsYaw") configSection.GlobalRcsYaw = value.get<float>();
+
+                            else if (key == "AimbotRcsEnabled") configSection.AimbotRcsEnabled = value.get<bool>();
+                            else if (key == "AimbotRcsPitch") configSection.AimbotRcsPitch = value.get<float>();
+                            else if (key == "AimbotRcsYaw") configSection.AimbotRcsYaw = value.get<float>();
+                            else if (key == "FuseGlobalRcsWithAimbot") configSection.FuseGlobalRcsWithAimbot = value.get<bool>();
+
                             else if (key == "AimbotFov") configSection.AimbotFov = value.get<float>();
                             else if (key == "AimbotSmooth") configSection.AimbotSmooth = value.get<float>();
+                            else if (key == "WeaponProfileEditorIndex") configSection.WeaponProfileEditorIndex = value.get<int>();
+                            else if (key == "TriggerProfileEditorIndex") configSection.TriggerProfileEditorIndex = value.get<int>();
+                            else if (key == "TriggerSpecialEditorIndex") configSection.TriggerSpecialEditorIndex = value.get<int>();
                         }
                         else if constexpr (std::is_same_v<T, Structs::KmboxConfig>)
                         {
@@ -364,6 +884,7 @@ namespace Config
                             else if (key == "MoneyColor") configSection.MoneyColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "WeaponColor") configSection.WeaponColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColor") configSection.BonesColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "BonesColorVisible") configSection.BonesColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "DefuserColor") configSection.DefuserColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                         }

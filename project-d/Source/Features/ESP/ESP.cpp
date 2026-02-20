@@ -1,6 +1,7 @@
 #include <Pch.hpp>
 #include <SDK.hpp>
 #include "ESP.hpp"
+#include <Aimbot/Aimbot.hpp>
 #include <array>
 #include <cfloat>
 #include <cstdio>
@@ -19,6 +20,10 @@ namespace
     constexpr int kAliveLifeStateA = 0;
     constexpr int kAliveLifeStateB = 256;
     constexpr int kHeadBone = 6;
+    constexpr float kTriggerHeadScaleFixed = 7.0f;
+    constexpr float kTriggerTorsoScaleFixed = 8.0f;
+    constexpr float kTriggerArmsScaleFixed = 6.0f;
+    constexpr float kTriggerLegsScaleFixed = 5.0f;
 
     constexpr std::array<int, 17> kTrackedBones = {
         0, 2, 4, 5, 6,
@@ -50,6 +55,38 @@ namespace
         std::pair{ 25, 26 },
         std::pair{ 26, 27 }
     };
+
+    struct DebugBoneLink
+    {
+        int FromBone = 0;
+        int ToBone = 0;
+        std::uint64_t BoneMask = 0;
+    };
+
+    constexpr std::array<DebugBoneLink, 16> kDebugBoneLinks = {
+        DebugBoneLink{ 0, 2, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(2) },
+        DebugBoneLink{ 2, 4, Structs::BoneMaskFromBoneId(2) | Structs::BoneMaskFromBoneId(4) },
+        DebugBoneLink{ 4, 5, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(5) },
+        DebugBoneLink{ 5, 6, Structs::BoneMaskFromBoneId(5) | Structs::BoneMaskFromBoneId(6) },
+
+        DebugBoneLink{ 4, 8, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(8) },
+        DebugBoneLink{ 8, 9, Structs::BoneMaskFromBoneId(8) | Structs::BoneMaskFromBoneId(9) },
+        DebugBoneLink{ 9, 10, Structs::BoneMaskFromBoneId(9) | Structs::BoneMaskFromBoneId(10) },
+
+        DebugBoneLink{ 4, 13, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(13) },
+        DebugBoneLink{ 13, 14, Structs::BoneMaskFromBoneId(13) | Structs::BoneMaskFromBoneId(14) },
+        DebugBoneLink{ 14, 15, Structs::BoneMaskFromBoneId(14) | Structs::BoneMaskFromBoneId(15) },
+
+        DebugBoneLink{ 0, 22, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(22) },
+        DebugBoneLink{ 22, 23, Structs::BoneMaskFromBoneId(22) | Structs::BoneMaskFromBoneId(23) },
+        DebugBoneLink{ 23, 24, Structs::BoneMaskFromBoneId(23) | Structs::BoneMaskFromBoneId(24) },
+
+        DebugBoneLink{ 0, 25, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(25) },
+        DebugBoneLink{ 25, 26, Structs::BoneMaskFromBoneId(25) | Structs::BoneMaskFromBoneId(26) },
+        DebugBoneLink{ 26, 27, Structs::BoneMaskFromBoneId(26) | Structs::BoneMaskFromBoneId(27) }
+    };
+
+    constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
 
     std::string WeaponIdToName(const int weaponId)
     {
@@ -122,6 +159,167 @@ namespace
         return std::abs(position.x) > 0.01f ||
             std::abs(position.y) > 0.01f ||
             std::abs(position.z) > 0.01f;
+    }
+
+    float Dot3(const Vector3& a, const Vector3& b)
+    {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+
+    Vector3 Cross3(const Vector3& a, const Vector3& b)
+    {
+        return Vector3{
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x
+        };
+    }
+
+    float Length3(const Vector3& v)
+    {
+        return std::sqrt(Dot3(v, v));
+    }
+
+    Vector3 Normalize3(const Vector3& v)
+    {
+        const float length = Length3(v);
+        if (length <= 0.0001f)
+            return Vector3{};
+
+        return v / length;
+    }
+
+    float Distance2D(const Vector2& a, const Vector2& b)
+    {
+        const float dx = a.x - b.x;
+        const float dy = a.y - b.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
+    float DistancePointToSegment2D(const Vector2& point, const Vector2& segmentStart, const Vector2& segmentEnd)
+    {
+        const float vx = segmentEnd.x - segmentStart.x;
+        const float vy = segmentEnd.y - segmentStart.y;
+        const float wx = point.x - segmentStart.x;
+        const float wy = point.y - segmentStart.y;
+        const float segmentLenSq = vx * vx + vy * vy;
+
+        if (segmentLenSq < 0.0001f)
+            return Distance2D(point, segmentStart);
+
+        const float t = std::clamp((wx * vx + wy * vy) / segmentLenSq, 0.0f, 1.0f);
+        const Vector2 closest{
+            segmentStart.x + t * vx,
+            segmentStart.y + t * vy
+        };
+
+        return Distance2D(point, closest);
+    }
+
+    float BoneLinkRadiusScale(const int fromBone, const int toBone)
+    {
+        const auto match = [&](const int a, const int b)
+        {
+            return (fromBone == a && toBone == b) || (fromBone == b && toBone == a);
+        };
+
+        if (match(0, 2)) return 1.45f;
+        if (match(2, 4)) return 1.40f;
+        if (match(4, 5)) return 1.25f;
+        if (match(5, 6)) return 1.10f;
+
+        if (match(4, 8) || match(4, 13)) return 1.12f;
+        if (match(8, 9) || match(13, 14)) return 0.92f;
+        if (match(9, 10) || match(14, 15)) return 0.78f;
+
+        if (match(0, 22) || match(0, 25)) return 1.28f;
+        if (match(22, 23) || match(25, 26)) return 1.12f;
+        if (match(23, 24) || match(26, 27)) return 0.90f;
+
+        return 1.0f;
+    }
+
+    bool BuildProjectedSegmentBoxCorners(
+        const Vector3& fromWorld,
+        const Vector3& toWorld,
+        const float radiusPx,
+        const Matrix& viewMatrix,
+        std::array<Vector2, 8>& outScreenCorners)
+    {
+        const Vector3 segment = toWorld - fromWorld;
+        const float segmentLength = Length3(segment);
+        if (segmentLength < 0.001f)
+            return false;
+
+        const Vector3 center = (fromWorld + toWorld) * 0.5f;
+        Vector2 centerScreen{};
+        if (!sdk.WorldToScreen(center, centerScreen, viewMatrix))
+            return false;
+
+        const Vector3 dir = segment / segmentLength;
+        const Vector3 helperAxis = std::fabs(dir.z) < 0.95f
+            ? Vector3{ 0.0f, 0.0f, 1.0f }
+            : Vector3{ 0.0f, 1.0f, 0.0f };
+
+        Vector3 right = Normalize3(Cross3(dir, helperAxis));
+        if (Length3(right) < 0.001f)
+        {
+            const Vector3 fallbackAxis = std::fabs(dir.x) < 0.95f
+                ? Vector3{ 1.0f, 0.0f, 0.0f }
+                : Vector3{ 0.0f, 1.0f, 0.0f };
+            right = Normalize3(Cross3(dir, fallbackAxis));
+        }
+        if (Length3(right) < 0.001f)
+            return false;
+
+        Vector3 up = Normalize3(Cross3(right, dir));
+        if (Length3(up) < 0.001f)
+            return false;
+
+        auto estimatePxPerWorld = [&](const Vector3& axis) -> float
+        {
+            Vector2 axisScreen{};
+            if (!sdk.WorldToScreen(center + axis, axisScreen, viewMatrix))
+                return 0.0f;
+            return Distance2D(centerScreen, axisScreen);
+        };
+
+        const float pxPerWorldRight = estimatePxPerWorld(right);
+        const float pxPerWorldUp = estimatePxPerWorld(up);
+        float pxPerWorld = 0.0f;
+        if (pxPerWorldRight > 0.001f && pxPerWorldUp > 0.001f)
+            pxPerWorld = 0.5f * (pxPerWorldRight + pxPerWorldUp);
+        else
+            pxPerWorld = (std::max)(pxPerWorldRight, pxPerWorldUp);
+
+        if (pxPerWorld < 0.001f)
+            return false;
+
+        const float halfWidthWorld = std::clamp(radiusPx / pxPerWorld, 0.01f, 40.0f);
+        const float halfLengthWorld = (std::max)(segmentLength * 0.5f, halfWidthWorld * 0.50f);
+
+        const Vector3 axisForward = dir * halfLengthWorld;
+        const Vector3 axisRight = right * halfWidthWorld;
+        const Vector3 axisUp = up * halfWidthWorld;
+
+        const std::array<Vector3, 8> worldCorners = {
+            center - axisForward - axisRight - axisUp,
+            center - axisForward + axisRight - axisUp,
+            center - axisForward + axisRight + axisUp,
+            center - axisForward - axisRight + axisUp,
+            center + axisForward - axisRight - axisUp,
+            center + axisForward + axisRight - axisUp,
+            center + axisForward + axisRight + axisUp,
+            center + axisForward - axisRight + axisUp
+        };
+
+        for (size_t i = 0; i < worldCorners.size(); ++i)
+        {
+            if (!sdk.WorldToScreen(worldCorners[i], outScreenCorners[i], viewMatrix))
+                return false;
+        }
+
+        return true;
     }
 
     int NormalizeBombSiteRaw(const int rawSite)
@@ -261,7 +459,15 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Bones)
     {
-        RenderSkeleton(drawList, player, ToImColor(config.Visuals.BonesColor));
+        ImU32 bonesColor = ToImColor(config.Visuals.BonesColor);
+        if (config.Visuals.VisibleCheck && player.IsVisible)
+            bonesColor = ToImColor(config.Visuals.BonesColorVisible);
+        RenderSkeleton(drawList, player, bonesColor);
+    }
+
+    if (config.Aim.TriggerHitboxDebug)
+    {
+        RenderTriggerHitboxDebug(drawList, player);
     }
 
     struct StatusLine
@@ -324,6 +530,178 @@ void ESP::RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, 
             continue;
 
         drawList->AddLine(fromBone->Screen.ToImVec2(), toBone->Screen.ToImVec2(), color, 1.0f);
+    }
+}
+
+void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const
+{
+    if (!drawList || player.Bones.empty())
+        return;
+
+    const float unifiedRadius = std::clamp(config.Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
+    const float hitboxScale = std::clamp(config.Aim.TriggerHitboxScale, 0.25f, 3.0f);
+    const float hitboxAddPx = std::clamp(config.Aim.TriggerHitboxAddPx, -20.0f, 40.0f);
+    const float headBaseRadius = std::clamp(config.Aim.TriggerHeadRadiusPx, 0.5f, 80.0f);
+
+    const float hitboxRadiusPx = std::clamp(unifiedRadius * hitboxScale + hitboxAddPx, 0.5f, 80.0f);
+    const float headRadiusPx = std::clamp(headBaseRadius * hitboxScale + hitboxAddPx, 0.5f, 100.0f);
+
+    std::uint64_t boneMask = aim.GetCurrentTriggerBoneMask() & kAllBonesMask;
+    if (boneMask == 0ull)
+        boneMask = kAllBonesMask;
+
+    const Vector2 crosshair{ ScreenCenter.x, ScreenCenter.y };
+    float bestNormalizedDistance = FLT_MAX;
+    int activeFromBone = -1;
+    int activeToBone = -1;
+
+    auto getBone = [&](const int index) -> const BonePoint*
+    {
+        for (const BonePoint& bone : player.Bones)
+        {
+            if (bone.Index == index)
+                return &bone;
+        }
+
+        return nullptr;
+    };
+
+    float distanceScale = 1.0f;
+    const BonePoint* headBoneForSizing = getBone(Structs::AimHeadBoneId);
+    const BonePoint* pelvisBoneForSizing = getBone(0);
+    if (headBoneForSizing && pelvisBoneForSizing && headBoneForSizing->OnScreen && pelvisBoneForSizing->OnScreen)
+    {
+        constexpr float kReferenceBodyHeightPx = 150.0f;
+        const float bodyHeight = (std::max)(1.0f, std::fabs(pelvisBoneForSizing->Screen.y - headBoneForSizing->Screen.y));
+        distanceScale = std::clamp(bodyHeight / kReferenceBodyHeightPx, 0.20f, 3.00f);
+    }
+    const float adaptiveBodyRadiusPx = std::clamp(hitboxRadiusPx * distanceScale, 0.5f, 100.0f);
+    const float adaptiveHeadRadiusPx = std::clamp(headRadiusPx * distanceScale, 0.5f, 100.0f);
+    const auto hitboxRegionFromBone = [](const int boneId) -> int
+    {
+        if (boneId == Structs::AimHeadBoneId)
+            return 0; // head
+        switch (boneId)
+        {
+        case 8: case 9: case 10:
+        case 13: case 14: case 15:
+            return 2; // arms
+        case 22: case 23: case 24:
+        case 25: case 26: case 27:
+            return 3; // legs
+        default:
+            return 1; // torso
+        }
+    };
+    const auto hitboxRegionScale = [](const int region) -> float
+    {
+        switch (region)
+        {
+        case 0: return kTriggerHeadScaleFixed;
+        case 2: return kTriggerArmsScaleFixed;
+        case 3: return kTriggerLegsScaleFixed;
+        default: break;
+        }
+        return kTriggerTorsoScaleFixed;
+    };
+
+    for (const DebugBoneLink& link : kDebugBoneLinks)
+    {
+        const bool endpointSelected =
+            (boneMask & Structs::BoneMaskFromBoneId(link.FromBone)) != 0ull ||
+            (boneMask & Structs::BoneMaskFromBoneId(link.ToBone)) != 0ull;
+        if (!endpointSelected)
+            continue;
+
+        const BonePoint* fromBone = getBone(link.FromBone);
+        const BonePoint* toBone = getBone(link.ToBone);
+        if (!fromBone || !toBone || !fromBone->OnScreen || !toBone->OnScreen)
+            continue;
+
+        const float distancePx = DistancePointToSegment2D(crosshair, fromBone->Screen, toBone->Screen);
+        const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
+            ? 0
+            : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
+                ? hitboxRegionFromBone(link.FromBone)
+                : 1);
+        const float threshold = adaptiveBodyRadiusPx * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+        const float normalized = distancePx / threshold;
+        if (normalized < bestNormalizedDistance)
+        {
+            bestNormalizedDistance = normalized;
+            activeFromBone = link.FromBone;
+            activeToBone = link.ToBone;
+        }
+    }
+
+    const bool hasActiveSegment = bestNormalizedDistance <= 1.0f;
+    const ImU32 baseColor = ToImColor(config.Aim.TriggerHitboxDebugColor);
+    const ImU32 activeColor = ToImColor(config.Aim.TriggerHitboxDebugActiveColor);
+    const float lineThickness = std::clamp(config.Aim.TriggerHitboxDebugThickness, 0.5f, 4.0f);
+
+    constexpr std::array<std::pair<int, int>, 12> kBoxEdges = {
+        std::pair{ 0, 1 }, std::pair{ 1, 2 }, std::pair{ 2, 3 }, std::pair{ 3, 0 },
+        std::pair{ 4, 5 }, std::pair{ 5, 6 }, std::pair{ 6, 7 }, std::pair{ 7, 4 },
+        std::pair{ 0, 4 }, std::pair{ 1, 5 }, std::pair{ 2, 6 }, std::pair{ 3, 7 }
+    };
+
+    const Matrix viewMatrix = Globals::ViewMatrix;
+    for (const DebugBoneLink& link : kDebugBoneLinks)
+    {
+        const bool endpointSelected =
+            (boneMask & Structs::BoneMaskFromBoneId(link.FromBone)) != 0ull ||
+            (boneMask & Structs::BoneMaskFromBoneId(link.ToBone)) != 0ull;
+        if (!endpointSelected)
+            continue;
+
+        const BonePoint* fromBone = getBone(link.FromBone);
+        const BonePoint* toBone = getBone(link.ToBone);
+        if (!fromBone || !toBone)
+            continue;
+
+        if (!IsNonZeroPosition(fromBone->World) || !IsNonZeroPosition(toBone->World))
+            continue;
+
+        const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
+            ? 0
+            : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
+                ? hitboxRegionFromBone(link.FromBone)
+                : 1);
+        const float segmentRadiusPx = adaptiveBodyRadiusPx * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+        std::array<Vector2, 8> projectedCorners{};
+        if (!BuildProjectedSegmentBoxCorners(fromBone->World, toBone->World, segmentRadiusPx, viewMatrix, projectedCorners))
+            continue;
+
+        const bool isActive = hasActiveSegment && link.FromBone == activeFromBone && link.ToBone == activeToBone;
+        const ImU32 color = isActive ? activeColor : baseColor;
+
+        for (const auto& [edgeStart, edgeEnd] : kBoxEdges)
+        {
+            drawList->AddLine(
+                projectedCorners[edgeStart].ToImVec2(),
+                projectedCorners[edgeEnd].ToImVec2(),
+                color,
+                lineThickness
+            );
+        }
+    }
+
+    if (config.Aim.TriggerHeadSphereDebug &&
+        (boneMask & Structs::BoneMaskFromBoneId(Structs::AimHeadBoneId)) != 0ull)
+    {
+        const BonePoint* headBone = getBone(Structs::AimHeadBoneId);
+        if (headBone && headBone->OnScreen)
+        {
+            const float headThreshold = (std::max)(0.5f, adaptiveHeadRadiusPx * hitboxRegionScale(0));
+            const bool headActive = Distance2D(crosshair, headBone->Screen) <= headThreshold;
+            drawList->AddCircle(
+                headBone->Screen.ToImVec2(),
+                headThreshold,
+                headActive ? activeColor : baseColor,
+                48,
+                (std::max)(1.0f, lineThickness + 0.2f)
+            );
+        }
     }
 }
 
@@ -803,17 +1181,8 @@ void ESP::UpdateVisCheckState()
 {
     ConsumeMapLoadResult();
 
-    m_VisCheckEnabled = config.Visuals.Enabled && config.Visuals.VisibleCheck;
-    if (!m_VisCheckEnabled)
-    {
-        m_VisCheck.reset();
-        m_CurrentMapName.clear();
-        m_CurrentOptPath.clear();
-        m_LastPolledMapName.clear();
-        m_ActiveMapRequestId = 0;
-        m_MapStatus = "Map Status: (Disabled)";
-        return;
-    }
+    // Keep map/.opt status alive by default; VisibleCheck only controls usage, not loading state.
+    m_VisCheckEnabled = true;
 
     const auto now = std::chrono::steady_clock::now();
     if (m_LastMapPoll.time_since_epoch().count() == 0 ||
@@ -1005,6 +1374,81 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
     return isVisible;
 }
 
+bool ESP::IsPawnVisibleCached(const uint64_t pawn) const
+{
+    if (!pawn)
+        return false;
+
+    std::lock_guard lock(m_RenderFrameMutex);
+    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    {
+        if (player.Pawn == pawn)
+            return player.IsVisible;
+    }
+
+    return false;
+}
+
+std::unordered_set<uint64_t> ESP::GetVisiblePawnSetSnapshot() const
+{
+    std::unordered_set<uint64_t> visiblePawns{};
+
+    std::lock_guard lock(m_RenderFrameMutex);
+    visiblePawns.reserve(m_RenderFrame.Players.size());
+    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    {
+        if (player.Pawn != 0 && player.IsVisible)
+            visiblePawns.insert(player.Pawn);
+    }
+
+    return visiblePawns;
+}
+
+std::vector<TriggerBoneSnapshot> ESP::GetTriggerBoneSnapshots() const
+{
+    std::vector<TriggerBoneSnapshot> snapshots{};
+
+    auto slotFromBoneId = [](const int boneId) -> int
+    {
+        for (std::size_t i = 0; i < kTrackedBones.size(); ++i)
+        {
+            if (kTrackedBones[i] == boneId)
+                return static_cast<int>(i);
+        }
+
+        return -1;
+    };
+
+    std::lock_guard lock(m_RenderFrameMutex);
+    snapshots.reserve(m_RenderFrame.Players.size());
+
+    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    {
+        TriggerBoneSnapshot snapshot{};
+        snapshot.Pawn = player.Pawn;
+        snapshot.Team = player.Team;
+        snapshot.Health = player.Health;
+        snapshot.LifeState = player.LifeState;
+        snapshot.IsVisible = player.IsVisible;
+        snapshot.BoxMin = player.BoxMin;
+        snapshot.BoxMax = player.BoxMax;
+
+        for (const BonePoint& bone : player.Bones)
+        {
+            const int slot = slotFromBoneId(bone.Index);
+            if (slot < 0 || static_cast<std::size_t>(slot) >= TriggerBoneSnapshot::BoneCount)
+                continue;
+
+            snapshot.Bones[static_cast<std::size_t>(slot)] = bone;
+            snapshot.BoneValid[static_cast<std::size_t>(slot)] = bone.OnScreen;
+        }
+
+        snapshots.push_back(std::move(snapshot));
+    }
+
+    return snapshots;
+}
+
 void ESP::EnsureSamplerStarted()
 {
     bool expected = false;
@@ -1085,7 +1529,12 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     UpdateVisCheckState();
     outFrame.MapStatus = m_MapStatus;
 
-    if (!config.Visuals.Enabled)
+    const bool needVisibilityChecks = config.Aim.AimVisible || config.Visuals.VisibleCheck;
+    const bool needTriggerBoneSampling =
+        config.Aim.Trigger &&
+        std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox;
+    const bool needEntitySampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
+    if (!needEntitySampling)
         return true;
 
     const SDK::CoreCache core = sdk.GetCoreCache();
@@ -1466,7 +1915,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         if (!IsAlive(entity->Health, entity->LifeState))
             continue;
 
-        if (config.Visuals.TeamCheck && localTeam > 0 && entity->Team == localTeam)
+        if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
             continue;
 
         activeControllers.insert(entity->Controller);
@@ -1525,7 +1974,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         snapshot.WeaponName = runtimeCache.WeaponName;
 
         bool hasBoxData = false;
-        if (config.Visuals.Bones && snapshot.BoneArray)
+        const bool needBoneData = (config.Visuals.Bones || config.Aim.TriggerHitboxDebug || needTriggerBoneSampling) && snapshot.BoneArray;
+        if (needBoneData)
             hasBoxData = BuildBoneData(snapshot.BoneArray, snapshot);
 
         if (!hasBoxData)
@@ -1546,7 +1996,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             snapshot.BoxMax = ImVec2(screenFeet.x + boxWidth * 0.5f, screenFeet.y);
         }
 
-        if (config.Visuals.VisibleCheck)
+        if (needVisibilityChecks && m_VisCheckEnabled)
             snapshot.IsVisible = CheckVisibility(localEyePosition, snapshot.HeadPosition);
 
         outFrame.Players.push_back(std::move(snapshot));
@@ -1639,12 +2089,121 @@ void ESP::Render(ImDrawList* drawList)
     drawnPlayers = static_cast<std::uint32_t>(frame.Players.size());
 
     RenderWatermark(drawList);
+    float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
 
-    if (config.Visuals.VisibleCheck)
+    const ImVec2 statusPos(12.0f, leftHudY);
+    const char* mapStatus = frame.MapStatus.empty() ? "Map Status: (Waiting)" : frame.MapStatus.c_str();
+    drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
+    leftHudY += ImGui::GetFontSize() + 2.0f;
+
+    if (config.Aim.Aimbot || config.Aim.Trigger)
     {
-        const ImVec2 statusPos(12.0f, config.Visuals.Watermark ? 34.0f : 12.0f);
-        const char* mapStatus = frame.MapStatus.empty() ? "Map Status: (Waiting)" : frame.MapStatus.c_str();
-        drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
+        const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
+        const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
+        const bool triggerHotkeyActive = aim.IsTriggerHotkeyActiveVisual();
+        const bool triggerHasTarget = aim.HasTriggerTargetVisual();
+
+        const char* aimbotState = "OFF";
+        ImU32 aimbotColor = IM_COL32(180, 180, 180, 255);
+        if (config.Aim.Aimbot)
+        {
+            aimbotState = "READY";
+            aimbotColor = IM_COL32(220, 220, 220, 255);
+            if (aimbotHotkeyActive)
+            {
+                aimbotState = "HOTKEY";
+                aimbotColor = IM_COL32(255, 220, 120, 255);
+            }
+            if (aimbotHasTarget)
+            {
+                aimbotState = "LOCK";
+                aimbotColor = IM_COL32(120, 255, 155, 255);
+            }
+        }
+
+        const char* triggerState = "OFF";
+        ImU32 triggerColor = IM_COL32(180, 180, 180, 255);
+        if (config.Aim.Trigger)
+        {
+            triggerState = "READY";
+            triggerColor = IM_COL32(220, 220, 220, 255);
+            if (triggerHotkeyActive)
+            {
+                triggerState = "HOTKEY";
+                triggerColor = IM_COL32(255, 220, 120, 255);
+            }
+            if (triggerHasTarget)
+            {
+                triggerState = "HIT";
+                triggerColor = IM_COL32(120, 255, 155, 255);
+            }
+        }
+
+        char aimbotStatusLine[64]{};
+        char triggerStatusLine[64]{};
+        std::snprintf(aimbotStatusLine, sizeof(aimbotStatusLine), "Aimbot: %s", aimbotState);
+        std::snprintf(triggerStatusLine, sizeof(triggerStatusLine), "Trigger: %s", triggerState);
+        drawList->AddText(ImVec2(12.0f, leftHudY), aimbotColor, aimbotStatusLine);
+        leftHudY += ImGui::GetFontSize() + 2.0f;
+        drawList->AddText(ImVec2(12.0f, leftHudY), triggerColor, triggerStatusLine);
+        leftHudY += ImGui::GetFontSize() + 2.0f;
+    }
+
+    if (config.Aim.Aimbot && config.Aim.DrawFov)
+    {
+        float radius = aim.GetCurrentFovRadiusPx();
+        if (radius <= 0.01f)
+            radius = (std::max)(2.0f, (config.Aim.WeaponProfiles[Structs::AimWeapon_Rifle].Fov / 180.0f) * ScreenCenter.x);
+
+        drawList->AddCircle(
+            ImVec2(ScreenCenter.x, ScreenCenter.y),
+            radius,
+            ToImColor(config.Aim.AimbotFovColor),
+            96,
+            1.3f
+        );
+
+        char fovText[64]{};
+        const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
+        const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
+        const char* aimState = aimbotHasTarget ? "LOCK" : (aimbotHotkeyActive ? "HOTKEY" : "IDLE");
+        std::snprintf(fovText, sizeof(fovText), "FOV %.1f px [%s]", radius, aimState);
+        drawList->AddText(
+            ImVec2(ScreenCenter.x + radius + 8.0f, ScreenCenter.y - ImGui::GetFontSize() * 0.5f),
+            ToImColor(config.Aim.AimbotFovColor),
+            fovText
+        );
+    }
+
+    if (config.Aim.TriggerHitboxDebug)
+    {
+        const int detectMode = std::clamp(
+            aim.GetCurrentTriggerDetectMode(),
+            0,
+            static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1
+        );
+        const float unifiedRadius = std::clamp(config.Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
+        const float hitboxScale = std::clamp(config.Aim.TriggerHitboxScale, 0.25f, 3.0f);
+        const float hitboxAddPx = std::clamp(config.Aim.TriggerHitboxAddPx, -20.0f, 40.0f);
+        const float headBaseRadius = std::clamp(config.Aim.TriggerHeadRadiusPx, 0.5f, 80.0f);
+        const float bodyRadius = std::clamp(unifiedRadius * hitboxScale + hitboxAddPx, 0.5f, 80.0f);
+        const float headRadius = std::clamp(headBaseRadius * hitboxScale + hitboxAddPx, 0.5f, 100.0f);
+        char triggerDebugText[128]{};
+        std::snprintf(
+            triggerDebugText,
+            sizeof(triggerDebugText),
+            "Trigger Debug: %s | Body %.1f px | Head %.1f px",
+            Structs::TriggerDetectModeNames[detectMode],
+            bodyRadius,
+            headRadius
+        );
+
+        drawList->AddText(
+            ImVec2(12.0f, leftHudY),
+            ToImColor(config.Aim.TriggerHitboxDebugColor),
+            triggerDebugText
+        );
+        leftHudY += ImGui::GetFontSize() + 2.0f;
     }
 
     for (const PlayerEspSnapshot& player : frame.Players)

@@ -1220,6 +1220,8 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
     }
 
     const bool user_clicked = hovered && io.MouseClicked[0];
+    static std::map<ImGuiID, bool> wait_release_after_activate;
+    bool waiting_for_release = false;
 
     if (user_clicked)
     {
@@ -1231,11 +1233,15 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
         }
         ImGui::SetActiveID(id, window);
         ImGui::FocusWindow(window);
+        wait_release_after_activate[id] = true;
     }
     else if (io.MouseClicked[0])
     {
         if (g.ActiveId == id)
+        {
             ImGui::ClearActiveID();
+            wait_release_after_activate.erase(id);
+        }
     }
 
     bool value_changed = false;
@@ -1243,71 +1249,113 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
 
     if (g.ActiveId == id)
     {
-        const bool suppressLeftMouseCapture = user_clicked;
+        auto wait_it = wait_release_after_activate.find(id);
+        waiting_for_release = wait_it != wait_release_after_activate.end() && wait_it->second;
 
-        for (auto i = 0; i < 5; i++)
+        if (waiting_for_release)
         {
-            if (suppressLeftMouseCapture && i == 0)
-                continue;
-
-            if (io.MouseDown[i])
+            bool any_input_down = false;
+            for (int i = 0; i < 5; ++i)
             {
-                switch (i) {
-                case 0:
-                    key = 0x01;
-                    break;
-                case 1:
-                    key = 0x02;
-                    break;
-                case 2:
-                    key = 0x04;
-                    break;
-                case 3:
-                    key = 0x05;
-                    break;
-                case 4:
-                    key = 0x06;
+                if (io.MouseDown[i])
+                {
+                    any_input_down = true;
                     break;
                 }
-                value_changed = true;
-                ImGui::ClearActiveID();
-                break;
             }
-        }
 
-        if (!value_changed)
-        {
-            const int hostMouseKey = CaptureHostMouseVk(!suppressLeftMouseCapture);
-            if (hostMouseKey != 0)
+            if (!any_input_down)
             {
-                key = hostMouseKey;
-                value_changed = true;
-                ImGui::ClearActiveID();
-            }
-        }
-
-        if (!value_changed)
-        {
-            for (auto i = 0x08; i <= 0xA5; i++)
-            {
-                if (io.KeysDown[i])
+                for (int i = 0x08; i <= 0xA5; ++i)
                 {
-                    key = i;
+                    if (io.KeysDown[i])
+                    {
+                        any_input_down = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!any_input_down)
+            {
+                if (CaptureHostMouseVk(true) != 0 || CaptureHostKeyboardVk() != 0)
+                    any_input_down = true;
+            }
+
+            if (!any_input_down)
+            {
+                waiting_for_release = false;
+                wait_release_after_activate[id] = false;
+            }
+        }
+
+        if (!waiting_for_release)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                if (io.MouseDown[i])
+                {
+                    switch (i) {
+                    case 0:
+                        key = 0x01;
+                        break;
+                    case 1:
+                        key = 0x02;
+                        break;
+                    case 2:
+                        key = 0x04;
+                        break;
+                    case 3:
+                        key = 0x05;
+                        break;
+                    case 4:
+                        key = 0x06;
+                        break;
+                    }
                     value_changed = true;
                     ImGui::ClearActiveID();
+                    wait_release_after_activate.erase(id);
                     break;
                 }
             }
-        }
 
-        if (!value_changed)
-        {
-            const int hostKeyboardKey = CaptureHostKeyboardVk();
-            if (hostKeyboardKey != 0)
+            if (!value_changed)
             {
-                key = hostKeyboardKey;
-                value_changed = true;
-                ImGui::ClearActiveID();
+                const int hostMouseKey = CaptureHostMouseVk(true);
+                if (hostMouseKey != 0)
+                {
+                    key = hostMouseKey;
+                    value_changed = true;
+                    ImGui::ClearActiveID();
+                    wait_release_after_activate.erase(id);
+                }
+            }
+
+            if (!value_changed)
+            {
+                for (int i = 0x08; i <= 0xA5; i++)
+                {
+                    if (io.KeysDown[i])
+                    {
+                        key = i;
+                        value_changed = true;
+                        ImGui::ClearActiveID();
+                        wait_release_after_activate.erase(id);
+                        break;
+                    }
+                }
+            }
+
+            if (!value_changed)
+            {
+                const int hostKeyboardKey = CaptureHostKeyboardVk();
+                if (hostKeyboardKey != 0)
+                {
+                    key = hostKeyboardKey;
+                    value_changed = true;
+                    ImGui::ClearActiveID();
+                    wait_release_after_activate.erase(id);
+                }
             }
         }
 
@@ -1315,8 +1363,16 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
         {
             *k = 0;
             ImGui::ClearActiveID();
+            wait_release_after_activate.erase(id);
         }
-        else *k = key;
+        else
+        {
+            *k = key;
+        }
+    }
+    else
+    {
+        wait_release_after_activate.erase(id);
     }
 
     window->DrawList->AddRectFilled(frame_bb.Min, frame_bb.Max, ImGui::GetColorU32(ImGuiCol_Button), style.FrameRounding);
@@ -1333,7 +1389,7 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
     if (*k != 0 && g.ActiveId != id)
         strcpy_s(buf_display, szKeyNames[*k]);
     else if (g.ActiveId == id)
-        strcpy_s(buf_display, "Press any key");
+        strcpy_s(buf_display, waiting_for_release ? "Release then press key" : "Press any key");
 
     const ImRect clip_rect(frame_bb.Min.x, frame_bb.Min.y, frame_bb.Min.x + size.x, frame_bb.Min.y + size.y);
     ImGui::RenderTextClipped(frame_bb.Min + style.FramePadding, frame_bb.Max - style.FramePadding, buf_display, NULL, NULL, style.ButtonTextAlign, &clip_rect);
@@ -1342,12 +1398,15 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
     if (label_size.x > 0.0f)
         ImGui::RenderText(label_pos, label);
 
+    char mode_popup_id[64]{};
+    ImFormatString(mode_popup_id, IM_ARRAYSIZE(mode_popup_id), "Mode##%08X", id);
+
     if (hovered && ImGui::IsMouseReleased(1))
     {
-        ImGui::OpenPopup("Mode");
+        ImGui::OpenPopup(mode_popup_id);
     }
 
-    if (ImGui::BeginPopup("Mode"))
+    if (ImGui::BeginPopup(mode_popup_id))
     {
         if (ImGui::MenuItem("Always On", nullptr, *options == KeyBindOptions::Always))
         {

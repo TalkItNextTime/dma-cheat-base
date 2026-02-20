@@ -40,6 +40,25 @@ namespace PerfDebug
 
         std::atomic<std::uint64_t> MapPolls{ 0 };
         std::atomic<std::uint64_t> MapHits{ 0 };
+
+        std::atomic<std::uint64_t> TriggerHotkeyDowns{ 0 };
+        std::atomic<std::uint64_t> TriggerTimeoutChecks{ 0 };
+        std::atomic<std::uint64_t> TriggerTimeoutHits{ 0 };
+        std::atomic<std::uint64_t> TriggerTimeoutAgeUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerTimeoutAgeUsMax{ 0 };
+        std::atomic<std::uint64_t> TriggerScans{ 0 };
+        std::atomic<std::uint64_t> TriggerScanUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerScanUsMax{ 0 };
+        std::atomic<std::uint64_t> TriggerScanCandidates{ 0 };
+        std::atomic<std::uint64_t> TriggerFires{ 0 };
+        std::atomic<std::uint64_t> TriggerTimeoutFires{ 0 };
+        std::atomic<std::uint64_t> TriggerDetectFires{ 0 };
+        std::atomic<std::uint64_t> TriggerFireHotkeyAgeUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerFireHotkeyAgeUsMax{ 0 };
+        std::atomic<std::uint64_t> TriggerDecisionUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerDecisionUsMax{ 0 };
+        std::atomic<std::uint64_t> TriggerSendUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerSendUsMax{ 0 };
     };
 
     inline IntervalCounters Counters{};
@@ -84,6 +103,49 @@ namespace PerfDebug
             Counters.MapHits.fetch_add(1, std::memory_order_relaxed);
     }
 
+    inline void RecordTriggerHotkeyDown()
+    {
+        Counters.TriggerHotkeyDowns.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordTriggerTimeoutCheck(const std::uint64_t hotkeyAgeUs, const bool timeoutHit)
+    {
+        Counters.TriggerTimeoutChecks.fetch_add(1, std::memory_order_relaxed);
+        Counters.TriggerTimeoutAgeUsSum.fetch_add(hotkeyAgeUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerTimeoutAgeUsMax, hotkeyAgeUs);
+        if (timeoutHit)
+            Counters.TriggerTimeoutHits.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordTriggerScan(const std::uint64_t scanUs, const bool hasCandidate)
+    {
+        Counters.TriggerScans.fetch_add(1, std::memory_order_relaxed);
+        Counters.TriggerScanUsSum.fetch_add(scanUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerScanUsMax, scanUs);
+        if (hasCandidate)
+            Counters.TriggerScanCandidates.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordTriggerFire(
+        const std::uint64_t hotkeyAgeUs,
+        const std::uint64_t decisionUs,
+        const std::uint64_t sendUs,
+        const bool byTimeout)
+    {
+        Counters.TriggerFires.fetch_add(1, std::memory_order_relaxed);
+        Counters.TriggerFireHotkeyAgeUsSum.fetch_add(hotkeyAgeUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerFireHotkeyAgeUsMax, hotkeyAgeUs);
+        Counters.TriggerDecisionUsSum.fetch_add(decisionUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerDecisionUsMax, decisionUs);
+        Counters.TriggerSendUsSum.fetch_add(sendUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerSendUsMax, sendUs);
+
+        if (byTimeout)
+            Counters.TriggerTimeoutFires.fetch_add(1, std::memory_order_relaxed);
+        else
+            Counters.TriggerDetectFires.fetch_add(1, std::memory_order_relaxed);
+    }
+
     inline void LogInterval(const double intervalSeconds = 1.0)
     {
         const double safeIntervalSeconds = intervalSeconds > 0.0 ? intervalSeconds : 1.0;
@@ -109,7 +171,27 @@ namespace PerfDebug
         const std::uint64_t mapPolls = Counters.MapPolls.exchange(0, std::memory_order_relaxed);
         const std::uint64_t mapHits = Counters.MapHits.exchange(0, std::memory_order_relaxed);
 
-        if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && visChecks == 0 && mapPolls == 0)
+        const std::uint64_t triggerHotkeyDowns = Counters.TriggerHotkeyDowns.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerTimeoutChecks = Counters.TriggerTimeoutChecks.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerTimeoutHits = Counters.TriggerTimeoutHits.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerTimeoutAgeUsSum = Counters.TriggerTimeoutAgeUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerTimeoutAgeUsMax = Counters.TriggerTimeoutAgeUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerScans = Counters.TriggerScans.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerScanUsSum = Counters.TriggerScanUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerScanUsMax = Counters.TriggerScanUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerScanCandidates = Counters.TriggerScanCandidates.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerFires = Counters.TriggerFires.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerTimeoutFires = Counters.TriggerTimeoutFires.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerDetectFires = Counters.TriggerDetectFires.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerFireHotkeyAgeUsSum = Counters.TriggerFireHotkeyAgeUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerFireHotkeyAgeUsMax = Counters.TriggerFireHotkeyAgeUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerDecisionUsSum = Counters.TriggerDecisionUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerDecisionUsMax = Counters.TriggerDecisionUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerSendUsSum = Counters.TriggerSendUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerSendUsMax = Counters.TriggerSendUsMax.exchange(0, std::memory_order_relaxed);
+
+        if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && visChecks == 0 && mapPolls == 0 &&
+            triggerHotkeyDowns == 0 && triggerTimeoutChecks == 0 && triggerScans == 0 && triggerFires == 0)
             return;
 
         const double overlayFps = static_cast<double>(overlayFrames) / safeIntervalSeconds;
@@ -126,23 +208,72 @@ namespace PerfDebug
         const double visAvgMs = visChecks ? (static_cast<double>(visCheckUsSum) / static_cast<double>(visChecks)) / 1000.0 : 0.0;
         const double visMaxMs = static_cast<double>(visCheckUsMax) / 1000.0;
 
+        (void)overlayFps;
+        (void)overlayAvgMs;
+        (void)overlayMaxMs;
+        (void)espAvgMs;
+        (void)espMaxMs;
+        (void)controllersPerFrame;
+        (void)playersPerFrame;
+        (void)sampleAvgMs;
+        (void)sampleMaxMs;
+        (void)visHits;
+        (void)visChecks;
+        (void)visAvgMs;
+        (void)visMaxMs;
+        (void)mapHits;
+        (void)mapPolls;
+
+        const double triggerTimeoutAgeAvgMs = triggerTimeoutChecks ? (static_cast<double>(triggerTimeoutAgeUsSum) / static_cast<double>(triggerTimeoutChecks)) / 1000.0 : 0.0;
+        const double triggerTimeoutAgeMaxMs = static_cast<double>(triggerTimeoutAgeUsMax) / 1000.0;
+        const double triggerScanAvgMs = triggerScans ? (static_cast<double>(triggerScanUsSum) / static_cast<double>(triggerScans)) / 1000.0 : 0.0;
+        const double triggerScanMaxMs = static_cast<double>(triggerScanUsMax) / 1000.0;
+        const double triggerFireAgeAvgMs = triggerFires ? (static_cast<double>(triggerFireHotkeyAgeUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
+        const double triggerFireAgeMaxMs = static_cast<double>(triggerFireHotkeyAgeUsMax) / 1000.0;
+        const double triggerDecisionAvgMs = triggerFires ? (static_cast<double>(triggerDecisionUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
+        const double triggerDecisionMaxMs = static_cast<double>(triggerDecisionUsMax) / 1000.0;
+        const double triggerSendAvgMs = triggerFires ? (static_cast<double>(triggerSendUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
+        const double triggerSendMaxMs = static_cast<double>(triggerSendUsMax) / 1000.0;
+
+        // LOG_INFO(
+        //     "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
+        //     overlayFps,
+        //     overlayAvgMs,
+        //     overlayMaxMs,
+        //     espAvgMs,
+        //     espMaxMs,
+        //     controllersPerFrame,
+        //     playersPerFrame,
+        //     sampleAvgMs,
+        //     sampleMaxMs,
+        //     visHits,
+        //     visChecks,
+        //     visAvgMs,
+        //     visMaxMs,
+        //     mapHits,
+        //     mapPolls
+        // );
+
         LOG_INFO(
-            "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
-            overlayFps,
-            overlayAvgMs,
-            overlayMaxMs,
-            espAvgMs,
-            espMaxMs,
-            controllersPerFrame,
-            playersPerFrame,
-            sampleAvgMs,
-            sampleMaxMs,
-            visHits,
-            visChecks,
-            visAvgMs,
-            visMaxMs,
-            mapHits,
-            mapPolls
+            "[trigger dbg] hk_down={} | timeout hit/check={}/{} age={:.2f}/{:.2f}ms | scan cand/scan={}/{} time={:.2f}/{:.2f}ms | fire={} timeout={} detect={} | fire_age={:.2f}/{:.2f}ms decision={:.2f}/{:.2f}ms send={:.2f}/{:.2f}ms",
+            triggerHotkeyDowns,
+            triggerTimeoutHits,
+            triggerTimeoutChecks,
+            triggerTimeoutAgeAvgMs,
+            triggerTimeoutAgeMaxMs,
+            triggerScanCandidates,
+            triggerScans,
+            triggerScanAvgMs,
+            triggerScanMaxMs,
+            triggerFires,
+            triggerTimeoutFires,
+            triggerDetectFires,
+            triggerFireAgeAvgMs,
+            triggerFireAgeMaxMs,
+            triggerDecisionAvgMs,
+            triggerDecisionMaxMs,
+            triggerSendAvgMs,
+            triggerSendMaxMs
         );
     }
 }

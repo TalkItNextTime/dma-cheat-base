@@ -301,6 +301,7 @@ bool SDK::LoadOffsets()
     loadSchema("C_EconEntity", "m_AttributeManager", Offsets::Schema::m_AttributeManager);
     loadSchema("C_AttributeContainer", "m_Item", Offsets::Schema::m_Item);
     loadSchema("C_EconItemView", "m_iItemDefinitionIndex", Offsets::Schema::m_iItemDefinitionIndex);
+    loadSchema("C_CSWeaponBase", "m_bInReload", Offsets::Schema::m_bInReload);
     loadSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
     loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
     loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);

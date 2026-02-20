@@ -79,6 +79,7 @@ namespace Offsets
         inline std::uint32_t m_AttributeManager = 0;
         inline std::uint32_t m_Item = 0;
         inline std::uint32_t m_iItemDefinitionIndex = 0;
+        inline std::uint32_t m_bInReload = 0;
         inline std::uint32_t m_bHasDefuser = 0;
         inline std::uint32_t m_bBombTicking = 0;
         inline std::uint32_t m_bBombDefused = 0;

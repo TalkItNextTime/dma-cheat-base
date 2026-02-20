@@ -1,5 +1,6 @@
 #include <Pch.hpp>
 #include <SDK.hpp>
+#include <array>
 
 #include "Overlay.hpp"
 #include "Fonts/IBMPlexMono_Medium.h"
@@ -470,88 +471,254 @@ void Overlay::RenderMenu()
 
 			if (m_iSelectedPage == MenuPage_Aim)
 			{
-				ImGui::BeginGroup(); // Left group
+				constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
+				auto drawBoneMaskEditor = [&](const char* idSuffix, std::uint64_t& mask, const std::uint64_t fallbackMask)
 				{
-					ImGui::BeginChild("Aimbot", ImVec2(fGroupWidth, 
-						ImGui::GetFrameHeight() + // MenuBar
-						style.WindowPadding.y * 2 + // child padding
-						style.ItemSpacing.x * 15 + // spacing
-						ImGui::GetFontSize() * 10 // checkbox + separators
-					), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar); 
+					mask &= kAllBonesMask;
+					for (size_t i = 0; i < Structs::AimBoneNames.size(); ++i)
 					{
-						if (ImGui::BeginMenuBar()) {
-							ImGui::SetCursorPos(style.FramePadding);
+						const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(i);
+						bool enabled = (mask & bit) != 0ull;
+						std::string label = std::string(Structs::AimBoneNames[i]) + "##" + idSuffix + std::to_string(i);
+						if (ImGui::Checkbox(label.c_str(), &enabled))
+						{
+							if (enabled)
+								mask |= bit;
+							else
+								mask &= ~bit;
+						}
+
+						if ((i % 2) == 0 && i + 1 < Structs::AimBoneNames.size())
+							ImGui::SameLine(ImGui::GetWindowWidth() * 0.47f);
+					}
+
+					if (mask == 0)
+						mask = fallbackMask;
+				};
+
+				ImGui::BeginChild("AimTabsRoot", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoBackground);
+				{
+					if (ImGui::BeginTabBar("AimSubTabs", ImGuiTabBarFlags_None))
+					{
+						if (ImGui::BeginTabItem("Aimbot"))
+						{
 							ImAdd::CheckBox("Aimbot##Enable", &config.Aim.Aimbot);
-							ImGui::EndMenuBar();
-						}
 
-						if (config.Aim.Aimbot)
-						{
-							if (ProcInfo::KmboxInitialized)
+							if (config.Aim.Aimbot)
 							{
-								ImAdd::CheckBox("Draw FOV", &config.Aim.DrawFov);
-								if (config.Aim.DrawFov)
+								if (ProcInfo::KmboxInitialized)
 								{
-									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-									ImAdd::ColorEdit4("##FovColor", (float*)&config.Aim.AimbotFovColor);
+									if (ImGui::BeginTabBar("AimbotLayoutTabs", ImGuiTabBarFlags_None))
+									{
+										if (ImGui::BeginTabItem("General"))
+										{
+											ImAdd::SeparatorText("Hotkeys");
+											ImAdd::KeyBindOptions primaryMode = (ImAdd::KeyBindOptions)config.Aim.AimbotKeyMode;
+											ImAdd::KeyBind("Primary Key", &config.Aim.AimbotKey, 0, &primaryMode);
+											config.Aim.AimbotKeyMode = (int)primaryMode;
+
+											ImAdd::CheckBox("Enable Secondary Key", &config.Aim.AimbotSecondKeyEnabled);
+											if (config.Aim.AimbotSecondKeyEnabled)
+											{
+												ImAdd::KeyBindOptions secondaryMode = (ImAdd::KeyBindOptions)config.Aim.AimbotSecondKeyMode;
+												ImAdd::KeyBind("Secondary Key", &config.Aim.AimbotSecondKey, 0, &secondaryMode);
+												config.Aim.AimbotSecondKeyMode = (int)secondaryMode;
+											}
+
+											ImAdd::SeparatorText("General");
+											ImAdd::CheckBox("Draw FOV", &config.Aim.DrawFov);
+											if (config.Aim.DrawFov)
+											{
+												ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+												ImAdd::ColorEdit4("##AimFovColor", (float*)&config.Aim.AimbotFovColor);
+											}
+
+											ImAdd::CheckBox("Dynamic FOV", &config.Aim.DynamicFov);
+											ImAdd::SliderFloat("Dynamic FOV Min Px", &config.Aim.DynamicFovMinPx, 2.0f, 40.0f);
+											ImAdd::CheckBox("Aim Visible", &config.Aim.AimVisible);
+											ImAdd::CheckBox("Aim Teammates", &config.Aim.AimFriendly);
+											ImAdd::CheckBox("Block Aimbot When Flashed", &config.Aim.BlockAimbotWhenFlashed);
+											ImAdd::SliderFloat("Deadzone (px)", &config.Aim.DeadzonePx, 0.0f, 6.0f);
+
+											ImAdd::SeparatorText("Aim Parts (Bone Points)");
+											drawBoneMaskEditor("AimbotBoneParts", config.Aim.AimbotBoneMask, Structs::AimDefaultAimbotBoneMask);
+
+											ImAdd::SeparatorText("RCS");
+											ImAdd::CheckBox("Global RCS", &config.Aim.GlobalRcsEnabled);
+											if (config.Aim.GlobalRcsEnabled)
+											{
+												ImAdd::SliderFloat("Global RCS Pitch", &config.Aim.GlobalRcsPitch, 0.0f, 4.0f);
+												ImAdd::SliderFloat("Global RCS Yaw", &config.Aim.GlobalRcsYaw, 0.0f, 4.0f);
+											}
+
+											ImAdd::CheckBox("Aimbot RCS", &config.Aim.AimbotRcsEnabled);
+											if (config.Aim.AimbotRcsEnabled)
+											{
+												ImAdd::SliderFloat("Aimbot RCS Pitch", &config.Aim.AimbotRcsPitch, 0.0f, 4.0f);
+												ImAdd::SliderFloat("Aimbot RCS Yaw", &config.Aim.AimbotRcsYaw, 0.0f, 4.0f);
+											}
+
+											ImAdd::CheckBox("Fuse Global RCS During Aim", &config.Aim.FuseGlobalRcsWithAimbot);
+											ImGui::TextDisabled("Aimbot thread interval: 2ms (~500Hz).");
+											ImGui::EndTabItem();
+										}
+
+										if (ImGui::BeginTabItem("Weapon Tabs"))
+										{
+											if (ImGui::BeginTabBar("AimbotWeaponTabs", ImGuiTabBarFlags_None))
+											{
+												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
+												{
+													if (ImGui::BeginTabItem(Structs::AimWeaponGroupNames[i]))
+													{
+														config.Aim.WeaponProfileEditorIndex = i;
+														Structs::AimWeaponProfile& profile = config.Aim.WeaponProfiles[i];
+														ImAdd::SliderFloat("Profile FOV", &profile.Fov, 0.1f, 45.0f);
+														ImAdd::SliderFloat("Profile Smooth", &profile.Smooth, 1.0f, 100.0f);
+														ImAdd::SliderFloat("Curve Strength", &profile.CurveStrength, 0.0f, 0.85f);
+														ImAdd::CheckBox("Profile Dynamic FOV", &profile.DynamicFov);
+														ImAdd::SliderFloat("Dynamic Distance Scale", &profile.DynamicFovDistanceScale, 400.0f, 4500.0f);
+														ImAdd::Combo("Target Strategy", &profile.TargetStrategy, Structs::AimTargetStrategyNames.data(), (int)Structs::AimTargetStrategyNames.size());
+														ImAdd::SliderInt("Target Switch Delay (ms)", &profile.TargetSwitchDelayMs, 0, 600);
+														ImGui::EndTabItem();
+													}
+												}
+												ImGui::EndTabBar();
+											}
+
+											ImGui::EndTabItem();
+										}
+
+										ImGui::EndTabBar();
+									}
 								}
-
-								ImAdd::CheckBox("Aim Visible", &config.Aim.AimVisible);
-								ImAdd::CheckBox("Aim Teammates", &config.Aim.AimFriendly);
-
-								ImAdd::KeyBindOptions KeyMode = (ImAdd::KeyBindOptions)config.Aim.AimbotKeyMode;
-								ImAdd::KeyBind("Aimbot Key", &config.Aim.AimbotKey, 0, &KeyMode);
-
-								ImAdd::SliderFloat("Aimbot Fov", &config.Aim.AimbotFov, 0.0f, 180.0f);
-								ImAdd::SliderFloat("Aimbot Smooth", &config.Aim.AimbotSmooth, 0.0f, 100.0f);
+								else
+								{
+									ImGui::SetCursorPos(
+										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
+										ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight())
+									);
+									ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
+								}
 							}
-							else
-							{
-								ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 - ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight()));
-								ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
-							}
-						}
-					}
-					ImGui::EndChild();
-				}
-				ImGui::EndGroup();
-				ImGui::SameLine();
-				ImGui::BeginGroup();
-				{
-					ImGui::BeginChild("Trigger", ImVec2(fGroupWidth,
-						ImGui::GetFrameHeight() + // MenuBar
-						style.WindowPadding.y * 2 + // child padding
-						style.ItemSpacing.x * 15 + // spacing
-						ImGui::GetFontSize() * 10 // checkbox + separators
-					), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
-					{
-						if (ImGui::BeginMenuBar()) {
-							ImGui::SetCursorPos(style.FramePadding);
-							ImAdd::CheckBox("Trigger##Enable", &config.Aim.Trigger);
-							ImGui::EndMenuBar();
+
+							ImGui::EndTabItem();
 						}
 
-						if (config.Aim.Trigger)
+						if (ImGui::BeginTabItem("Trigger"))
 						{
-							if (ProcInfo::KmboxInitialized)
-							{
-								ImAdd::CheckBox("Trigger##Enable", &config.Aim.Trigger);
+							ImAdd::CheckBox("Trigger##Enable", &config.Aim.Trigger);
 
-								ImAdd::KeyBindOptions KeyMode = (ImAdd::KeyBindOptions)config.Aim.TriggerKeyMode;
-								ImAdd::KeyBind("Trigger Key", &config.Aim.TriggerKey, 0, &KeyMode);
-
-								ImAdd::SliderInt("Trigger Delay (ms)", &config.Aim.TriggerDelay, 0, 250);
-							}
-							else
+							if (config.Aim.Trigger)
 							{
-								ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 - ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight()));
-								ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
+								if (ProcInfo::KmboxInitialized)
+								{
+									if (ImGui::BeginTabBar("TriggerLayoutTabs", ImGuiTabBarFlags_None))
+									{
+										if (ImGui::BeginTabItem("General"))
+										{
+											ImAdd::SeparatorText("Hotkeys");
+											ImGui::TextDisabled("Trigger only works while holding hotkey.");
+											ImAdd::KeyBindOptions triggerMode = (ImAdd::KeyBindOptions)config.Aim.TriggerKeyMode;
+											ImAdd::KeyBind("Primary Trigger Key", &config.Aim.TriggerKey, 0, &triggerMode);
+											config.Aim.TriggerKeyMode = (int)ImAdd::KeyBindOptions::OnKeyDown;
+
+											ImAdd::CheckBox("Enable Secondary Trigger Key", &config.Aim.TriggerSecondKeyEnabled);
+											if (config.Aim.TriggerSecondKeyEnabled)
+											{
+												ImAdd::KeyBindOptions triggerSecondMode = (ImAdd::KeyBindOptions)config.Aim.TriggerSecondKeyMode;
+												ImAdd::KeyBind("Secondary Trigger Key", &config.Aim.TriggerSecondKey, 0, &triggerSecondMode);
+												config.Aim.TriggerSecondKeyMode = (int)ImAdd::KeyBindOptions::OnKeyDown;
+											}
+
+											ImAdd::SeparatorText("Detection");
+											ImAdd::Combo("Trigger Detect Mode", &config.Aim.TriggerDetectMode, Structs::TriggerDetectModeNames.data(), (int)Structs::TriggerDetectModeNames.size());
+											ImAdd::SliderFloat("Unified Hitbox Radius (px)", &config.Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
+											ImAdd::SliderFloat("Hitbox Scale", &config.Aim.TriggerHitboxScale, 0.25f, 3.0f);
+											ImAdd::SliderFloat("Hitbox Add (px)", &config.Aim.TriggerHitboxAddPx, -20.0f, 40.0f);
+											ImAdd::SliderFloat("Head Radius (px)", &config.Aim.TriggerHeadRadiusPx, 0.5f, 80.0f);
+
+											ImAdd::SeparatorText("Safety");
+											ImAdd::CheckBox("Block Trigger When Flashed", &config.Aim.BlockTriggerWhenFlashed);
+											ImGui::TextDisabled("Reloading / non-gun is always blocked.");
+
+											ImAdd::SeparatorText("Hitbox Debug");
+											ImAdd::CheckBox("Enable Trigger Hitbox Debug", &config.Aim.TriggerHitboxDebug);
+											ImAdd::CheckBox("Head Sphere Debug", &config.Aim.TriggerHeadSphereDebug);
+											if (config.Aim.TriggerHitboxDebug)
+											{
+												ImGui::TextDisabled("ESP draws 3D box per bone segment.");
+												ImAdd::SliderFloat("Debug Thickness", &config.Aim.TriggerHitboxDebugThickness, 0.5f, 4.0f);
+												ImAdd::ColorEdit4("Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugColor);
+												ImAdd::ColorEdit4("Active Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugActiveColor);
+											}
+
+											ImGui::TextDisabled("Trigger thread interval: 2ms (~500Hz).");
+											ImGui::EndTabItem();
+										}
+
+										if (ImGui::BeginTabItem("Weapon Tabs"))
+										{
+											if (ImGui::BeginTabBar("TriggerWeaponTabs", ImGuiTabBarFlags_None))
+											{
+												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
+												{
+													if (ImGui::BeginTabItem(Structs::AimWeaponGroupNames[i]))
+													{
+														config.Aim.TriggerProfileEditorIndex = i;
+														Structs::TriggerWeaponProfile& profile = config.Aim.TriggerProfiles[i];
+														ImAdd::SliderInt("Pre Fire Delay (ms)", &profile.PreFireDelayMs, 0, 600);
+														ImAdd::SliderInt("Post Fire Interval (ms)", &profile.PostFireIntervalMs, 0, 1200);
+														ImAdd::SliderInt("Timeout Force Fire (ms)", &profile.TimeoutForceFireMs, 0, 3000);
+														ImAdd::SeparatorText("Trigger Parts (Bone Points)");
+														const std::string profileBoneMaskId = std::string("TriggerProfileBoneMask") + std::to_string(i);
+														drawBoneMaskEditor(profileBoneMaskId.c_str(), profile.BoneMask, kAllBonesMask);
+														ImGui::EndTabItem();
+													}
+												}
+
+												for (int i = 0; i < Structs::TriggerSpecial_Count; ++i)
+												{
+													if (ImGui::BeginTabItem(Structs::TriggerSpecialWeaponNames[i]))
+													{
+														config.Aim.TriggerSpecialEditorIndex = i;
+														Structs::TriggerSpecialProfile& special = config.Aim.TriggerSpecialProfiles[i];
+														ImAdd::SliderInt("Special Pre Fire Delay (ms)", &special.PreFireDelayMs, 0, 600);
+														ImAdd::SliderInt("Special Post Fire Interval (ms)", &special.PostFireIntervalMs, 0, 1500);
+														ImAdd::SliderInt("Special Timeout Force Fire (ms)", &special.TimeoutForceFireMs, 0, 3000);
+														ImAdd::SliderInt("Special Hold Fire (ms)", &special.HoldFireMs, 0, 600);
+														ImAdd::SeparatorText("Trigger Parts (Bone Points)");
+														const std::string specialBoneMaskId = std::string("TriggerSpecialBoneMask") + std::to_string(i);
+														drawBoneMaskEditor(specialBoneMaskId.c_str(), special.BoneMask, kAllBonesMask);
+														ImGui::EndTabItem();
+													}
+												}
+
+												ImGui::EndTabBar();
+											}
+											ImGui::EndTabItem();
+										}
+
+										ImGui::EndTabBar();
+									}
+								}
+								else
+								{
+									ImGui::SetCursorPos(
+										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
+										ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight())
+									);
+									ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
+								}
 							}
+
+							ImGui::EndTabItem();
 						}
+
+						ImGui::EndTabBar();
 					}
-					ImGui::EndChild();
 				}
-				ImGui::EndGroup();
+				ImGui::EndChild();
 			}
 
 			else if (m_iSelectedPage == MenuPage_Visuals)
@@ -669,8 +836,8 @@ void Overlay::RenderMenu()
 							ImAdd::CheckBox("Bones", &config.Visuals.Bones);
 							if (config.Visuals.Bones)
 							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##BonesColor", (float*)&config.Visuals.BonesColor);
+								ImAdd::ColorEdit4("Bones Color", (float*)&config.Visuals.BonesColor);
+								ImAdd::ColorEdit4("Bones Color Visible", (float*)&config.Visuals.BonesColorVisible);
 							}
 						}
 
