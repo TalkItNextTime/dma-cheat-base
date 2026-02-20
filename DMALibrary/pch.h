@@ -17,6 +17,16 @@
 #include <sstream>
 #include <fstream>
 #include <filesystem>
+#include <cstring>
+#include <chrono>
+#include <thread>
+#include <vector>
+#include <string>
+#include <memory>
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
 
 //#define DEBUG_INFO
 #ifdef DEBUG_INFO

@@ -658,7 +658,21 @@ uint64_t Memory::FindSignature(const char* signature, uint64_t range_start, uint
 		PID = current_process.PID;
 
 	std::vector<uint8_t> buffer(range_end - range_start);
-	if (!VMMDLL_MemReadEx(this->vHandle, PID, range_start, buffer.data(), buffer.size(), 0, VMMDLL_FLAG_NOCACHE))
+	if (buffer.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+		return 0;
+
+	DWORD read_size = 0;
+	if (!VMMDLL_MemReadEx(
+		this->vHandle,
+		PID,
+		range_start,
+		buffer.data(),
+		static_cast<DWORD>(buffer.size()),
+		&read_size,
+		VMMDLL_FLAG_NOCACHE
+	))
+		return 0;
+	if (read_size == 0)
 		return 0;
 
 	const char* pat = signature;

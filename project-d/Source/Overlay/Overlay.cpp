@@ -235,6 +235,18 @@ void Overlay::SetForeground(HWND window)
 		BringToForeground(window);
 }
 
+bool Overlay::IsHostKeyDown(const int virtualKey)
+{
+	const bool localKeyDown = (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+	c_keys* keyboard = mem.GetKeyboard();
+	if (!keyboard)
+		return localKeyDown;
+
+	const bool dmaKeyDown = keyboard->IsKeyDown(static_cast<uint32_t>(virtualKey));
+	return localKeyDown || dmaKeyDown;
+}
+
 void Overlay::StartRender()
 {
 	MSG msg;
@@ -247,8 +259,11 @@ void Overlay::StartRender()
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	m_FrameStart = std::chrono::steady_clock::now();
+	OverlayFps = ImGui::GetIO().Framerate;
 
-	if (GetAsyncKeyState(VK_INSERT) & 1)
+	const bool insertDown = IsHostKeyDown(VK_INSERT);
+	if (insertDown && !m_InsertHeld)
 	{
 		shouldRenderMenu = !shouldRenderMenu;
 
@@ -261,6 +276,8 @@ void Overlay::StartRender()
 			SetWindowLong(overlay, GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED);
 		}
 	}
+
+	m_InsertHeld = insertDown;
 }
 
 void Overlay::EndRender()
@@ -283,6 +300,16 @@ void Overlay::EndRender()
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 	swap_chain->Present(config.Visuals.VSync ? 1U : 0U, 0U);
+
+	if (m_FrameStart.time_since_epoch().count() != 0)
+	{
+		const auto frameUs = std::chrono::duration_cast<std::chrono::microseconds>(
+			std::chrono::steady_clock::now() - m_FrameStart
+		).count();
+
+		if (frameUs >= 0)
+			PerfDebug::RecordOverlayFrame(static_cast<std::uint64_t>(frameUs));
+	}
 }
 
 void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
@@ -369,6 +396,8 @@ bool Overlay::Create()
 {
 	shouldRun = true;
 	shouldRenderMenu = false;
+	m_InsertHeld = false;
+	m_FrameStart = {};
 
 	if (!CreateOverlay())
 		return false;
@@ -406,7 +435,7 @@ void Overlay::RenderMenu()
 
 	StyleMenu(io, style);
 
-	float OverlayFps = ImGui::GetIO().Framerate;
+	OverlayFps = ImGui::GetIO().Framerate;
 
 	ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize("Awhare").x / 2);
 	ImGui::Text("Awhare");
@@ -587,6 +616,26 @@ void Overlay::RenderMenu()
 
 						ImGui::BeginGroup();
 						{
+							ImAdd::CheckBox("Armor", &config.Visuals.Armor);
+							if (config.Visuals.Armor)
+							{
+								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+								ImAdd::ColorEdit4("##ArmorColor", (float*)&config.Visuals.ArmorColor);
+							}
+						}
+
+						ImGui::BeginGroup();
+						{
+							ImAdd::CheckBox("Money", &config.Visuals.Money);
+							if (config.Visuals.Money)
+							{
+								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+								ImAdd::ColorEdit4("##MoneyColor", (float*)&config.Visuals.MoneyColor);
+							}
+						}
+
+						ImGui::BeginGroup();
+						{
 							ImAdd::CheckBox("Box", &config.Visuals.Box);
 							if (config.Visuals.Box)
 							{
@@ -612,6 +661,28 @@ void Overlay::RenderMenu()
 							{
 								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
 								ImAdd::ColorEdit4("##BonesColor", (float*)&config.Visuals.BonesColor);
+							}
+						}
+
+						ImAdd::SeparatorText("World");
+
+						ImGui::BeginGroup();
+						{
+							ImAdd::CheckBox("C4", &config.Visuals.C4);
+							if (config.Visuals.C4)
+							{
+								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+								ImAdd::ColorEdit4("##C4Color", (float*)&config.Visuals.C4Color);
+							}
+						}
+
+						ImGui::BeginGroup();
+						{
+							ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
+							if (config.Visuals.Defuser)
+							{
+								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+								ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
 							}
 						}
 					}
@@ -763,6 +834,9 @@ void Overlay::RenderMenu()
 					ImAdd::SeparatorText("Cheat");
 
 					ImGui::Text("Overlay FPS: %.2f", OverlayFps);
+					ImGui::Text("Host INSERT: %s", IsHostKeyDown(VK_INSERT) ? "Down" : "Up");
+					ImGui::Text("Host LMB: %s", IsHostKeyDown(VK_LBUTTON) ? "Down" : "Up");
+					ImGui::Text("Host RMB: %s", IsHostKeyDown(VK_RBUTTON) ? "Down" : "Up");
 
 					float buttonWidth = 100.0f;
 					float buttonSpacing = 20.0f;

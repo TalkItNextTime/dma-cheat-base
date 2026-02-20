@@ -93,5 +93,6 @@ using json = nlohmann::json;
 #include "Dma/DMA.hpp"
 
 #include "Misc/Animation/Animation.hpp"
+#include "Misc/Perf/PerfDebug.hpp"
 #include "Misc/Timer/Timer.hpp"
 #include "Misc/Exception.hpp"

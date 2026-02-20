@@ -16,6 +16,12 @@ bool DMA::Init()
         return false;
     }
 
+    Globals::Engine2Base = mem.GetBaseDaddy(ENGINE2_DLL);
+    if (!Globals::Engine2Base || Globals::Engine2Base == NULL)
+    {
+        LOG_WARN("Failed to get Engine2Base, map dependent features may be unavailable");
+    }
+
     if (!mem.GetKeyboard()->InitKeyboard())
     {
         LOG_ERROR("Failed to initialize DMA Keyboard");
@@ -30,4 +36,5 @@ bool DMA::Init()
 
     ProcInfo::DmaInitialized = true;
 
+    return true;
 }

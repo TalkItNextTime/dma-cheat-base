@@ -87,10 +87,18 @@ namespace Config
             j["Visuals"]["BoxColor"] = { Visuals.BoxColor.x, Visuals.BoxColor.y, Visuals.BoxColor.z, Visuals.BoxColor.w };
             j["Visuals"]["BoxColorVisible"] = { Visuals.BoxColorVisible.x, Visuals.BoxColorVisible.y, Visuals.BoxColorVisible.z, Visuals.BoxColorVisible.w };
             j["Visuals"]["Health"] = Visuals.Health;
+            j["Visuals"]["Armor"] = Visuals.Armor;
+            j["Visuals"]["ArmorColor"] = { Visuals.ArmorColor.x, Visuals.ArmorColor.y, Visuals.ArmorColor.z, Visuals.ArmorColor.w };
+            j["Visuals"]["Money"] = Visuals.Money;
+            j["Visuals"]["MoneyColor"] = { Visuals.MoneyColor.x, Visuals.MoneyColor.y, Visuals.MoneyColor.z, Visuals.MoneyColor.w };
             j["Visuals"]["Weapon"] = Visuals.Weapon;
             j["Visuals"]["WeaponColor"] = { Visuals.WeaponColor.x, Visuals.WeaponColor.y, Visuals.WeaponColor.z, Visuals.WeaponColor.w };
             j["Visuals"]["Bones"] = Visuals.Bones;
             j["Visuals"]["BonesColor"] = { Visuals.BonesColor.x, Visuals.BonesColor.y, Visuals.BonesColor.z, Visuals.BonesColor.w };
+            j["Visuals"]["C4"] = Visuals.C4;
+            j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
+            j["Visuals"]["Defuser"] = Visuals.Defuser;
+            j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -264,10 +272,18 @@ namespace Config
                 j["Visuals"]["BoxColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["BoxColorVisible"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["Health"] = false;
+                j["Visuals"]["Armor"] = true;
+                j["Visuals"]["ArmorColor"] = { 0.65f, 0.85f, 1.0f, 1.0f };
+                j["Visuals"]["Money"] = true;
+                j["Visuals"]["MoneyColor"] = { 0.65f, 1.0f, 0.65f, 1.0f };
                 j["Visuals"]["Weapon"] = false;
                 j["Visuals"]["WeaponColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["Bones"] = false;
                 j["Visuals"]["BonesColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
+                j["Visuals"]["C4"] = true;
+                j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
+                j["Visuals"]["Defuser"] = true;
+                j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();
@@ -327,15 +343,23 @@ namespace Config
                             else if (key == "Name") configSection.Name = value.get<bool>();
                             else if (key == "Box") configSection.Box = value.get<bool>();
                             else if (key == "Health") configSection.Health = value.get<bool>();
+                            else if (key == "Armor") configSection.Armor = value.get<bool>();
+                            else if (key == "Money") configSection.Money = value.get<bool>();
                             else if (key == "Weapon") configSection.Weapon = value.get<bool>();
                             else if (key == "Bones") configSection.Bones = value.get<bool>();
+                            else if (key == "C4") configSection.C4 = value.get<bool>();
+                            else if (key == "Defuser") configSection.Defuser = value.get<bool>();
 
                             else if (key == "WatermarkColor") configSection.WatermarkColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "NameColor") configSection.NameColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BoxColor") configSection.BoxColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BoxColorVisible") configSection.BoxColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "ArmorColor") configSection.ArmorColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "MoneyColor") configSection.MoneyColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "WeaponColor") configSection.WeaponColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColor") configSection.BonesColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "DefuserColor") configSection.DefuserColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                         }
                     }
                 }

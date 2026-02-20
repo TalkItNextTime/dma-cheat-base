@@ -2,6 +2,7 @@
 
 #define GAME_NAME "cs2.exe"
 #define CLIENT_DLL "client.dll"
+#define ENGINE2_DLL "engine2.dll"
 
 #define DISABLE_TIMERS 1
 #define USE_LOCALHOST 1
@@ -20,6 +21,7 @@ namespace Globals
 {
 	inline bool Running = false;
 	inline uint64_t ClientBase = NULL;
+	inline uint64_t Engine2Base = NULL;
 
 	inline Matrix ViewMatrix;
 };

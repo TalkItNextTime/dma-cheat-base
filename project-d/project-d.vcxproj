@@ -20,10 +20,10 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
+    <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -60,10 +60,11 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.hpp</PrecompiledHeaderFile>
@@ -77,7 +78,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalDependencies>d3d11.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AssemblyDebug>true</AssemblyDebug>
@@ -90,6 +91,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
@@ -103,7 +105,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalDependencies>d3d11.lib;$(SolutionDir)lib\DMALibrary.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>
@@ -251,32 +253,41 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="External\imgui\addons\imgui_addons.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_demo.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_draw.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_impl_dx11.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_impl_win32.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_tables.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="External\imgui\imgui_widgets.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Dma\DMA.cpp" />
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp" />
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
+    <ClCompile Include="VisCheckCS2\OptimizedGeometry.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="VisCheckCS2\Parser.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="VisCheckCS2\VisCheck.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Source\Misc\Animation\Animation.cpp" />
     <ClCompile Include="Source\Misc\Timer\Timer.cpp" />
     <ClCompile Include="Source\Overlay\Overlay.cpp" />
@@ -287,6 +298,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DMALibrary\DMALibrary.vcxproj">
+      <Project>{f02f56b1-10cd-4654-b744-93abe6e15ff0}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

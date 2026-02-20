@@ -48,6 +48,7 @@ public:
 	static bool BringToForeground(HWND window) { return SetForegroundWindow(window); }
 
 	static void SetForeground(HWND window);
+	static bool IsHostKeyDown(int virtualKey);
 
 	static ImDrawList* GetBackgroundDrawList() { return ImGui::GetBackgroundDrawList(); }
 
@@ -65,6 +66,8 @@ private:
 	inline static std::vector<const char*> m_Tabs;
 
 	inline static float OverlayFps;
+	inline static bool m_InsertHeld;
+	inline static std::chrono::steady_clock::time_point m_FrameStart{};
 
 };
 

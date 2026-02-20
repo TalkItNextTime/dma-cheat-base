@@ -54,11 +54,20 @@ namespace Structs
         ImVec4 BoxColorVisible;
 
         bool Health;
+        bool Armor;
+        ImVec4 ArmorColor;
+        bool Money;
+        ImVec4 MoneyColor;
 
         bool Weapon;
         ImVec4 WeaponColor;
 
         bool Bones;
         ImVec4 BonesColor;
+
+        bool C4;
+        ImVec4 C4Color;
+        bool Defuser;
+        ImVec4 DefuserColor;
     };
 }

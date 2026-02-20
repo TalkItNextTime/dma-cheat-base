@@ -1,5 +1,9 @@
-#include "imgui/imgui_impl_dx11.h"
-#include "imgui/imgui_impl_win32.h"
+#pragma once
+
+#include <cmath>
+#include <string>
+
+#include "imgui/imgui.h"
 
 namespace math
 {

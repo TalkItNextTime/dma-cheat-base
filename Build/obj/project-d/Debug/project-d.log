@@ -1,0 +1,24 @@
+﻿  DMA.cpp
+  Aimbot.cpp
+  ESP.cpp
+  Animation.cpp
+  Timer.cpp
+  Overlay.cpp
+  Manager.cpp
+  main.cpp
+  Pch.cpp
+  SDK.cpp
+  imgui_addons.cpp
+  imgui.cpp
+  imgui_demo.cpp
+  imgui_draw.cpp
+  imgui_impl_dx11.cpp
+  imgui_impl_win32.cpp
+  imgui_tables.cpp
+  imgui_widgets.cpp
+  OptimizedGeometry.cpp
+  Parser.cpp
+  VisCheck.cpp
+  正在生成代码...
+imgui_addons.obj : warning LNK4075: 忽略“/EDITANDCONTINUE”(由于“/INCREMENTAL:NO”规范)
+  project-d.vcxproj -> C:\Users\Admin\Source\Repos\dma-cheat-base\Build\Debug\project-d.exe
