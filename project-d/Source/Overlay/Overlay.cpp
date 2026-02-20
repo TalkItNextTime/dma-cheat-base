@@ -636,6 +636,16 @@ void Overlay::RenderMenu()
 
 						ImGui::BeginGroup();
 						{
+							ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
+							if (config.Visuals.Defuser)
+							{
+								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+								ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
+							}
+						}
+
+						ImGui::BeginGroup();
+						{
 							ImAdd::CheckBox("Box", &config.Visuals.Box);
 							if (config.Visuals.Box)
 							{
@@ -673,18 +683,11 @@ void Overlay::RenderMenu()
 							{
 								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
 								ImAdd::ColorEdit4("##C4Color", (float*)&config.Visuals.C4Color);
+								ImAdd::SliderFloat("C4 Card X", &config.Visuals.C4PanelPosX, 0.0f, 1.0f);
+								ImAdd::SliderFloat("C4 Card Y", &config.Visuals.C4PanelPosY, 0.0f, 1.0f);
 							}
 						}
 
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
-							if (config.Visuals.Defuser)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
-							}
-						}
 					}
 				}
 				ImGui::EndChild();
@@ -837,6 +840,8 @@ void Overlay::RenderMenu()
 					ImGui::Text("Host INSERT: %s", IsHostKeyDown(VK_INSERT) ? "Down" : "Up");
 					ImGui::Text("Host LMB: %s", IsHostKeyDown(VK_LBUTTON) ? "Down" : "Up");
 					ImGui::Text("Host RMB: %s", IsHostKeyDown(VK_RBUTTON) ? "Down" : "Up");
+					ImGui::Text("Host X1: %s", IsHostKeyDown(VK_XBUTTON1) ? "Down" : "Up");
+					ImGui::Text("Host X2: %s", IsHostKeyDown(VK_XBUTTON2) ? "Down" : "Up");
 
 					float buttonWidth = 100.0f;
 					float buttonSpacing = 20.0f;

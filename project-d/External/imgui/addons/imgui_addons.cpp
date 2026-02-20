@@ -8,6 +8,40 @@
 
 using namespace ImGui;
 
+namespace
+{
+    bool IsHostVkDown(const int virtualKey)
+    {
+        return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+    }
+
+    int CaptureHostMouseVk(const bool includeLeftButton)
+    {
+        const int mouseVirtualKeys[] = { VK_LBUTTON, VK_RBUTTON, VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2 };
+        for (const int virtualKey : mouseVirtualKeys)
+        {
+            if (!includeLeftButton && virtualKey == VK_LBUTTON)
+                continue;
+
+            if (IsHostVkDown(virtualKey))
+                return virtualKey;
+        }
+
+        return 0;
+    }
+
+    int CaptureHostKeyboardVk()
+    {
+        for (int virtualKey = 0x08; virtualKey <= 0xA5; ++virtualKey)
+        {
+            if (IsHostVkDown(virtualKey))
+                return virtualKey;
+        }
+
+        return 0;
+    }
+}
+
 ImVec4 ImAdd::HexToColorVec4(unsigned int hex_color, float alpha) {
     ImVec4 color;
 
@@ -1209,8 +1243,13 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
 
     if (g.ActiveId == id)
     {
+        const bool suppressLeftMouseCapture = user_clicked;
+
         for (auto i = 0; i < 5; i++)
         {
+            if (suppressLeftMouseCapture && i == 0)
+                continue;
+
             if (io.MouseDown[i])
             {
                 switch (i) {
@@ -1232,6 +1271,18 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
                 }
                 value_changed = true;
                 ImGui::ClearActiveID();
+                break;
+            }
+        }
+
+        if (!value_changed)
+        {
+            const int hostMouseKey = CaptureHostMouseVk(!suppressLeftMouseCapture);
+            if (hostMouseKey != 0)
+            {
+                key = hostMouseKey;
+                value_changed = true;
+                ImGui::ClearActiveID();
             }
         }
 
@@ -1244,7 +1295,19 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
                     key = i;
                     value_changed = true;
                     ImGui::ClearActiveID();
+                    break;
                 }
+            }
+        }
+
+        if (!value_changed)
+        {
+            const int hostKeyboardKey = CaptureHostKeyboardVk();
+            if (hostKeyboardKey != 0)
+            {
+                key = hostKeyboardKey;
+                value_changed = true;
+                ImGui::ClearActiveID();
             }
         }
 

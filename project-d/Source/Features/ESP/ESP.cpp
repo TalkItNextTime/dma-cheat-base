@@ -3,6 +3,7 @@
 #include "ESP.hpp"
 #include <array>
 #include <cfloat>
+#include <cstdio>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -19,16 +20,15 @@ namespace
     constexpr int kAliveLifeStateB = 256;
     constexpr int kHeadBone = 6;
 
-    constexpr std::array<int, 18> kTrackedBones = {
+    constexpr std::array<int, 17> kTrackedBones = {
         0, 2, 4, 5, 6,
         8, 9, 10,
         13, 14, 15,
         22, 23, 24,
-        25, 26, 27,
-        28
+        25, 26, 27
     };
 
-    constexpr std::array<std::pair<int, int>, 17> kBoneLinks = {
+    constexpr std::array<std::pair<int, int>, 16> kBoneLinks = {
         std::pair{ 0, 2 },
         std::pair{ 2, 4 },
         std::pair{ 4, 5 },
@@ -48,8 +48,7 @@ namespace
 
         std::pair{ 0, 25 },
         std::pair{ 25, 26 },
-        std::pair{ 26, 27 },
-        std::pair{ 27, 28 }
+        std::pair{ 26, 27 }
     };
 
     std::string WeaponIdToName(const int weaponId)
@@ -118,6 +117,41 @@ namespace
         return address > 0x10000ULL && address < 0x00007FFFFFFFFFFFULL;
     }
 
+    bool IsNonZeroPosition(const Vector3& position)
+    {
+        return std::abs(position.x) > 0.01f ||
+            std::abs(position.y) > 0.01f ||
+            std::abs(position.z) > 0.01f;
+    }
+
+    int NormalizeBombSiteRaw(const int rawSite)
+    {
+        if (rawSite == 0)
+            return 0; // A
+        if (rawSite == 1 || rawSite == 2)
+            return 1; // B (some dumps are 1-based)
+        if (rawSite == 'A' || rawSite == 'a')
+            return 0;
+        if (rawSite == 'B' || rawSite == 'b')
+            return 1;
+        return -1;
+    }
+
+    float ReadGlobalCurrentTime()
+    {
+        if (!Globals::ClientBase || !Offsets::Client::dwGlobalVars)
+            return 0.0f;
+
+        const uint64_t globalVars = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwGlobalVars);
+        if (!IsLikelyUserAddress(globalVars))
+            return 0.0f;
+
+        float currentTime = mem.Read<float>(globalVars + 0x2C);
+        if (currentTime <= 0.0f)
+            currentTime = mem.Read<float>(globalVars + 0x30);
+        return currentTime;
+    }
+
     struct SampledEntityData
     {
         int HandleIndex = 0;
@@ -140,6 +174,7 @@ namespace
 
         int Armor = 0;
         bool IsScoped = false;
+        bool HasDefuser = false;
         float FlashDuration = 0.0f;
         bool RefreshStatus = false;
     };
@@ -236,7 +271,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     };
 
     std::vector<StatusLine> statusLines{};
-    statusLines.reserve(4);
+    statusLines.reserve(5);
 
     if (player.IsScoped)
         statusLines.push_back({ "Scoped", IM_COL32(220, 220, 220, 255) });
@@ -249,6 +284,9 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Money)
         statusLines.push_back({ "$" + std::to_string(player.Money), ToImColor(config.Visuals.MoneyColor) });
+
+    if (config.Visuals.Defuser && player.HasDefuser)
+        statusLines.push_back({ "Kit", ToImColor(config.Visuals.DefuserColor) });
 
     float lineOffset = 0.0f;
     for (const StatusLine& line : statusLines)
@@ -291,31 +329,76 @@ void ESP::RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, 
 
 void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
 {
-    if (!c4.Valid || !c4.BombTicking)
-        return;
-    if (!config.Visuals.C4 && !config.Visuals.Defuser)
+    if (!c4.Valid || !config.Visuals.C4)
         return;
 
-    const std::string site = (c4.BombSite == 0) ? "A" : ((c4.BombSite == 1) ? "B" : "?");
-    const float shownTime = c4.TimeRemaining > 0.0f ? c4.TimeRemaining : c4.TimerLength;
-    const std::string text = "C4 [" + site + "]  Timer:" + std::to_string(static_cast<int>(shownTime)) + "s";
-
-    ImVec2 textPos(20.0f, 42.0f);
+    auto formatSeconds1 = [](const float value) -> std::string
+    {
+        char buffer[32]{};
+        std::snprintf(buffer, sizeof(buffer), "%.1f", (std::max)(0.0f, value));
+        return buffer;
+    };
 
     if (c4.OnScreen)
-        textPos = ImVec2(c4.Screen.x + 8.0f, c4.Screen.y - 16.0f);
-
-    if (config.Visuals.C4)
-        drawList->AddText(textPos, ToImColor(config.Visuals.C4Color), text.c_str());
-
-    if (config.Visuals.Defuser && c4.BeingDefused)
     {
-        ImVec2 defusePos = textPos;
-        if (config.Visuals.C4)
-            defusePos += ImVec2(0.0f, ImGui::GetFontSize() + 1.0f);
-
-        drawList->AddText(defusePos, ToImColor(config.Visuals.DefuserColor), "Defusing");
+        const ImU32 markerColor = c4.Planted ? ToImColor(config.Visuals.C4Color) : IM_COL32(240, 220, 70, 255);
+        drawList->AddCircleFilled(c4.Screen.ToImVec2(), 4.0f, markerColor, 12);
+        drawList->AddCircle(c4.Screen.ToImVec2(), 8.0f, markerColor, 12, 1.2f);
+        drawList->AddText(ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f), markerColor, c4.Planted ? "C4" : "C4 (Ground)");
     }
+
+    if (!c4.Planted)
+        return;
+
+    std::string siteName = "Unknown";
+    if (c4.BombSite == 0)
+        siteName = "A";
+    else if (c4.BombSite == 1)
+        siteName = "B";
+
+    const std::string line1 = std::string("C4 Site: ") + siteName + " | " + (c4.BeingDefused ? "Defusing" : "Not Defusing");
+
+    std::string line2 = "Explode: " + formatSeconds1(c4.TimeRemaining) + "s  Defuse: ";
+    if (c4.BeingDefused)
+        line2 += formatSeconds1(c4.DefuseCountDown) + "s";
+    else
+        line2 += "--";
+
+    std::string line3 = "Defuse Result: --";
+    if (c4.BeingDefused)
+        line3 = std::string("Defuse Result: ") + (c4.CanDefuse ? "SUCCESS" : "FAIL");
+
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    constexpr float panelW = 250.0f;
+    constexpr float panelH = 84.0f;
+    const float panelX = std::clamp(config.Visuals.C4PanelPosX * displaySize.x, 8.0f, (std::max)(8.0f, displaySize.x - panelW - 8.0f));
+    const float panelY = std::clamp(config.Visuals.C4PanelPosY * displaySize.y, 8.0f, (std::max)(8.0f, displaySize.y - panelH - 8.0f));
+    drawList->AddRectFilled(
+        ImVec2(panelX, panelY),
+        ImVec2(panelX + panelW, panelY + panelH),
+        IM_COL32(18, 18, 18, 190),
+        5.0f
+    );
+    drawList->AddRect(
+        ImVec2(panelX, panelY),
+        ImVec2(panelX + panelW, panelY + panelH),
+        ToImColor(config.Visuals.C4Color),
+        5.0f,
+        0,
+        1.2f
+    );
+
+    drawList->AddText(ImVec2(panelX + 10.0f, panelY + 8.0f), ToImColor(config.Visuals.C4Color), line1.c_str());
+    drawList->AddText(
+        ImVec2(panelX + 10.0f, panelY + 28.0f),
+        c4.BeingDefused ? ToImColor(config.Visuals.DefuserColor) : IM_COL32(225, 225, 225, 255),
+        line2.c_str()
+    );
+    drawList->AddText(
+        ImVec2(panelX + 10.0f, panelY + 48.0f),
+        c4.BeingDefused ? (c4.CanDefuse ? IM_COL32(120, 235, 120, 255) : IM_COL32(255, 110, 110, 255)) : IM_COL32(225, 225, 225, 255),
+        line3.c_str()
+    );
 }
 
 bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapshot) const
@@ -404,60 +487,209 @@ C4Snapshot ESP::ReadC4Snapshot() const
     if (!Globals::ClientBase || !Offsets::Client::dwPlantedC4)
         return snapshot;
 
-    const uint64_t plantedC4 = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwPlantedC4);
-    if (!plantedC4)
-        return snapshot;
+    const float gameTime = ReadGlobalCurrentTime();
+    const std::uint64_t nowMs = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count()
+    );
 
-    snapshot.Valid = true;
-    if (Offsets::Schema::m_bBombTicking)
-        snapshot.BombTicking = mem.Read<bool>(plantedC4 + Offsets::Schema::m_bBombTicking);
-    if (Offsets::Schema::m_bBeingDefused)
-        snapshot.BeingDefused = mem.Read<bool>(plantedC4 + Offsets::Schema::m_bBeingDefused);
-    if (Offsets::Schema::m_nBombSite)
-        snapshot.BombSite = mem.Read<int>(plantedC4 + Offsets::Schema::m_nBombSite);
-    if (Offsets::Schema::m_flC4Blow)
-        snapshot.BlowTime = mem.Read<float>(plantedC4 + Offsets::Schema::m_flC4Blow);
-    if (Offsets::Schema::m_flTimerLength)
-        snapshot.TimerLength = mem.Read<float>(plantedC4 + Offsets::Schema::m_flTimerLength);
-    if (Offsets::Schema::m_flDefuseCountDown)
-        snapshot.DefuseCountDown = mem.Read<float>(plantedC4 + Offsets::Schema::m_flDefuseCountDown);
+    static std::uint64_t bombPlantStartMs = 0;
+    static std::uint64_t bombDefuseStartMs = 0;
+    static bool wasDefusing = false;
+    static bool canDefuseLatched = false;
 
-    snapshot.TimeRemaining = snapshot.TimerLength;
-
-    if (Offsets::Client::dwGlobalVars && snapshot.BlowTime > 0.0f)
+    auto readBool = [](const std::uint64_t address, bool& outValue)
     {
-        const uint64_t globalVars = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwGlobalVars);
-        if (globalVars)
+        outValue = mem.Read<std::uint8_t>(address) != 0;
+    };
+
+    auto readEntityFromHolder = [](const std::uint64_t holderAddress) -> std::uint64_t
+    {
+        if (!IsLikelyUserAddress(holderAddress))
+            return 0;
+
+        const std::uint64_t resolved = mem.Read<std::uint64_t>(holderAddress);
+        if (IsLikelyUserAddress(resolved))
+            return resolved;
+
+        // Some builds expose the entity pointer directly.
+        return holderAddress;
+    };
+
+    auto readBombWorldPos = [](const std::uint64_t bombEntity, Vector3& outPos) -> bool
+    {
+        outPos = {};
+        if (!IsLikelyUserAddress(bombEntity))
+            return false;
+
+        if (Offsets::Schema::m_pGameSceneNode && Offsets::Schema::m_vecAbsOrigin)
         {
-            const float currentTimeCandidates[] = {
-                mem.Read<float>(globalVars + 0x30),
-                mem.Read<float>(globalVars + 0x34),
-                mem.Read<float>(globalVars + 0x38)
-            };
-
-            for (const float candidate : currentTimeCandidates)
+            const std::uint64_t sceneNode = mem.Read<std::uint64_t>(bombEntity + Offsets::Schema::m_pGameSceneNode);
+            if (IsLikelyUserAddress(sceneNode))
             {
-                if (candidate <= 0.0f || candidate > 20000.0f)
-                    continue;
-
-                const float remaining = snapshot.BlowTime - candidate;
-                if (remaining >= 0.0f && remaining <= 90.0f)
+                const Vector3 absPos = mem.Read<Vector3>(sceneNode + Offsets::Schema::m_vecAbsOrigin);
+                if (IsNonZeroPosition(absPos))
                 {
-                    snapshot.TimeRemaining = remaining;
-                    break;
+                    outPos = absPos;
+                    return true;
                 }
+            }
+        }
+
+        if (Offsets::Schema::m_vecC4ExplodeSpectatePos)
+        {
+            const Vector3 spectatePos = mem.Read<Vector3>(bombEntity + Offsets::Schema::m_vecC4ExplodeSpectatePos);
+            if (IsNonZeroPosition(spectatePos))
+            {
+                outPos = spectatePos;
+                return true;
+            }
+        }
+
+        if (Offsets::Schema::m_vOldOrigin)
+        {
+            const Vector3 oldOrigin = mem.Read<Vector3>(bombEntity + Offsets::Schema::m_vOldOrigin);
+            if (IsNonZeroPosition(oldOrigin))
+            {
+                outPos = oldOrigin;
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    const std::uint64_t clientBase = Globals::ClientBase;
+    const std::uint64_t plantedHolder = mem.Read<std::uint64_t>(clientBase + Offsets::Client::dwPlantedC4);
+
+    bool plantedFlag = false;
+    if (Offsets::Client::dwPlantedC4 >= 0x8)
+    {
+        const std::uint8_t plantedByte = mem.Read<std::uint8_t>(clientBase + Offsets::Client::dwPlantedC4 - 0x8);
+        plantedFlag = plantedByte != 0;
+    }
+    if (!plantedFlag && IsLikelyUserAddress(plantedHolder))
+        plantedFlag = true;
+
+    if (plantedFlag && IsLikelyUserAddress(plantedHolder))
+    {
+        const std::uint64_t plantedEntity = readEntityFromHolder(plantedHolder);
+        if (IsLikelyUserAddress(plantedEntity))
+        {
+            snapshot.Valid = true;
+
+            if (Offsets::Schema::m_nBombSite)
+            {
+                int normalizedSite = NormalizeBombSiteRaw(static_cast<int>(mem.Read<std::uint8_t>(plantedEntity + Offsets::Schema::m_nBombSite)));
+                if (normalizedSite < 0)
+                    normalizedSite = NormalizeBombSiteRaw(mem.Read<int>(plantedEntity + Offsets::Schema::m_nBombSite));
+                snapshot.BombSite = normalizedSite;
+            }
+
+            if (Offsets::Schema::m_bBombTicking)
+                readBool(plantedEntity + Offsets::Schema::m_bBombTicking, snapshot.BombTicking);
+            if (Offsets::Schema::m_bBombDefused)
+                readBool(plantedEntity + Offsets::Schema::m_bBombDefused, snapshot.BombDefused);
+            if (Offsets::Schema::m_bBeingDefused)
+                readBool(plantedEntity + Offsets::Schema::m_bBeingDefused, snapshot.BeingDefused);
+            if (Offsets::Schema::m_flTimerLength)
+                snapshot.TimerLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flTimerLength);
+            if (Offsets::Schema::m_flDefuseLength)
+                snapshot.DefuseLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseLength);
+            if (Offsets::Schema::m_flC4Blow)
+                snapshot.BlowTime = mem.Read<float>(plantedEntity + Offsets::Schema::m_flC4Blow);
+            if (Offsets::Schema::m_flDefuseCountDown)
+                snapshot.DefuseCountDown = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseCountDown);
+
+            snapshot.Planted = snapshot.BombTicking && !snapshot.BombDefused;
+
+            if (snapshot.BombTicking && snapshot.BlowTime > 0.001f && gameTime > 0.001f)
+            {
+                snapshot.TimeRemaining = (std::max)(0.0f, snapshot.BlowTime - gameTime);
+                bombPlantStartMs = 0;
+            }
+            else if (snapshot.BombTicking && snapshot.TimerLength > 0.001f)
+            {
+                if (bombPlantStartMs == 0)
+                    bombPlantStartMs = nowMs;
+                const float elapsed = static_cast<float>(nowMs - bombPlantStartMs) / 1000.0f;
+                snapshot.TimeRemaining = (std::max)(0.0f, snapshot.TimerLength - elapsed);
+            }
+            else
+            {
+                bombPlantStartMs = 0;
+                snapshot.TimeRemaining = 0.0f;
+            }
+
+            if (snapshot.BeingDefused)
+            {
+                if (snapshot.DefuseCountDown > 0.001f && gameTime > 0.001f)
+                {
+                    snapshot.DefuseCountDown = (std::max)(0.0f, snapshot.DefuseCountDown - gameTime);
+                    bombDefuseStartMs = 0;
+                }
+                else
+                {
+                    if (bombDefuseStartMs == 0)
+                        bombDefuseStartMs = nowMs;
+                    const float elapsed = static_cast<float>(nowMs - bombDefuseStartMs) / 1000.0f;
+                    const float total = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
+                    snapshot.DefuseCountDown = (std::max)(0.0f, total - elapsed);
+                }
+
+                const float totalDefuse = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
+                snapshot.DefuseProgress = std::clamp(1.0f - (snapshot.DefuseCountDown / totalDefuse), 0.0f, 1.0f);
+
+                if (!wasDefusing)
+                    canDefuseLatched = snapshot.DefuseCountDown <= (snapshot.TimeRemaining + 0.05f);
+
+                snapshot.CanDefuse = canDefuseLatched;
+                wasDefusing = true;
+            }
+            else
+            {
+                bombDefuseStartMs = 0;
+                snapshot.DefuseCountDown = 0.0f;
+                snapshot.DefuseProgress = 0.0f;
+                snapshot.CanDefuse = false;
+                wasDefusing = false;
+                canDefuseLatched = false;
+            }
+
+            if (snapshot.BombDefused)
+            {
+                bombPlantStartMs = 0;
+                bombDefuseStartMs = 0;
+                wasDefusing = false;
+                canDefuseLatched = false;
+            }
+
+            readBombWorldPos(plantedEntity, snapshot.Position);
+        }
+    }
+    else
+    {
+        bombPlantStartMs = 0;
+        bombDefuseStartMs = 0;
+        wasDefusing = false;
+        canDefuseLatched = false;
+
+        if (Offsets::Client::dwWeaponC4)
+        {
+            const std::uint64_t weaponHolder = mem.Read<std::uint64_t>(clientBase + Offsets::Client::dwWeaponC4);
+            const std::uint64_t weaponEntity = readEntityFromHolder(weaponHolder);
+            if (IsLikelyUserAddress(weaponEntity))
+            {
+                snapshot.Valid = true;
+                snapshot.Planted = false;
+                readBombWorldPos(weaponEntity, snapshot.Position);
             }
         }
     }
 
-    if (Offsets::Schema::m_pGameSceneNode && Offsets::Schema::m_vecAbsOrigin)
-    {
-        const uint64_t sceneNode = mem.Read<uint64_t>(plantedC4 + Offsets::Schema::m_pGameSceneNode);
-        if (IsLikelyUserAddress(sceneNode))
-            snapshot.Position = mem.Read<Vector3>(sceneNode + Offsets::Schema::m_vecAbsOrigin);
-    }
-
-    snapshot.OnScreen = sdk.WorldToScreen(snapshot.Position, snapshot.Screen);
+    if (IsNonZeroPosition(snapshot.Position))
+        snapshot.OnScreen = sdk.WorldToScreen(snapshot.Position, snapshot.Screen);
 
     return snapshot;
 }
@@ -522,7 +754,7 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
 {
     if (!pawn || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon)
         return {};
-    if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_iItemDefinitionIndex)
+    if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
         return {};
 
     const uint64_t weaponServices = mem.Read<uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
@@ -537,8 +769,22 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
     if (!weapon || !IsLikelyUserAddress(weapon))
         return {};
 
-    const int weaponId = mem.Read<int>(weapon + Offsets::Schema::m_AttributeManager + Offsets::Schema::m_iItemDefinitionIndex);
-    return WeaponIdToName(weaponId);
+    const std::uint64_t itemDefinitionIndexAddress =
+        weapon +
+        static_cast<uint64_t>(Offsets::Schema::m_AttributeManager) +
+        static_cast<uint64_t>(Offsets::Schema::m_Item) +
+        static_cast<uint64_t>(Offsets::Schema::m_iItemDefinitionIndex);
+
+    const int weaponId = static_cast<int>(mem.Read<std::uint16_t>(itemDefinitionIndexAddress));
+
+    if (weaponId <= 0)
+        return {};
+
+    const std::string resolvedName = WeaponIdToName(weaponId);
+    if (!resolvedName.empty())
+        return resolvedName;
+
+    return "Weapon " + std::to_string(weaponId);
 }
 
 void ESP::UpdateVisCheckState()
@@ -562,7 +808,7 @@ void ESP::UpdateVisCheckState()
         now - m_LastMapPoll >= std::chrono::milliseconds(1000))
     {
         m_LastPolledMapName = sdk.GetCurrentMapName();
-        PerfDebug::RecordMapPoll(!m_LastPolledMapName.empty());
+        //PerfDebug::RecordMapPoll(!m_LastPolledMapName.empty());
         m_LastMapPoll = now;
     }
 
@@ -742,7 +988,7 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
     ).count();
 
     if (durationUs >= 0)
-        PerfDebug::RecordVisCheck(static_cast<std::uint64_t>(durationUs), isVisible);
+        //PerfDebug::RecordVisCheck(static_cast<std::uint64_t>(durationUs), isVisible);
 
     return isVisible;
 }
@@ -793,6 +1039,7 @@ void ESP::UpdateRoundEpoch(const uint64_t localPawn, const bool localAlive)
 void ESP::SamplerLoop()
 {
     constexpr auto kSampleInterval = std::chrono::milliseconds(4); // 250Hz
+    constexpr auto kOverrunYield = std::chrono::milliseconds(1);
 
     while (Globals::Running)
     {
@@ -804,7 +1051,7 @@ void ESP::SamplerLoop()
 
         {
             std::lock_guard lock(m_RenderFrameMutex);
-            m_RenderFrame = std::move(sampledFrame);
+            std::swap(m_RenderFrame, sampledFrame);
         }
 
         const auto sampleUs = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -816,6 +1063,8 @@ void ESP::SamplerLoop()
         const auto elapsed = std::chrono::steady_clock::now() - cycleStart;
         if (elapsed < kSampleInterval)
             std::this_thread::sleep_for(kSampleInterval - elapsed);
+        else
+            std::this_thread::sleep_for(kOverrunYield);
     }
 }
 
@@ -1093,6 +1342,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             {
                 entity->Armor = runtimeCache.Armor;
                 entity->IsScoped = runtimeCache.IsScoped;
+                entity->HasDefuser = runtimeCache.HasDefuser;
                 entity->FlashDuration = runtimeCache.FlashDuration;
             }
             else
@@ -1101,6 +1351,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_ArmorValue, &entity->Armor, sizeof(entity->Armor));
                 if (Offsets::Schema::m_bIsScoped)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bIsScoped, &entity->IsScoped, sizeof(entity->IsScoped));
+                if (Offsets::Schema::m_bHasDefuser)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
                 if (Offsets::Schema::m_flFlashDuration)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
             }
@@ -1124,6 +1376,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
             runtimeCache.Armor = (std::max)(0, entity->Armor);
             runtimeCache.IsScoped = entity->IsScoped;
+            runtimeCache.HasDefuser = entity->HasDefuser;
             runtimeCache.FlashDuration = (std::max)(0.0f, entity->FlashDuration);
             runtimeCache.LastStatusRead = now;
         }
@@ -1252,6 +1505,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
         snapshot.Armor = runtimeCache.Armor;
         snapshot.IsScoped = runtimeCache.IsScoped;
+        snapshot.HasDefuser = runtimeCache.HasDefuser;
         snapshot.FlashDuration = runtimeCache.FlashDuration;
 
         snapshot.Origin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
@@ -1305,7 +1559,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             ++it;
     }
 
-    if (config.Visuals.C4 || config.Visuals.Defuser)
+    if (config.Visuals.C4)
         outFrame.C4 = ReadC4Snapshot();
     else
         outFrame.C4 = C4Snapshot{};
@@ -1328,11 +1582,11 @@ void ESP::Render(ImDrawList* drawList)
 
         if (renderUs >= 0)
         {
-            PerfDebug::RecordEspFrame(
+           /* PerfDebug::RecordEspFrame(
                 static_cast<std::uint64_t>(renderUs),
                 resolvedControllers,
                 drawnPlayers
-            );
+            );*/
         }
     };
 
@@ -1369,7 +1623,7 @@ void ESP::Render(ImDrawList* drawList)
     for (const PlayerEspSnapshot& player : frame.Players)
         RenderPlayer(drawList, player);
 
-    if (config.Visuals.C4 || config.Visuals.Defuser)
+    if (config.Visuals.C4)
         RenderC4(drawList, frame.C4);
 
     publishPerf();

@@ -67,6 +67,8 @@ namespace Structs
 
         bool C4;
         ImVec4 C4Color;
+        float C4PanelPosX = 0.02f;
+        float C4PanelPosY = 0.06f;
         bool Defuser;
         ImVec4 DefuserColor;
     };

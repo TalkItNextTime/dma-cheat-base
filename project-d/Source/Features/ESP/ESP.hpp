@@ -35,6 +35,7 @@ struct PlayerEspSnapshot
     int LifeState = 0;
 
     bool IsScoped = false;
+    bool HasDefuser = false;
     float FlashDuration = 0.0f;
 
     Vector3 Origin{};
@@ -54,13 +55,18 @@ struct PlayerEspSnapshot
 struct C4Snapshot
 {
     bool Valid = false;
+    bool Planted = false;
     bool BombTicking = false;
+    bool BombDefused = false;
     bool BeingDefused = false;
     int BombSite = -1;
     float BlowTime = 0.0f;
     float TimerLength = 0.0f;
     float TimeRemaining = 0.0f;
+    float DefuseLength = 0.0f;
     float DefuseCountDown = 0.0f;
+    float DefuseProgress = 0.0f;
+    bool CanDefuse = false;
     Vector3 Position{};
     Vector2 Screen{};
     bool OnScreen = false;
@@ -100,6 +106,7 @@ private:
 
         int Armor = 0;
         bool IsScoped = false;
+        bool HasDefuser = false;
         float FlashDuration = 0.0f;
         std::chrono::steady_clock::time_point LastStatusRead{};
     };

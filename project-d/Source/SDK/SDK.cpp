@@ -244,6 +244,7 @@ bool SDK::LoadOffsets()
     Offsets::Client::dwGameEntitySystem_highestEntityIndex = client.value("dwGameEntitySystem_highestEntityIndex", 0ULL);
     Offsets::Client::dwGameRules = client.value("dwGameRules", 0ULL);
     Offsets::Client::dwPlantedC4 = client.value("dwPlantedC4", 0ULL);
+    Offsets::Client::dwWeaponC4 = client.value("dwWeaponC4", 0ULL);
     Offsets::Client::dwGlobalVars = client.value("dwGlobalVars", 0ULL);
     Offsets::Client::dwViewAngles = client.value("dwViewAngles", 0ULL);
     Offsets::Client::dwViewMatrix = client.value("dwViewMatrix", 0ULL);
@@ -298,13 +299,18 @@ bool SDK::LoadOffsets()
     loadSchema("C_CSPlayerPawn", "m_aimPunchAngle", Offsets::Schema::m_aimPunchAngle);
     loadSchema("CPlayer_WeaponServices", "m_hActiveWeapon", Offsets::Schema::m_hActiveWeapon);
     loadSchema("C_EconEntity", "m_AttributeManager", Offsets::Schema::m_AttributeManager);
+    loadSchema("C_AttributeContainer", "m_Item", Offsets::Schema::m_Item);
     loadSchema("C_EconItemView", "m_iItemDefinitionIndex", Offsets::Schema::m_iItemDefinitionIndex);
+    loadSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
     loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
+    loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);
     loadSchema("C_PlantedC4", "m_nBombSite", Offsets::Schema::m_nBombSite);
     loadSchema("C_PlantedC4", "m_flC4Blow", Offsets::Schema::m_flC4Blow);
     loadSchema("C_PlantedC4", "m_flTimerLength", Offsets::Schema::m_flTimerLength);
+    loadSchema("C_PlantedC4", "m_flDefuseLength", Offsets::Schema::m_flDefuseLength);
     loadSchema("C_PlantedC4", "m_bBeingDefused", Offsets::Schema::m_bBeingDefused);
     loadSchema("C_PlantedC4", "m_flDefuseCountDown", Offsets::Schema::m_flDefuseCountDown);
+    loadSchema("C_PlantedC4", "m_vecC4ExplodeSpectatePos", Offsets::Schema::m_vecC4ExplodeSpectatePos);
     loadSchema("C_CSGameRules", "m_bFreezePeriod", Offsets::Schema::m_bFreezePeriod);
 
     if (!Offsets::HasCore())

@@ -97,6 +97,8 @@ namespace Config
             j["Visuals"]["BonesColor"] = { Visuals.BonesColor.x, Visuals.BonesColor.y, Visuals.BonesColor.z, Visuals.BonesColor.w };
             j["Visuals"]["C4"] = Visuals.C4;
             j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
+            j["Visuals"]["C4PanelPosX"] = Visuals.C4PanelPosX;
+            j["Visuals"]["C4PanelPosY"] = Visuals.C4PanelPosY;
             j["Visuals"]["Defuser"] = Visuals.Defuser;
             j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
 
@@ -282,6 +284,8 @@ namespace Config
                 j["Visuals"]["BonesColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["C4"] = true;
                 j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
+                j["Visuals"]["C4PanelPosX"] = 0.02f;
+                j["Visuals"]["C4PanelPosY"] = 0.06f;
                 j["Visuals"]["Defuser"] = true;
                 j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
 
@@ -348,6 +352,8 @@ namespace Config
                             else if (key == "Weapon") configSection.Weapon = value.get<bool>();
                             else if (key == "Bones") configSection.Bones = value.get<bool>();
                             else if (key == "C4") configSection.C4 = value.get<bool>();
+                            else if (key == "C4PanelPosX") configSection.C4PanelPosX = value.get<float>();
+                            else if (key == "C4PanelPosY") configSection.C4PanelPosY = value.get<float>();
                             else if (key == "Defuser") configSection.Defuser = value.get<bool>();
 
                             else if (key == "WatermarkColor") configSection.WatermarkColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());

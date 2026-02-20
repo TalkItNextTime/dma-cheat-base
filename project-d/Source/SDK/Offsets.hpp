@@ -14,6 +14,7 @@ namespace Offsets
         inline std::uint64_t dwGameEntitySystem_highestEntityIndex = 0x0;
         inline std::uint64_t dwGameRules = 0x0;
         inline std::uint64_t dwPlantedC4 = 0x0;
+        inline std::uint64_t dwWeaponC4 = 0x0;
         inline std::uint64_t dwGlobalVars = 0x0;
         inline std::uint64_t dwViewAngles = 0x0;
         inline std::uint64_t dwViewMatrix = 0x0;
@@ -76,13 +77,18 @@ namespace Offsets
         inline std::uint32_t m_aimPunchAngle = 0;
         inline std::uint32_t m_hActiveWeapon = 0;
         inline std::uint32_t m_AttributeManager = 0;
+        inline std::uint32_t m_Item = 0;
         inline std::uint32_t m_iItemDefinitionIndex = 0;
+        inline std::uint32_t m_bHasDefuser = 0;
         inline std::uint32_t m_bBombTicking = 0;
+        inline std::uint32_t m_bBombDefused = 0;
         inline std::uint32_t m_nBombSite = 0;
         inline std::uint32_t m_flC4Blow = 0;
         inline std::uint32_t m_flTimerLength = 0;
+        inline std::uint32_t m_flDefuseLength = 0;
         inline std::uint32_t m_bBeingDefused = 0;
         inline std::uint32_t m_flDefuseCountDown = 0;
+        inline std::uint32_t m_vecC4ExplodeSpectatePos = 0;
         inline std::uint32_t m_bFreezePeriod = 0;
     }
 
