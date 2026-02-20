@@ -282,7 +282,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     if (config.Visuals.Armor)
         statusLines.push_back({ "AR:" + std::to_string(player.Armor), ToImColor(config.Visuals.ArmorColor) });
 
-    if (config.Visuals.Money)
+    if (config.Visuals.Money && player.ShowMoney)
         statusLines.push_back({ "$" + std::to_string(player.Money), ToImColor(config.Visuals.MoneyColor) });
 
     if (config.Visuals.Defuser && player.HasDefuser)
@@ -344,7 +344,7 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         const ImU32 markerColor = c4.Planted ? ToImColor(config.Visuals.C4Color) : IM_COL32(240, 220, 70, 255);
         drawList->AddCircleFilled(c4.Screen.ToImVec2(), 4.0f, markerColor, 12);
         drawList->AddCircle(c4.Screen.ToImVec2(), 8.0f, markerColor, 12, 1.2f);
-        drawList->AddText(ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f), markerColor, c4.Planted ? "C4" : "C4 (Ground)");
+        drawList->AddText(ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f), markerColor, c4.Planted ? "C4(Planted)" : "C4");
     }
 
     if (!c4.Planted)
@@ -504,19 +504,6 @@ C4Snapshot ESP::ReadC4Snapshot() const
         outValue = mem.Read<std::uint8_t>(address) != 0;
     };
 
-    auto readEntityFromHolder = [](const std::uint64_t holderAddress) -> std::uint64_t
-    {
-        if (!IsLikelyUserAddress(holderAddress))
-            return 0;
-
-        const std::uint64_t resolved = mem.Read<std::uint64_t>(holderAddress);
-        if (IsLikelyUserAddress(resolved))
-            return resolved;
-
-        // Some builds expose the entity pointer directly.
-        return holderAddress;
-    };
-
     auto readBombWorldPos = [](const std::uint64_t bombEntity, Vector3& outPos) -> bool
     {
         outPos = {};
@@ -560,6 +547,24 @@ C4Snapshot ESP::ReadC4Snapshot() const
         return false;
     };
 
+    auto resolveBombEntityFromHolder = [&](const std::uint64_t holderAddress) -> std::uint64_t
+    {
+        if (!IsLikelyUserAddress(holderAddress))
+            return 0;
+
+        // Primary path used by reference project: holder -> entity pointer.
+        const std::uint64_t indirectEntity = mem.Read<std::uint64_t>(holderAddress);
+        if (IsLikelyUserAddress(indirectEntity))
+            return indirectEntity;
+
+        // Fallback for builds where global points directly to entity.
+        Vector3 validatePos{};
+        if (readBombWorldPos(holderAddress, validatePos))
+            return holderAddress;
+
+        return 0;
+    };
+
     const std::uint64_t clientBase = Globals::ClientBase;
     const std::uint64_t plantedHolder = mem.Read<std::uint64_t>(clientBase + Offsets::Client::dwPlantedC4);
 
@@ -569,104 +574,111 @@ C4Snapshot ESP::ReadC4Snapshot() const
         const std::uint8_t plantedByte = mem.Read<std::uint8_t>(clientBase + Offsets::Client::dwPlantedC4 - 0x8);
         plantedFlag = plantedByte != 0;
     }
-    if (!plantedFlag && IsLikelyUserAddress(plantedHolder))
-        plantedFlag = true;
 
-    if (plantedFlag && IsLikelyUserAddress(plantedHolder))
+    const std::uint64_t plantedEntity = resolveBombEntityFromHolder(plantedHolder);
+    if (!plantedFlag && IsLikelyUserAddress(plantedEntity) && Offsets::Schema::m_bBombTicking)
     {
-        const std::uint64_t plantedEntity = readEntityFromHolder(plantedHolder);
-        if (IsLikelyUserAddress(plantedEntity))
+        bool tickingCandidate = false;
+        readBool(plantedEntity + Offsets::Schema::m_bBombTicking, tickingCandidate);
+
+        bool defusedCandidate = false;
+        if (Offsets::Schema::m_bBombDefused)
+            readBool(plantedEntity + Offsets::Schema::m_bBombDefused, defusedCandidate);
+
+        plantedFlag = tickingCandidate && !defusedCandidate;
+    }
+
+    if (plantedFlag && IsLikelyUserAddress(plantedEntity))
+    {
+        snapshot.Valid = true;
+
+        if (Offsets::Schema::m_nBombSite)
         {
-            snapshot.Valid = true;
-
-            if (Offsets::Schema::m_nBombSite)
-            {
-                int normalizedSite = NormalizeBombSiteRaw(static_cast<int>(mem.Read<std::uint8_t>(plantedEntity + Offsets::Schema::m_nBombSite)));
-                if (normalizedSite < 0)
-                    normalizedSite = NormalizeBombSiteRaw(mem.Read<int>(plantedEntity + Offsets::Schema::m_nBombSite));
-                snapshot.BombSite = normalizedSite;
-            }
-
-            if (Offsets::Schema::m_bBombTicking)
-                readBool(plantedEntity + Offsets::Schema::m_bBombTicking, snapshot.BombTicking);
-            if (Offsets::Schema::m_bBombDefused)
-                readBool(plantedEntity + Offsets::Schema::m_bBombDefused, snapshot.BombDefused);
-            if (Offsets::Schema::m_bBeingDefused)
-                readBool(plantedEntity + Offsets::Schema::m_bBeingDefused, snapshot.BeingDefused);
-            if (Offsets::Schema::m_flTimerLength)
-                snapshot.TimerLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flTimerLength);
-            if (Offsets::Schema::m_flDefuseLength)
-                snapshot.DefuseLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseLength);
-            if (Offsets::Schema::m_flC4Blow)
-                snapshot.BlowTime = mem.Read<float>(plantedEntity + Offsets::Schema::m_flC4Blow);
-            if (Offsets::Schema::m_flDefuseCountDown)
-                snapshot.DefuseCountDown = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseCountDown);
-
-            snapshot.Planted = snapshot.BombTicking && !snapshot.BombDefused;
-
-            if (snapshot.BombTicking && snapshot.BlowTime > 0.001f && gameTime > 0.001f)
-            {
-                snapshot.TimeRemaining = (std::max)(0.0f, snapshot.BlowTime - gameTime);
-                bombPlantStartMs = 0;
-            }
-            else if (snapshot.BombTicking && snapshot.TimerLength > 0.001f)
-            {
-                if (bombPlantStartMs == 0)
-                    bombPlantStartMs = nowMs;
-                const float elapsed = static_cast<float>(nowMs - bombPlantStartMs) / 1000.0f;
-                snapshot.TimeRemaining = (std::max)(0.0f, snapshot.TimerLength - elapsed);
-            }
-            else
-            {
-                bombPlantStartMs = 0;
-                snapshot.TimeRemaining = 0.0f;
-            }
-
-            if (snapshot.BeingDefused)
-            {
-                if (snapshot.DefuseCountDown > 0.001f && gameTime > 0.001f)
-                {
-                    snapshot.DefuseCountDown = (std::max)(0.0f, snapshot.DefuseCountDown - gameTime);
-                    bombDefuseStartMs = 0;
-                }
-                else
-                {
-                    if (bombDefuseStartMs == 0)
-                        bombDefuseStartMs = nowMs;
-                    const float elapsed = static_cast<float>(nowMs - bombDefuseStartMs) / 1000.0f;
-                    const float total = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
-                    snapshot.DefuseCountDown = (std::max)(0.0f, total - elapsed);
-                }
-
-                const float totalDefuse = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
-                snapshot.DefuseProgress = std::clamp(1.0f - (snapshot.DefuseCountDown / totalDefuse), 0.0f, 1.0f);
-
-                if (!wasDefusing)
-                    canDefuseLatched = snapshot.DefuseCountDown <= (snapshot.TimeRemaining + 0.05f);
-
-                snapshot.CanDefuse = canDefuseLatched;
-                wasDefusing = true;
-            }
-            else
-            {
-                bombDefuseStartMs = 0;
-                snapshot.DefuseCountDown = 0.0f;
-                snapshot.DefuseProgress = 0.0f;
-                snapshot.CanDefuse = false;
-                wasDefusing = false;
-                canDefuseLatched = false;
-            }
-
-            if (snapshot.BombDefused)
-            {
-                bombPlantStartMs = 0;
-                bombDefuseStartMs = 0;
-                wasDefusing = false;
-                canDefuseLatched = false;
-            }
-
-            readBombWorldPos(plantedEntity, snapshot.Position);
+            int normalizedSite = NormalizeBombSiteRaw(static_cast<int>(mem.Read<std::uint8_t>(plantedEntity + Offsets::Schema::m_nBombSite)));
+            if (normalizedSite < 0)
+                normalizedSite = NormalizeBombSiteRaw(mem.Read<int>(plantedEntity + Offsets::Schema::m_nBombSite));
+            snapshot.BombSite = normalizedSite;
         }
+
+        if (Offsets::Schema::m_bBombTicking)
+            readBool(plantedEntity + Offsets::Schema::m_bBombTicking, snapshot.BombTicking);
+        if (Offsets::Schema::m_bBombDefused)
+            readBool(plantedEntity + Offsets::Schema::m_bBombDefused, snapshot.BombDefused);
+        if (Offsets::Schema::m_bBeingDefused)
+            readBool(plantedEntity + Offsets::Schema::m_bBeingDefused, snapshot.BeingDefused);
+        if (Offsets::Schema::m_flTimerLength)
+            snapshot.TimerLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flTimerLength);
+        if (Offsets::Schema::m_flDefuseLength)
+            snapshot.DefuseLength = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseLength);
+        if (Offsets::Schema::m_flC4Blow)
+            snapshot.BlowTime = mem.Read<float>(plantedEntity + Offsets::Schema::m_flC4Blow);
+        if (Offsets::Schema::m_flDefuseCountDown)
+            snapshot.DefuseCountDown = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseCountDown);
+
+        snapshot.Planted = snapshot.BombTicking && !snapshot.BombDefused;
+
+        if (snapshot.BombTicking && snapshot.BlowTime > 0.001f && gameTime > 0.001f)
+        {
+            snapshot.TimeRemaining = (std::max)(0.0f, snapshot.BlowTime - gameTime);
+            bombPlantStartMs = 0;
+        }
+        else if (snapshot.BombTicking && snapshot.TimerLength > 0.001f)
+        {
+            if (bombPlantStartMs == 0)
+                bombPlantStartMs = nowMs;
+            const float elapsed = static_cast<float>(nowMs - bombPlantStartMs) / 1000.0f;
+            snapshot.TimeRemaining = (std::max)(0.0f, snapshot.TimerLength - elapsed);
+        }
+        else
+        {
+            bombPlantStartMs = 0;
+            snapshot.TimeRemaining = 0.0f;
+        }
+
+        if (snapshot.BeingDefused)
+        {
+            if (snapshot.DefuseCountDown > 0.001f && gameTime > 0.001f)
+            {
+                snapshot.DefuseCountDown = (std::max)(0.0f, snapshot.DefuseCountDown - gameTime);
+                bombDefuseStartMs = 0;
+            }
+            else
+            {
+                if (bombDefuseStartMs == 0)
+                    bombDefuseStartMs = nowMs;
+                const float elapsed = static_cast<float>(nowMs - bombDefuseStartMs) / 1000.0f;
+                const float total = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
+                snapshot.DefuseCountDown = (std::max)(0.0f, total - elapsed);
+            }
+
+            const float totalDefuse = snapshot.DefuseLength > 0.001f ? snapshot.DefuseLength : 10.0f;
+            snapshot.DefuseProgress = std::clamp(1.0f - (snapshot.DefuseCountDown / totalDefuse), 0.0f, 1.0f);
+
+            if (!wasDefusing)
+                canDefuseLatched = snapshot.DefuseCountDown <= (snapshot.TimeRemaining + 0.05f);
+
+            snapshot.CanDefuse = canDefuseLatched;
+            wasDefusing = true;
+        }
+        else
+        {
+            bombDefuseStartMs = 0;
+            snapshot.DefuseCountDown = 0.0f;
+            snapshot.DefuseProgress = 0.0f;
+            snapshot.CanDefuse = false;
+            wasDefusing = false;
+            canDefuseLatched = false;
+        }
+
+        if (snapshot.BombDefused)
+        {
+            bombPlantStartMs = 0;
+            bombDefuseStartMs = 0;
+            wasDefusing = false;
+            canDefuseLatched = false;
+        }
+
+        readBombWorldPos(plantedEntity, snapshot.Position);
     }
     else
     {
@@ -678,7 +690,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
         if (Offsets::Client::dwWeaponC4)
         {
             const std::uint64_t weaponHolder = mem.Read<std::uint64_t>(clientBase + Offsets::Client::dwWeaponC4);
-            const std::uint64_t weaponEntity = readEntityFromHolder(weaponHolder);
+            const std::uint64_t weaponEntity = resolveBombEntityFromHolder(weaponHolder);
             if (IsLikelyUserAddress(weaponEntity))
             {
                 snapshot.Valid = true;
@@ -1433,6 +1445,21 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     constexpr auto kMoneyPollInterval = std::chrono::seconds(1);
     constexpr auto kPostFreezeDuration = std::chrono::seconds(20);
     constexpr auto kEstimatedFreezeDuration = std::chrono::seconds(15); // fallback when freeze flag is unavailable.
+    bool moneyWindowActive = false;
+    if (m_LastRoundEpochTick.time_since_epoch().count() != 0)
+    {
+        if (freezeValid)
+        {
+            moneyWindowActive = freezePeriod ||
+                (m_LastFreezeEndTick.time_since_epoch().count() != 0 &&
+                    now - m_LastFreezeEndTick <= kPostFreezeDuration);
+        }
+        else
+        {
+            const auto roundElapsed = now - m_LastRoundEpochTick;
+            moneyWindowActive = roundElapsed <= (kEstimatedFreezeDuration + kPostFreezeDuration);
+        }
+    }
 
     for (SampledEntityData* entity : activeEntities)
     {
@@ -1449,38 +1476,19 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         if (identityCache.RoundEpoch != m_RoundEpoch)
         {
             identityCache.Name = ReadPlayerName(entity->Controller);
-            identityCache.Money = ReadMoney(entity->Controller);
             identityCache.RoundEpoch = m_RoundEpoch;
-            identityCache.LastMoneyRead = now;
-        }
-        else if (m_LastRoundEpochTick.time_since_epoch().count() != 0)
-        {
-            bool withinMoneyWindow = false;
-            if (freezeValid)
-            {
-                if (freezePeriod)
-                {
-                    withinMoneyWindow = true;
-                }
-                else if (m_LastFreezeEndTick.time_since_epoch().count() != 0 &&
-                    now - m_LastFreezeEndTick <= kPostFreezeDuration)
-                {
-                    withinMoneyWindow = true;
-                }
-            }
-            else
-            {
-                const auto roundElapsed = now - m_LastRoundEpochTick;
-                withinMoneyWindow = roundElapsed <= (kEstimatedFreezeDuration + kPostFreezeDuration);
-            }
-
-            if (withinMoneyWindow &&
-                (identityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
-                    now - identityCache.LastMoneyRead >= kMoneyPollInterval))
+            if (moneyWindowActive)
             {
                 identityCache.Money = ReadMoney(entity->Controller);
                 identityCache.LastMoneyRead = now;
             }
+        }
+        else if (moneyWindowActive &&
+            (identityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
+                now - identityCache.LastMoneyRead >= kMoneyPollInterval))
+        {
+            identityCache.Money = ReadMoney(entity->Controller);
+            identityCache.LastMoneyRead = now;
         }
 
         PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
@@ -1513,6 +1521,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
         snapshot.Name = identityCache.Name;
         snapshot.Money = identityCache.Money;
+        snapshot.ShowMoney = moneyWindowActive;
         snapshot.WeaponName = runtimeCache.WeaponName;
 
         bool hasBoxData = false;
@@ -1560,9 +1569,27 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     }
 
     if (config.Visuals.C4)
-        outFrame.C4 = ReadC4Snapshot();
+    {
+        constexpr auto kC4IntervalIdle = std::chrono::microseconds(16667);   // 60Hz
+        constexpr auto kC4IntervalPlanted = std::chrono::microseconds(10000); // 100Hz
+
+        const bool cacheValid = m_LastC4Sample.time_since_epoch().count() != 0;
+        const auto targetInterval = m_C4Cache.Planted ? kC4IntervalPlanted : kC4IntervalIdle;
+
+        if (!cacheValid || (now - m_LastC4Sample) >= targetInterval)
+        {
+            m_C4Cache = ReadC4Snapshot();
+            m_LastC4Sample = now;
+        }
+
+        outFrame.C4 = m_C4Cache;
+    }
     else
+    {
+        m_C4Cache = C4Snapshot{};
+        m_LastC4Sample = {};
         outFrame.C4 = C4Snapshot{};
+    }
 
     return true;
 }

@@ -32,6 +32,7 @@ struct PlayerEspSnapshot
     int Team = 0;
     int Armor = 0;
     int Money = 0;
+    bool ShowMoney = false;
     int LifeState = 0;
 
     bool IsScoped = false;
@@ -159,6 +160,8 @@ private:
 
     std::unordered_map<uint64_t, ControllerIdentityCache> m_ControllerIdentityCache{};
     std::unordered_map<uint64_t, PawnRuntimeCache> m_PawnRuntimeCache{};
+    C4Snapshot m_C4Cache{};
+    std::chrono::steady_clock::time_point m_LastC4Sample{};
     std::uint64_t m_RoundEpoch = 1;
     std::uint64_t m_LastRoundLocalPawn = 0;
     bool m_LastRoundLocalAlive = false;
