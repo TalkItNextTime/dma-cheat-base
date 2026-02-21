@@ -1,4 +1,5 @@
 #include "imgui_addons.h"
+#include "Localization.hpp"
 
 #include <map>
 #include <string>
@@ -10,6 +11,11 @@ using namespace ImGui;
 
 namespace
 {
+    const char* L(const char* text)
+    {
+        return Localization::Localize(text);
+    }
+
     bool IsHostVkDown(const int virtualKey)
     {
         return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
@@ -94,10 +100,12 @@ void ImAdd::SeparatorText(const char* label, float thickness)
     if (window->SkipItems)
         return;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
     ImVec2 pos = window->DC.CursorPos;
     ImVec2 size = CalcItemSize(ImVec2(-0.1f, g.FontSize), label_size.x, g.FontSize);
@@ -108,7 +116,7 @@ void ImAdd::SeparatorText(const char* label, float thickness)
         return;
     }
 
-    window->DrawList->AddText(pos, GetColorU32(ImGuiCol_TextDisabled), label);
+    window->DrawList->AddText(pos, GetColorU32(ImGuiCol_TextDisabled), labelText);
 
     if (thickness > 0)
         window->DrawList->AddLine(pos + ImVec2(label_size.x + style.ItemInnerSpacing.x, size.y / 2), pos + ImVec2(size.x, size.y / 2), GetColorU32(ImGuiCol_Border), thickness);
@@ -145,11 +153,13 @@ bool ImAdd::RadioFrameIcon(const char* label, ImTextureID user_texture_id, int* 
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
 
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
     const ImVec2 icon_size = ImVec2(g.FontSize, g.FontSize);
 
     ImVec2 pos = window->DC.CursorPos;
@@ -214,7 +224,7 @@ bool ImAdd::RadioFrameIcon(const char* label, ImTextureID user_texture_id, int* 
     if (label_size.x > 0)
     {
         window->DrawList->AddImage(user_texture_id, pos + style.FramePadding + adjust_icon_pos, pos + style.FramePadding + icon_size + adjust_icon_pos, ImVec2(0, 0), ImVec2(1, 1), GetColorU32(it_anim->second.Icon));
-        window->DrawList->AddText(pos + ImVec2(size.y, style.FramePadding.y), GetColorU32(it_anim->second.Label), label);
+        window->DrawList->AddText(pos + ImVec2(size.y, style.FramePadding.y), GetColorU32(it_anim->second.Label), labelText);
     }
     else
     {
@@ -230,11 +240,13 @@ bool ImAdd::RadioFrame(const char* label, int* v, int current_id, bool borders, 
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
 
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
     ImVec2 pos = window->DC.CursorPos;
     ImVec2 size = CalcItemSize(size_arg, label_size.x + style.FramePadding.x * 2.0f, g.FontSize + style.FramePadding.y * 2.0f);
@@ -298,7 +310,7 @@ bool ImAdd::RadioFrame(const char* label, int* v, int current_id, bool borders, 
 
     if (label_size.x > 0)
     {
-        window->DrawList->AddText(pos + ImVec2(size.x / 2 - label_size.x / 2, style.FramePadding.y), GetColorU32(it_anim->second.Label), label);
+        window->DrawList->AddText(pos + ImVec2(size.x / 2 - label_size.x / 2, style.FramePadding.y), GetColorU32(it_anim->second.Label), labelText);
     }
 
     return pressed;
@@ -350,11 +362,14 @@ bool ImAdd::InputText(const char* label, const char* text, char* buf, size_t buf
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+    const char* hintText = L(text);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
-    const ImVec2 text_size = CalcTextSize(text, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
+    const ImVec2 text_size = CalcTextSize(hintText, NULL, true);
 
     IM_ASSERT(!(flags & ImGuiInputTextFlags_Multiline)); // call InputTextMultiline()
 
@@ -367,7 +382,7 @@ bool ImAdd::InputText(const char* label, const char* text, char* buf, size_t buf
     {
         if (has_label) {
             PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemInnerSpacing.y));
-            ImGui::Text(label);
+            ImGui::Text(labelText);
         }
         {
             ImVec2 pos = GetCursorScreenPos();
@@ -381,7 +396,7 @@ bool ImAdd::InputText(const char* label, const char* text, char* buf, size_t buf
             {
                 if (!ImGui::IsItemActive() && !strlen(buf)) {
                     ImGui::SetCursorScreenPos(pos + style.FramePadding);
-                    ImGui::TextDisabled(text);
+                    ImGui::TextDisabled(hintText);
                 }
             }
         }
@@ -400,10 +415,12 @@ bool ImAdd::Button(const char* label, const ImVec2& size_arg, ImGuiButtonFlags f
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
     ImVec2 pos = window->DC.CursorPos;
     if ((flags & ImGuiButtonFlags_AlignTextBaseLine) && style.FramePadding.y < window->DC.CurrLineTextBaseOffset) // Try to vertically align buttons that are smaller/have no padding so that text baseline matches (bit hacky, since it shouldn't be a flag)
@@ -444,7 +461,7 @@ bool ImAdd::Button(const char* label, const ImVec2& size_arg, ImGuiButtonFlags f
 
     if (g.LogEnabled)
         LogSetNextTextDecoration("[", "]");
-    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, NULL, &label_size, style.ButtonTextAlign, &bb);
+    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, labelText, NULL, &label_size, style.ButtonTextAlign, &bb);
 
     return pressed;
 }
@@ -455,9 +472,11 @@ bool ImAdd::ColorEdit4(const char* label, float col[4])
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
     const ImVec4 col_v4(col[0], col[1], col[2], col[3]);
 
     ImVec2 size = CalcItemSize(ImVec2(-0.1f, g.FontSize), label_size.x + style.ItemInnerSpacing.x + g.FontSize * 2, g.FontSize);
@@ -467,7 +486,7 @@ bool ImAdd::ColorEdit4(const char* label, float col[4])
     BeginGroup();
 
     if (label_size.x > 0) {
-        Text(label);
+        Text(labelText);
         SameLine(size.x - g.FontSize * 2);
     }
 
@@ -661,11 +680,13 @@ bool ImAdd::CheckBox(const char* label, bool* v)
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
 
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
     float height = g.FontSize;
 
@@ -725,7 +746,7 @@ bool ImAdd::CheckBox(const char* label, bool* v)
 
     if (label_size.x > 0)
     {
-        RenderText(pos + ImVec2(height + style.ItemInnerSpacing.x, 0), label);
+        RenderText(pos + ImVec2(height + style.ItemInnerSpacing.x, 0), labelText);
     }
 
     return pressed;
@@ -737,6 +758,8 @@ bool ImAdd::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
@@ -744,7 +767,7 @@ bool ImAdd::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
     char value_buf[64];
     const char* value_buf_end = value_buf + DataTypeFormatString(value_buf, IM_ARRAYSIZE(value_buf), data_type, p_data, format);
 
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
     float w = CalcItemSize(ImVec2(width, 0), CalcItemWidth(), 0).x;
     w -= label_size.x > 0 ? 0 : CalcTextSize(value_buf).x + style.ItemInnerSpacing.x;
 
@@ -834,7 +857,7 @@ bool ImAdd::SliderScalar(const char* label, ImGuiDataType data_type, void* p_dat
     window->DrawList->AddText(pos + ImVec2(w + extra_width, 0), GetColorU32(ImGuiCol_TextDisabled), value_buf);
 
     if (label_size.x > 0.0f)
-        RenderText(pos, label);
+        RenderText(pos, labelText);
 
     return value_changed;
 }
@@ -855,10 +878,12 @@ bool ImAdd::Selectable(const char* label, bool selected, const ImVec2& size_arg)
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
     ImVec2 pos = window->DC.CursorPos;
     ImVec2 size = CalcItemSize(size_arg, label_size.x + style.FramePadding.x * 2.0f, label_size.y + style.FramePadding.y * 2.0f);
@@ -910,7 +935,7 @@ bool ImAdd::Selectable(const char* label, bool selected, const ImVec2& size_arg)
     if (borderSize > 0)
         window->DrawList->AddRect(bb.Min, bb.Max, GetColorU32(it_anim->second.Border), style.FrameRounding, 0, borderSize);
 
-    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, NULL, &label_size, style.ButtonTextAlign, &bb);
+    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, labelText, NULL, &label_size, style.ButtonTextAlign, &bb);
 
     return pressed;
 }
@@ -925,6 +950,9 @@ bool ImAdd::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+    const char* previewText = L(preview_value);
+
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
     IM_ASSERT((flags & (ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_NoPreview)) != (ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_NoPreview)); // Can't use both flags together
@@ -932,9 +960,9 @@ bool ImAdd::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
         IM_ASSERT((flags & (ImGuiComboFlags_NoPreview | ImGuiComboFlags_CustomPreview)) == 0);
 
     const float arrow_size = (flags & ImGuiComboFlags_NoArrowButton) ? 0.0f : GetFrameHeight();
-    const ImVec2 label_size = CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = CalcTextSize(labelText, NULL, true);
 
-    const float preview_width = ((flags & ImGuiComboFlags_WidthFitPreview) && (preview_value != NULL)) ? CalcTextSize(preview_value, NULL, true).x : 0.0f;
+    const float preview_width = ((flags & ImGuiComboFlags_WidthFitPreview) && (previewText != NULL)) ? CalcTextSize(previewText, NULL, true).x : 0.0f;
     const float w = (flags & ImGuiComboFlags_NoPreview) ? arrow_size : ((flags & ImGuiComboFlags_WidthFitPreview) ? (arrow_size + preview_width + style.FramePadding.x * 2.0f) : CalcItemWidth());
 
     const ImRect bb(window->DC.CursorPos + ImVec2(0.0f, label_size.x > 0 ? label_size.y + style.ItemInnerSpacing.y : 0.0f), window->DC.CursorPos + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f) + ImVec2(0.0f, label_size.x > 0 ? label_size.y + style.ItemInnerSpacing.y : 0.0f));
@@ -996,21 +1024,21 @@ bool ImAdd::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
     if (flags & ImGuiComboFlags_CustomPreview)
     {
         g.ComboPreviewData.PreviewRect = ImRect(bb.Min.x, bb.Min.y, value_x2, bb.Max.y);
-        IM_ASSERT(preview_value == NULL || preview_value[0] == 0);
-        preview_value = NULL;
+        IM_ASSERT(previewText == NULL || previewText[0] == 0);
+        previewText = NULL;
     }
 
     // Render preview and label
-    if (preview_value != NULL && !(flags & ImGuiComboFlags_NoPreview))
+    if (previewText != NULL && !(flags & ImGuiComboFlags_NoPreview))
     {
         if (g.LogEnabled)
             LogSetNextTextDecoration("{", "}");
         PushStyleColor(ImGuiCol_Text, GetStyleColorVec4(ImGuiCol_TextDisabled));
-        RenderTextClipped(bb.Min + style.FramePadding, ImVec2(value_x2, bb.Max.y), preview_value, NULL, NULL);
+        RenderTextClipped(bb.Min + style.FramePadding, ImVec2(value_x2, bb.Max.y), previewText, NULL, NULL);
         PopStyleColor();
     }
     if (label_size.x > 0)
-        RenderText(total_bb.Min, label);
+        RenderText(total_bb.Min, labelText);
 
     if (!popup_open)
         return false;
@@ -1191,14 +1219,17 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
     if (window->SkipItems)
         return false;
 
+    const char* labelText = L(label);
+
     ImGuiContext& g = *GImGui;
     ImGuiIO& io = g.IO;
     const ImGuiStyle& style = g.Style;
     const ImGuiID id = window->GetID(label);
 
-    char buf_display[32] = "None";
+    char buf_display[32] = {};
+    strcpy_s(buf_display, L("None"));
     ImVec2 pos = window->DC.CursorPos;
-    const ImVec2 label_size = ImGui::CalcTextSize(label, NULL, true);
+    const ImVec2 label_size = ImGui::CalcTextSize(labelText, NULL, true);
     ImVec2 buf_display_size = ImGui::CalcTextSize(buf_display, NULL, true);
     float width = custom_width == 0 ? ImGui::CalcItemSize(ImVec2(-0.1, 0), 0, 0).x : custom_width;
     float height = ImGui::GetFrameHeight();
@@ -1389,14 +1420,14 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
     if (*k != 0 && g.ActiveId != id)
         strcpy_s(buf_display, szKeyNames[*k]);
     else if (g.ActiveId == id)
-        strcpy_s(buf_display, waiting_for_release ? "Release then press key" : "Press any key");
+        strcpy_s(buf_display, waiting_for_release ? L("Release then press key") : L("Press any key"));
 
     const ImRect clip_rect(frame_bb.Min.x, frame_bb.Min.y, frame_bb.Min.x + size.x, frame_bb.Min.y + size.y);
     ImGui::RenderTextClipped(frame_bb.Min + style.FramePadding, frame_bb.Max - style.FramePadding, buf_display, NULL, NULL, style.ButtonTextAlign, &clip_rect);
 
     ImVec2 label_pos = pos;
     if (label_size.x > 0.0f)
-        ImGui::RenderText(label_pos, label);
+        ImGui::RenderText(label_pos, labelText);
 
     char mode_popup_id[64]{};
     ImFormatString(mode_popup_id, IM_ARRAYSIZE(mode_popup_id), "Mode##%08X", id);
@@ -1408,15 +1439,15 @@ bool ImAdd::KeyBind(const char* label, int* k, float custom_width, KeyBindOption
 
     if (ImGui::BeginPopup(mode_popup_id))
     {
-        if (ImGui::MenuItem("Always On", nullptr, *options == KeyBindOptions::Always))
+        if (ImGui::MenuItem(L("Always On"), nullptr, *options == KeyBindOptions::Always))
         {
             *options = KeyBindOptions::Always;
         }
-        if (ImGui::MenuItem("On Toggle", nullptr, *options == KeyBindOptions::OnToggle))
+        if (ImGui::MenuItem(L("On Toggle"), nullptr, *options == KeyBindOptions::OnToggle))
         {
             *options = KeyBindOptions::OnToggle;
         }
-        if (ImGui::MenuItem("On Key", nullptr, *options == KeyBindOptions::OnKeyDown))
+        if (ImGui::MenuItem(L("On Key"), nullptr, *options == KeyBindOptions::OnKeyDown))
         {
             *options = KeyBindOptions::OnKeyDown;
         }

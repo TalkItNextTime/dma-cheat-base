@@ -7,6 +7,7 @@ namespace Config
         Structs::AimConfig Aim;
         Structs::KmboxConfig Kmbox;
         Structs::VisualsConfig Visuals;
+        int Language = 0;
 
         static AppConfig& Get()
         {
@@ -196,6 +197,7 @@ namespace Config
             j["Visuals"]["C4PanelPosY"] = Visuals.C4PanelPosY;
             j["Visuals"]["Defuser"] = Visuals.Defuser;
             j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
+            j["Info"]["Language"] = std::clamp(Language, 0, 1);
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -261,6 +263,18 @@ namespace Config
                 LoadConfigSection(j, "Kmbox", Kmbox);
                 LoadConfigSection(j, "Visuals", Visuals);
                 LoadWeaponProfiles(j);
+                if (j.contains("Info") && j["Info"].is_object())
+                {
+                    const auto& info = j["Info"];
+                    if (info.contains("Language"))
+                    {
+                        if (info["Language"].is_number_integer())
+                            Language = info["Language"].get<int>();
+                        else if (info["Language"].is_number())
+                            Language = static_cast<int>(info["Language"].get<double>());
+                    }
+                }
+                Language = std::clamp(Language, 0, 1);
 
                 LOG_INFO("Loaded config from file: {}", filename);
                 return true;
@@ -289,6 +303,18 @@ namespace Config
                             LoadConfigSection(j, "Kmbox", Kmbox);
                             LoadConfigSection(j, "Visuals", Visuals);
                             LoadWeaponProfiles(j);
+                            if (j.contains("Info") && j["Info"].is_object())
+                            {
+                                const auto& info = j["Info"];
+                                if (info.contains("Language"))
+                                {
+                                    if (info["Language"].is_number_integer())
+                                        Language = info["Language"].get<int>();
+                                    else if (info["Language"].is_number())
+                                        Language = static_cast<int>(info["Language"].get<double>());
+                                }
+                            }
+                            Language = std::clamp(Language, 0, 1);
                             LOG_INFO("Loaded config from clipboard");
                             GlobalUnlock(clipboardData);
                             CloseClipboard();
@@ -488,6 +514,7 @@ namespace Config
                 j["Visuals"]["C4PanelPosY"] = 0.06f;
                 j["Visuals"]["Defuser"] = true;
                 j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
+                j["Info"]["Language"] = 0;
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();

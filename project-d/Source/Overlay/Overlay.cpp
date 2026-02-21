@@ -4,6 +4,7 @@
 
 #include "Overlay.hpp"
 #include "Fonts/IBMPlexMono_Medium.h"
+#include "Localization.hpp"
 
 ID3D11Device* Overlay::device = nullptr;
 
@@ -17,6 +18,20 @@ HWND Overlay::overlay = nullptr;
 WNDCLASSEX Overlay::wc = { };
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+namespace
+{
+	const char* L(const char* text)
+	{
+		return Localization::Localize(text);
+	}
+
+	void SyncLanguageFromConfig()
+	{
+		config.Language = std::clamp(config.Language, 0, 1);
+		Localization::CurrentLanguage = static_cast<Localization::Language>(config.Language);
+	}
+}
 
 LRESULT CALLBACK window_procedure(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -209,6 +224,68 @@ bool Overlay::CreateImGui()
 {
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
+	ImGuiIO& io = ImGui::GetIO();
+	io.IniFilename = nullptr;
+
+	ImFont* uiFont = nullptr;
+	const std::array<std::filesystem::path, 4> yaHeiCandidates = {
+		std::filesystem::path("C:/Windows/Fonts/msyh.ttc"),
+		std::filesystem::path("C:/Windows/Fonts/msyh.ttf"),
+		std::filesystem::path("C:/Windows/Fonts/msyhbd.ttc"),
+		std::filesystem::path("C:/Windows/Fonts/msyhl.ttc")
+	};
+
+	for (const auto& candidate : yaHeiCandidates)
+	{
+		if (!std::filesystem::exists(candidate))
+			continue;
+
+		uiFont = io.Fonts->AddFontFromFileTTF(
+			candidate.string().c_str(),
+			16.0f,
+			nullptr,
+			io.Fonts->GetGlyphRangesChineseFull()
+		);
+
+		if (uiFont)
+		{
+			LOG_INFO("Loaded UI font: {}", candidate.string());
+			break;
+		}
+	}
+
+	if (!uiFont)
+	{
+		const std::filesystem::path localFont = std::filesystem::current_path() / "font.otf";
+		if (std::filesystem::exists(localFont))
+		{
+			uiFont = io.Fonts->AddFontFromFileTTF(
+				localFont.string().c_str(),
+				16.0f,
+				nullptr,
+				io.Fonts->GetGlyphRangesChineseFull()
+			);
+			if (uiFont)
+				LOG_INFO("Loaded fallback UI font: {}", localFont.string());
+		}
+	}
+
+	if (!uiFont)
+	{
+		uiFont = io.Fonts->AddFontFromMemoryCompressedTTF(
+			IBMPlexMono_Medium_compressed_data,
+			IBMPlexMono_Medium_compressed_size,
+			14.0f,
+			nullptr,
+			io.Fonts->GetGlyphRangesDefault()
+		);
+		LOG_WARN("Failed to load Microsoft YaHei, using bundled fallback font.");
+	}
+
+	if (!uiFont)
+		uiFont = io.Fonts->AddFontDefault();
+
+	io.FontDefault = uiFont;
 
 	if (!ImGui_ImplWin32_Init(overlay)) {
 		LOG_ERROR("Failed ImGui_ImplWin32_Init");
@@ -250,6 +327,8 @@ bool Overlay::IsHostKeyDown(const int virtualKey)
 
 void Overlay::StartRender()
 {
+	SyncLanguageFromConfig();
+
 	MSG msg;
 	while (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
 	{
@@ -377,8 +456,7 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
     style.Colors[ImGuiCol_HeaderHovered]        = ImAdd::HexToColorVec4(0x282828, 0.7f);
     style.Colors[ImGuiCol_HeaderActive]         = ImAdd::HexToColorVec4(0x282828, 0.5f);
 
-	static bool bInit = false;
-	if (!bInit)
+	if (m_Tabs.empty())
 	{
 		m_iSelectedPage = 0;
 
@@ -386,10 +464,6 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
 		m_Tabs.push_back("Visuals");    // MenuPage_Visuals
 		m_Tabs.push_back("Config");    // MenuPage_Configs
 		m_Tabs.push_back("Info");       // MenuPage_Info
-
-		ImFont* MainFont = IO.Fonts->AddFontFromMemoryCompressedTTF(IBMPlexMono_Medium_compressed_data, IBMPlexMono_Medium_compressed_size, 14, nullptr, IO.Fonts->GetGlyphRangesDefault());
-
-		bInit = true;
 	}
 }
 
@@ -399,6 +473,8 @@ bool Overlay::Create()
 	shouldRenderMenu = false;
 	m_InsertHeld = false;
 	m_FrameStart = {};
+	m_iSelectedPage = 0;
+	m_Tabs.clear();
 
 	if (!CreateOverlay())
 		return false;
@@ -480,7 +556,7 @@ void Overlay::RenderMenu()
 						const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(i);
 						bool enabled = (mask & bit) != 0ull;
 						std::string label = std::string(Structs::AimBoneNames[i]) + "##" + idSuffix + std::to_string(i);
-						if (ImGui::Checkbox(label.c_str(), &enabled))
+						if (ImGui::Checkbox(L(label.c_str()), &enabled))
 						{
 							if (enabled)
 								mask |= bit;
@@ -500,7 +576,7 @@ void Overlay::RenderMenu()
 				{
 					if (ImGui::BeginTabBar("AimSubTabs", ImGuiTabBarFlags_None))
 					{
-						if (ImGui::BeginTabItem("Aimbot"))
+						if (ImGui::BeginTabItem(L("Aimbot")))
 						{
 							ImAdd::CheckBox("Aimbot##Enable", &config.Aim.Aimbot);
 
@@ -510,7 +586,7 @@ void Overlay::RenderMenu()
 								{
 									if (ImGui::BeginTabBar("AimbotLayoutTabs", ImGuiTabBarFlags_None))
 									{
-										if (ImGui::BeginTabItem("General"))
+										if (ImGui::BeginTabItem(L("General")))
 										{
 											ImAdd::SeparatorText("Hotkeys");
 											ImAdd::KeyBindOptions primaryMode = (ImAdd::KeyBindOptions)config.Aim.AimbotKeyMode;
@@ -559,17 +635,17 @@ void Overlay::RenderMenu()
 											}
 
 											ImAdd::CheckBox("Fuse Global RCS During Aim", &config.Aim.FuseGlobalRcsWithAimbot);
-											ImGui::TextDisabled("Aimbot thread interval: 2ms (~500Hz).");
+											ImGui::TextDisabled("%s", L("Aimbot thread interval: 2ms (~500Hz)."));
 											ImGui::EndTabItem();
 										}
 
-										if (ImGui::BeginTabItem("Weapon Tabs"))
+										if (ImGui::BeginTabItem(L("Weapon Tabs")))
 										{
 											if (ImGui::BeginTabBar("AimbotWeaponTabs", ImGuiTabBarFlags_None))
 											{
 												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(Structs::AimWeaponGroupNames[i]))
+													if (ImGui::BeginTabItem(L(Structs::AimWeaponGroupNames[i])))
 													{
 														config.Aim.WeaponProfileEditorIndex = i;
 														Structs::AimWeaponProfile& profile = config.Aim.WeaponProfiles[i];
@@ -594,18 +670,19 @@ void Overlay::RenderMenu()
 								}
 								else
 								{
+									const char* disconnectedText = L("KMBOX not connected.");
 									ImGui::SetCursorPos(
 										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
-										ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight())
+										ImGui::CalcTextSize(disconnectedText) / 2 + ImVec2(0, ImGui::GetFrameHeight())
 									);
-									ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
+									ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", disconnectedText);
 								}
 							}
 
 							ImGui::EndTabItem();
 						}
 
-						if (ImGui::BeginTabItem("Trigger"))
+						if (ImGui::BeginTabItem(L("Trigger")))
 						{
 							ImAdd::CheckBox("Trigger##Enable", &config.Aim.Trigger);
 
@@ -615,10 +692,10 @@ void Overlay::RenderMenu()
 								{
 									if (ImGui::BeginTabBar("TriggerLayoutTabs", ImGuiTabBarFlags_None))
 									{
-										if (ImGui::BeginTabItem("General"))
+										if (ImGui::BeginTabItem(L("General")))
 										{
 											ImAdd::SeparatorText("Hotkeys");
-											ImGui::TextDisabled("Trigger only works while holding hotkey.");
+											ImGui::TextDisabled("%s", L("Trigger only works while holding hotkey."));
 											ImAdd::KeyBindOptions triggerMode = (ImAdd::KeyBindOptions)config.Aim.TriggerKeyMode;
 											ImAdd::KeyBind("Primary Trigger Key", &config.Aim.TriggerKey, 0, &triggerMode);
 											config.Aim.TriggerKeyMode = (int)ImAdd::KeyBindOptions::OnKeyDown;
@@ -640,30 +717,30 @@ void Overlay::RenderMenu()
 
 											ImAdd::SeparatorText("Safety");
 											ImAdd::CheckBox("Block Trigger When Flashed", &config.Aim.BlockTriggerWhenFlashed);
-											ImGui::TextDisabled("Reloading / non-gun is always blocked.");
+											ImGui::TextDisabled("%s", L("Reloading / non-gun is always blocked."));
 
 											ImAdd::SeparatorText("Hitbox Debug");
 											ImAdd::CheckBox("Enable Trigger Hitbox Debug", &config.Aim.TriggerHitboxDebug);
 											ImAdd::CheckBox("Head Sphere Debug", &config.Aim.TriggerHeadSphereDebug);
 											if (config.Aim.TriggerHitboxDebug)
 											{
-												ImGui::TextDisabled("ESP draws 3D box per bone segment.");
+												ImGui::TextDisabled("%s", L("ESP draws 3D box per bone segment."));
 												ImAdd::SliderFloat("Debug Thickness", &config.Aim.TriggerHitboxDebugThickness, 0.5f, 4.0f);
 												ImAdd::ColorEdit4("Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugColor);
 												ImAdd::ColorEdit4("Active Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugActiveColor);
 											}
 
-											ImGui::TextDisabled("Trigger thread interval: 2ms (~500Hz).");
+											ImGui::TextDisabled("%s", L("Trigger thread interval: 2ms (~500Hz)."));
 											ImGui::EndTabItem();
 										}
 
-										if (ImGui::BeginTabItem("Weapon Tabs"))
+										if (ImGui::BeginTabItem(L("Weapon Tabs")))
 										{
 											if (ImGui::BeginTabBar("TriggerWeaponTabs", ImGuiTabBarFlags_None))
 											{
 												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(Structs::AimWeaponGroupNames[i]))
+													if (ImGui::BeginTabItem(L(Structs::AimWeaponGroupNames[i])))
 													{
 														config.Aim.TriggerProfileEditorIndex = i;
 														Structs::TriggerWeaponProfile& profile = config.Aim.TriggerProfiles[i];
@@ -679,7 +756,7 @@ void Overlay::RenderMenu()
 
 												for (int i = 0; i < Structs::TriggerSpecial_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(Structs::TriggerSpecialWeaponNames[i]))
+													if (ImGui::BeginTabItem(L(Structs::TriggerSpecialWeaponNames[i])))
 													{
 														config.Aim.TriggerSpecialEditorIndex = i;
 														Structs::TriggerSpecialProfile& special = config.Aim.TriggerSpecialProfiles[i];
@@ -704,11 +781,12 @@ void Overlay::RenderMenu()
 								}
 								else
 								{
+									const char* disconnectedText = L("KMBOX not connected.");
 									ImGui::SetCursorPos(
 										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
-										ImGui::CalcTextSize("KMBOX not connected.") / 2 + ImVec2(0, ImGui::GetFrameHeight())
+										ImGui::CalcTextSize(disconnectedText) / 2 + ImVec2(0, ImGui::GetFrameHeight())
 									);
-									ImGui::TextColored(ImVec4(1, 0, 0, 1), "KMBOX not connected.");
+									ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", disconnectedText);
 								}
 							}
 
@@ -865,7 +943,7 @@ void Overlay::RenderMenu()
 				ImGui::BeginChild("Configs", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
 				{
 					if (ImGui::BeginMenuBar()) {
-						ImGui::Text("Configs");
+						ImGui::Text("%s", L("Configs"));
 						ImGui::EndMenuBar();
 					}
 						
@@ -881,11 +959,11 @@ void Overlay::RenderMenu()
 					ImGui::Separator();
 
 					// Config List
-					if (ImGui::BeginListBox("Config list"))
+					if (ImGui::BeginListBox(L("Config list")))
 					{
 						if (configFiles.empty())
 						{
-							ImGui::Selectable("No configs found", false, ImGuiSelectableFlags_Disabled);
+							ImGui::Selectable(L("No configs found"), false, ImGuiSelectableFlags_Disabled);
 						}
 						else
 						{
@@ -908,7 +986,7 @@ void Overlay::RenderMenu()
 					}
 
 					// Config Name Input
-					ImGui::InputText("Config Name", configName, IM_ARRAYSIZE(configName));
+					ImGui::InputText(L("Config Name"), configName, IM_ARRAYSIZE(configName));
 
 					// Control Buttons
 					float buttonWidth = 75.0f;
@@ -924,6 +1002,7 @@ void Overlay::RenderMenu()
 						}
 						else
 						{
+							SyncLanguageFromConfig();
 							LOG_INFO("Loaded config: {}", filePath);
 						}
 					}
@@ -965,6 +1044,7 @@ void Overlay::RenderMenu()
 					{
 						if (config.LoadFromClipboard())
 						{
+							SyncLanguageFromConfig();
 							LOG_INFO("Config imported from clipboard");
 						}
 						else
@@ -981,34 +1061,54 @@ void Overlay::RenderMenu()
 				ImGui::BeginChild("Info", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
 				{
 					if (ImGui::BeginMenuBar()) {
-						ImGui::Text("Info");
+						ImGui::Text("%s", L("Info"));
 						ImGui::EndMenuBar();
+					}
+
+					int languageIndex = std::clamp(config.Language, 0, 1);
+					const char* languageItems[] = { "English", "Chinese" };
+					if (ImAdd::Combo("Language", &languageIndex, languageItems, IM_ARRAYSIZE(languageItems)))
+					{
+						languageIndex = std::clamp(languageIndex, 0, 1);
+						config.Language = languageIndex;
+						Localization::CurrentLanguage = static_cast<Localization::Language>(config.Language);
+
+						if (!config.SaveToFile("configs/config.json"))
+							LOG_ERROR("Failed to persist language setting to configs/config.json");
 					}
 
 					ImAdd::SeparatorText("Hardware");
 
-					ImGui::Text("DMA:");
+					ImGui::Text("%s", L("DMA:"));
 					ImGui::SameLine();
-					ImGui::TextColored(ProcInfo::DmaInitialized ? ImVec4(0, 1, 0, 1)/* green */ : ImVec4(1, 0, 0, 1)/* red */, "%s", ProcInfo::DmaInitialized ? "Connected" : "Disconnected");
+					ImGui::TextColored(
+						ProcInfo::DmaInitialized ? ImVec4(0, 1, 0, 1)/* green */ : ImVec4(1, 0, 0, 1)/* red */,
+						"%s",
+						ProcInfo::DmaInitialized ? L("Connected") : L("Disconnected")
+					);
 
-					ImGui::Text("KMBOX:");
+					ImGui::Text("%s", L("KMBOX:"));
 					ImGui::SameLine();
-					ImGui::TextColored(ProcInfo::KmboxInitialized ? ImVec4(0, 1, 0, 1)/* green */: ImVec4(1, 0, 0, 1)/* red */, "%s", ProcInfo::KmboxInitialized ? "Connected" : "Disconnected");
+					ImGui::TextColored(
+						ProcInfo::KmboxInitialized ? ImVec4(0, 1, 0, 1)/* green */: ImVec4(1, 0, 0, 1)/* red */,
+						"%s",
+						ProcInfo::KmboxInitialized ? L("Connected") : L("Disconnected")
+					);
 
 					ImAdd::SeparatorText("Game");
 
-					ImGui::Text("Client:");
+					ImGui::Text("%s", L("Client:"));
 					ImGui::SameLine();
 					ImGui::Text("0x%llx", Globals::ClientBase);
 
 					ImAdd::SeparatorText("Cheat");
 
-					ImGui::Text("Overlay FPS: %.2f", OverlayFps);
-					ImGui::Text("Host INSERT: %s", IsHostKeyDown(VK_INSERT) ? "Down" : "Up");
-					ImGui::Text("Host LMB: %s", IsHostKeyDown(VK_LBUTTON) ? "Down" : "Up");
-					ImGui::Text("Host RMB: %s", IsHostKeyDown(VK_RBUTTON) ? "Down" : "Up");
-					ImGui::Text("Host X1: %s", IsHostKeyDown(VK_XBUTTON1) ? "Down" : "Up");
-					ImGui::Text("Host X2: %s", IsHostKeyDown(VK_XBUTTON2) ? "Down" : "Up");
+					ImGui::Text(L("Overlay FPS: %.2f"), OverlayFps);
+					ImGui::Text(L("Host INSERT: %s"), IsHostKeyDown(VK_INSERT) ? L("Down") : L("Up"));
+					ImGui::Text(L("Host LMB: %s"), IsHostKeyDown(VK_LBUTTON) ? L("Down") : L("Up"));
+					ImGui::Text(L("Host RMB: %s"), IsHostKeyDown(VK_RBUTTON) ? L("Down") : L("Up"));
+					ImGui::Text(L("Host X1: %s"), IsHostKeyDown(VK_XBUTTON1) ? L("Down") : L("Up"));
+					ImGui::Text(L("Host X2: %s"), IsHostKeyDown(VK_XBUTTON2) ? L("Down") : L("Up"));
 
 					float buttonWidth = 100.0f;
 					float buttonSpacing = 20.0f;
@@ -1036,8 +1136,10 @@ void Overlay::RenderMenu()
 		{
 			ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetWindowPos(), ImGui::GetWindowPos() + ImGui::GetWindowSize(), ImGui::GetColorU32(ImGuiCol_ChildBg), style.WindowRounding, ImDrawFlags_RoundCornersBottom);
 			ImGui::GetWindowDrawList()->AddLine(ImGui::GetWindowPos() + ImVec2(style.WindowBorderSize, 0), ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - style.WindowBorderSize, 0), ImGui::GetColorU32(ImGuiCol_Border), style.WindowBorderSize);
-			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + style.FramePadding, ImGui::GetColorU32(ImGuiCol_Text), "Build: Developer");
-			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - ImGui::CalcTextSize("Expires: Never").x - style.FramePadding.x, style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), "Expires: Never");
+			const char* buildText = L("Build: Developer");
+			const char* expiryText = L("Expires: Never");
+			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + style.FramePadding, ImGui::GetColorU32(ImGuiCol_Text), buildText);
+			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - ImGui::CalcTextSize(expiryText).x - style.FramePadding.x, style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), expiryText);
 		}
 		ImGui::EndChild();
 	}

@@ -68,8 +68,7 @@
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>
-      </AdditionalOptions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -96,8 +95,7 @@
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>
-      </AdditionalOptions>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -131,6 +129,7 @@
     <ClInclude Include="Source\Features\Features.hpp" />
     <ClInclude Include="Source\Misc\Animation\Animation.hpp" />
     <ClInclude Include="Source\Overlay\Fonts\IBMPlexMono_Medium.h" />
+    <ClInclude Include="Source\Overlay\Localization.hpp" />
     <ClInclude Include="Source\Overlay\Overlay.hpp" />
     <ClInclude Include="Source\Overlay\Render\Renderer.hpp" />
     <ClInclude Include="External\fnv1a\fnv1a.hpp" />

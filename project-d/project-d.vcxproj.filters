@@ -372,6 +372,9 @@
     <ClInclude Include="Source\Overlay\Overlay.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Overlay\Localization.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\SDK\SDK.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

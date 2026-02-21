@@ -2,6 +2,7 @@
 #include <SDK.hpp>
 #include "ESP.hpp"
 #include <Aimbot/Aimbot.hpp>
+#include <Overlay/Localization.hpp>
 #include <array>
 #include <cfloat>
 #include <cstdio>
@@ -10,6 +11,14 @@
 
 namespace
 {
+    std::string LocalizeRuntimeText(const std::string& text)
+    {
+        if (text.empty() || !Localization::IsChinese())
+            return text;
+
+        return Localization::TranslateImpl(text);
+    }
+
     struct BoneDataRaw
     {
         Vector3 Position{};
@@ -435,7 +444,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Name)
     {
-        const std::string nameText = player.Name.empty() ? "Unknown" : player.Name;
+        const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "未知") : player.Name;
         const ImVec2 textSize = ImGui::CalcTextSize(nameText.c_str());
 
         const ImVec2 textPos(
@@ -448,13 +457,14 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Weapon && !player.WeaponName.empty())
     {
-        const ImVec2 textSize = ImGui::CalcTextSize(player.WeaponName.c_str());
+        const std::string weaponText = LocalizeRuntimeText(player.WeaponName);
+        const ImVec2 textSize = ImGui::CalcTextSize(weaponText.c_str());
         const ImVec2 textPos(
             player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - textSize.x) * 0.5f,
             player.BoxMax.y + 2.0f
         );
 
-        drawList->AddText(textPos, ToImColor(config.Visuals.WeaponColor), player.WeaponName.c_str());
+        drawList->AddText(textPos, ToImColor(config.Visuals.WeaponColor), weaponText.c_str());
     }
 
     if (config.Visuals.Bones)
@@ -480,19 +490,19 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     statusLines.reserve(5);
 
     if (player.IsScoped)
-        statusLines.push_back({ "Scoped", IM_COL32(220, 220, 220, 255) });
+        statusLines.push_back({ Localization::Pick("Scoped", "开镜"), IM_COL32(220, 220, 220, 255) });
 
     if (player.FlashDuration > 0.01f)
-        statusLines.push_back({ "Flashed", IM_COL32(255, 214, 120, 255) });
+        statusLines.push_back({ Localization::Pick("Flashed", "致盲"), IM_COL32(255, 214, 120, 255) });
 
     if (config.Visuals.Armor)
-        statusLines.push_back({ "AR:" + std::to_string(player.Armor), ToImColor(config.Visuals.ArmorColor) });
+        statusLines.push_back({ std::string(Localization::Pick("AR:", "甲:")) + std::to_string(player.Armor), ToImColor(config.Visuals.ArmorColor) });
 
     if (config.Visuals.Money && player.ShowMoney)
         statusLines.push_back({ "$" + std::to_string(player.Money), ToImColor(config.Visuals.MoneyColor) });
 
     if (config.Visuals.Defuser && player.HasDefuser)
-        statusLines.push_back({ "Kit", ToImColor(config.Visuals.DefuserColor) });
+        statusLines.push_back({ Localization::Pick("Kit", "拆弹钳"), ToImColor(config.Visuals.DefuserColor) });
 
     float lineOffset = 0.0f;
     for (const StatusLine& line : statusLines)
@@ -722,29 +732,36 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         const ImU32 markerColor = c4.Planted ? ToImColor(config.Visuals.C4Color) : IM_COL32(240, 220, 70, 255);
         drawList->AddCircleFilled(c4.Screen.ToImVec2(), 4.0f, markerColor, 12);
         drawList->AddCircle(c4.Screen.ToImVec2(), 8.0f, markerColor, 12, 1.2f);
-        drawList->AddText(ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f), markerColor, c4.Planted ? "C4(Planted)" : "C4");
+        drawList->AddText(
+            ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f),
+            markerColor,
+            c4.Planted ? Localization::Pick("C4(Planted)", "C4(已安放)") : "C4"
+        );
     }
 
     if (!c4.Planted)
         return;
 
-    std::string siteName = "Unknown";
+    std::string siteName = Localization::Pick("Unknown", "未知");
     if (c4.BombSite == 0)
         siteName = "A";
     else if (c4.BombSite == 1)
         siteName = "B";
 
-    const std::string line1 = std::string("C4 Site: ") + siteName + " | " + (c4.BeingDefused ? "Defusing" : "Not Defusing");
+    const std::string line1 =
+        std::string(Localization::Pick("C4 Site: ", "C4点位: ")) +
+        siteName + " | " +
+        (c4.BeingDefused ? Localization::Pick("Defusing", "拆弹中") : Localization::Pick("Not Defusing", "未拆弹"));
 
-    std::string line2 = "Explode: " + formatSeconds1(c4.TimeRemaining) + "s  Defuse: ";
+    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆弹: ");
     if (c4.BeingDefused)
         line2 += formatSeconds1(c4.DefuseCountDown) + "s";
     else
         line2 += "--";
 
-    std::string line3 = "Defuse Result: --";
+    std::string line3 = Localization::Pick("Defuse Result: --", "拆弹结果: --");
     if (c4.BeingDefused)
-        line3 = std::string("Defuse Result: ") + (c4.CanDefuse ? "SUCCESS" : "FAIL");
+        line3 = std::string(Localization::Pick("Defuse Result: ", "拆弹结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
 
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     constexpr float panelW = 250.0f;
@@ -1174,7 +1191,7 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
     if (!resolvedName.empty())
         return resolvedName;
 
-    return "Weapon " + std::to_string(weaponId);
+    return std::string(Localization::Pick("Weapon ", "武器 ")) + std::to_string(weaponId);
 }
 
 void ESP::UpdateVisCheckState()
@@ -1196,7 +1213,7 @@ void ESP::UpdateVisCheckState()
     const std::string& mapName = m_LastPolledMapName;
     if (mapName.empty())
     {
-        m_MapStatus = "Map Status: (No Map)";
+        m_MapStatus = Localization::Pick("Map Status: (No Map)", "地图状态: (无地图)");
         return;
     }
 
@@ -1344,10 +1361,10 @@ std::string ESP::ResolveOptPath(const std::string& mapName) const
 
 std::string ESP::BuildMapStatus(const std::string& mapName, const char* suffix) const
 {
-    std::string status = "Map Status: ";
-    status += mapName.empty() ? "(Unknown)" : (mapName + ".opt");
+    std::string status = Localization::Pick("Map Status: ", "地图状态: ");
+    status += mapName.empty() ? Localization::Pick("(Unknown)", "(未知)") : (mapName + ".opt");
     status += " (";
-    status += suffix;
+    status += Localization::Localize(suffix);
     status += ")";
     return status;
 }
@@ -2092,7 +2109,7 @@ void ESP::Render(ImDrawList* drawList)
     float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
 
     const ImVec2 statusPos(12.0f, leftHudY);
-    const char* mapStatus = frame.MapStatus.empty() ? "Map Status: (Waiting)" : frame.MapStatus.c_str();
+    const char* mapStatus = frame.MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态: (等待中)") : frame.MapStatus.c_str();
     drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
     leftHudY += ImGui::GetFontSize() + 2.0f;
 
@@ -2103,46 +2120,46 @@ void ESP::Render(ImDrawList* drawList)
         const bool triggerHotkeyActive = aim.IsTriggerHotkeyActiveVisual();
         const bool triggerHasTarget = aim.HasTriggerTargetVisual();
 
-        const char* aimbotState = "OFF";
+        const char* aimbotState = Localization::Pick("OFF", "关闭");
         ImU32 aimbotColor = IM_COL32(180, 180, 180, 255);
         if (config.Aim.Aimbot)
         {
-            aimbotState = "READY";
+            aimbotState = Localization::Pick("READY", "就绪");
             aimbotColor = IM_COL32(220, 220, 220, 255);
             if (aimbotHotkeyActive)
             {
-                aimbotState = "HOTKEY";
+                aimbotState = Localization::Pick("HOTKEY", "热键");
                 aimbotColor = IM_COL32(255, 220, 120, 255);
             }
             if (aimbotHasTarget)
             {
-                aimbotState = "LOCK";
+                aimbotState = Localization::Pick("LOCK", "锁定");
                 aimbotColor = IM_COL32(120, 255, 155, 255);
             }
         }
 
-        const char* triggerState = "OFF";
+        const char* triggerState = Localization::Pick("OFF", "关闭");
         ImU32 triggerColor = IM_COL32(180, 180, 180, 255);
         if (config.Aim.Trigger)
         {
-            triggerState = "READY";
+            triggerState = Localization::Pick("READY", "就绪");
             triggerColor = IM_COL32(220, 220, 220, 255);
             if (triggerHotkeyActive)
             {
-                triggerState = "HOTKEY";
+                triggerState = Localization::Pick("HOTKEY", "热键");
                 triggerColor = IM_COL32(255, 220, 120, 255);
             }
             if (triggerHasTarget)
             {
-                triggerState = "HIT";
+                triggerState = Localization::Pick("HIT", "命中");
                 triggerColor = IM_COL32(120, 255, 155, 255);
             }
         }
 
         char aimbotStatusLine[64]{};
         char triggerStatusLine[64]{};
-        std::snprintf(aimbotStatusLine, sizeof(aimbotStatusLine), "Aimbot: %s", aimbotState);
-        std::snprintf(triggerStatusLine, sizeof(triggerStatusLine), "Trigger: %s", triggerState);
+        std::snprintf(aimbotStatusLine, sizeof(aimbotStatusLine), Localization::Pick("Aimbot: %s", "自瞄: %s"), aimbotState);
+        std::snprintf(triggerStatusLine, sizeof(triggerStatusLine), Localization::Pick("Trigger: %s", "扳机: %s"), triggerState);
         drawList->AddText(ImVec2(12.0f, leftHudY), aimbotColor, aimbotStatusLine);
         leftHudY += ImGui::GetFontSize() + 2.0f;
         drawList->AddText(ImVec2(12.0f, leftHudY), triggerColor, triggerStatusLine);
@@ -2166,8 +2183,8 @@ void ESP::Render(ImDrawList* drawList)
         char fovText[64]{};
         const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
         const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
-        const char* aimState = aimbotHasTarget ? "LOCK" : (aimbotHotkeyActive ? "HOTKEY" : "IDLE");
-        std::snprintf(fovText, sizeof(fovText), "FOV %.1f px [%s]", radius, aimState);
+        const char* aimState = aimbotHasTarget ? Localization::Pick("LOCK", "锁定") : (aimbotHotkeyActive ? Localization::Pick("HOTKEY", "热键") : Localization::Pick("IDLE", "待机"));
+        std::snprintf(fovText, sizeof(fovText), Localization::Pick("FOV %.1f px [%s]", "FOV %.1f 像素 [%s]"), radius, aimState);
         drawList->AddText(
             ImVec2(ScreenCenter.x + radius + 8.0f, ScreenCenter.y - ImGui::GetFontSize() * 0.5f),
             ToImColor(config.Aim.AimbotFovColor),
@@ -2192,8 +2209,8 @@ void ESP::Render(ImDrawList* drawList)
         std::snprintf(
             triggerDebugText,
             sizeof(triggerDebugText),
-            "Trigger Debug: %s | Body %.1f px | Head %.1f px",
-            Structs::TriggerDetectModeNames[detectMode],
+            Localization::Pick("Trigger Debug: %s | Body %.1f px | Head %.1f px", "扳机调试: %s | 身体 %.1f 像素 | 头部 %.1f 像素"),
+            Localization::Localize(Structs::TriggerDetectModeNames[detectMode]),
             bodyRadius,
             headRadius
         );
