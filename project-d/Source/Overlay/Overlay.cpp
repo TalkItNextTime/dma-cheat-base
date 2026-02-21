@@ -32,6 +32,291 @@ namespace
 		config.Language = std::clamp(config.Language, 0, 1);
 		Localization::CurrentLanguage = static_cast<Localization::Language>(config.Language);
 	}
+
+	struct ThrowKeySelection
+	{
+		std::string Mouse = "LB";
+		bool W = false;
+		bool A = false;
+		bool S = false;
+		bool D = false;
+		bool Ctrl = false;
+		bool Space = false;
+	};
+
+	std::string TrimAscii(std::string value)
+	{
+		const auto isSpace = [](unsigned char ch) { return std::isspace(ch) != 0; };
+		while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
+			value.erase(value.begin());
+		while (!value.empty() && isSpace(static_cast<unsigned char>(value.back())))
+			value.pop_back();
+		return value;
+	}
+
+	std::string ToUpperAscii(std::string value)
+	{
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+		{
+			return static_cast<char>(std::toupper(c));
+		});
+		return value;
+	}
+
+	std::string NormalizeMouseToken(const std::string& tokenUpper)
+	{
+		if (tokenUpper == "LB" || tokenUpper == "LMB" || tokenUpper == "LEFT" || tokenUpper == "LEFTCLICK")
+			return "LB";
+		if (tokenUpper == "RB" || tokenUpper == "RMB" || tokenUpper == "RIGHT" || tokenUpper == "RIGHTCLICK")
+			return "RB";
+		if (tokenUpper == "LRB" || tokenUpper == "DUAL" || tokenUpper == "BOTH")
+			return "LRB";
+		return {};
+	}
+
+	void ParseThrowToken(const std::string& rawToken, ThrowKeySelection& inOut)
+	{
+		const std::string tokenUpper = ToUpperAscii(TrimAscii(rawToken));
+		if (tokenUpper.empty())
+			return;
+
+		if (const std::string mouse = NormalizeMouseToken(tokenUpper); !mouse.empty())
+		{
+			inOut.Mouse = mouse;
+			return;
+		}
+		if (tokenUpper == "W")
+			inOut.W = true;
+		else if (tokenUpper == "A")
+			inOut.A = true;
+		else if (tokenUpper == "S")
+			inOut.S = true;
+		else if (tokenUpper == "D")
+			inOut.D = true;
+		else if (tokenUpper == "CTRL" )
+			inOut.Ctrl = true;
+		else if (tokenUpper == "SPACE" )
+			inOut.Space = true;
+	}
+
+	ThrowKeySelection ParseThrowType(const std::string& throwTypeRaw)
+	{
+		ThrowKeySelection keys{};
+		const std::string throwType = TrimAscii(throwTypeRaw);
+		if (throwType.empty())
+			return keys;
+
+		const std::string lowered = ToUpperAscii(throwType);
+		if (lowered == "STANDTHROW")
+			return keys;
+		if (lowered == "JUMPTHROW")
+		{
+			keys.Space = true;
+			return keys;
+		}
+		if (lowered == "RUNTHROW")
+		{
+			keys.W = true;
+			return keys;
+		}
+		if (lowered == "RUNJUMPTHROW" || lowered == "RUNJUMP")
+		{
+			keys.W = true;
+			keys.Space = true;
+			return keys;
+		}
+
+		size_t begin = 0;
+		while (begin <= throwType.size())
+		{
+			const size_t plusPos = throwType.find('+', begin);
+			const size_t endPos = plusPos == std::string::npos ? throwType.size() : plusPos;
+			ParseThrowToken(throwType.substr(begin, endPos - begin), keys);
+			if (plusPos == std::string::npos)
+				break;
+			begin = plusPos + 1;
+		}
+
+		return keys;
+	}
+
+	std::string BuildCanonicalThrowType(const ThrowKeySelection& keys)
+	{
+		std::string result = keys.Mouse.empty() ? std::string("LB") : keys.Mouse;
+		const auto appendKey = [&](const char* key)
+		{
+			result += "+";
+			result += key;
+		};
+
+		if (keys.W) appendKey("W");
+		if (keys.A) appendKey("A");
+		if (keys.S) appendKey("S");
+		if (keys.D) appendKey("D");
+		if (keys.Ctrl) appendKey("Ctrl");
+		if (keys.Space) appendKey("Space");
+		return result;
+	}
+
+	std::vector<std::string> BuildThrowDisplayTokens(const std::string& throwTypeRaw, const bool includePlus)
+	{
+		const ThrowKeySelection keys = ParseThrowType(throwTypeRaw);
+		std::vector<std::string> keyboard{};
+		if (keys.W) keyboard.push_back("W");
+		if (keys.A) keyboard.push_back("A");
+		if (keys.S) keyboard.push_back("S");
+		if (keys.D) keyboard.push_back("D");
+		if (keys.Ctrl) keyboard.push_back("Ctrl");
+		if (keys.Space) keyboard.push_back("Space");
+
+		std::vector<std::string> out{};
+		out.reserve(keyboard.size() * 2 + 1);
+		out.push_back(keys.Mouse.empty() ? std::string("LB") : keys.Mouse);
+		if (!keyboard.empty())
+		{
+			if (includePlus)
+			{
+				out.push_back("+");
+				for (size_t i = 0; i < keyboard.size(); ++i)
+				{
+					if (i > 0)
+						out.push_back("+");
+					out.push_back(keyboard[i]);
+				}
+			}
+			else
+			{
+				for (const std::string& key : keyboard)
+					out.push_back(key);
+			}
+		}
+
+		return out;
+	}
+
+	std::string GetThrowTokenDisplayText(const std::string& rawToken)
+	{
+		const std::string tokenUpper = ToUpperAscii(TrimAscii(rawToken));
+		if (tokenUpper == "PLUS" || tokenUpper == "+")
+			return "+";
+
+		if (Localization::IsChinese())
+		{
+			if (tokenUpper == "LB")
+				return "左键";
+			if (tokenUpper == "RB")
+				return "右键";
+			if (tokenUpper == "LRB")
+				return "双键";
+			if (tokenUpper == "CTRL" )
+				return "蹲";
+			if (tokenUpper == "SPACE")
+				return "跳";
+		}
+
+		if (tokenUpper == "LB")
+			return "LB";
+		if (tokenUpper == "RB")
+			return "RB";
+		if (tokenUpper == "LRB")
+			return "LRB";
+		if (tokenUpper == "CTRL" )
+			return "Ctrl";
+		if (tokenUpper == "SPACE")
+			return "Space";
+		return rawToken;
+	}
+
+	void DrawThrowTypeTagRow(const std::string& throwTypeRaw, const char* idScope, const bool includePlus = true)
+	{
+		const std::vector<std::string> tokens = BuildThrowDisplayTokens(throwTypeRaw, includePlus);
+		if (tokens.empty())
+			return;
+
+		ImGui::PushID(idScope);
+		for (size_t i = 0; i < tokens.size(); ++i)
+		{
+			if (i > 0)
+				ImGui::SameLine(0.0f, 4.0f);
+
+			ImGui::BeginDisabled();
+			const std::string displayText = GetThrowTokenDisplayText(tokens[i]);
+			ImGui::SmallButton(displayText.c_str());
+			ImGui::EndDisabled();
+		}
+		ImGui::PopID();
+	}
+
+	bool DrawThrowTypePopupEditor(const char* popupId, std::string& inOutThrowType)
+	{
+		bool changed = false;
+		static ThrowKeySelection draft{};
+		static std::string activePopup{};
+
+		if (ImGui::BeginPopup(popupId))
+		{
+			if (activePopup != popupId)
+			{
+				draft = ParseThrowType(inOutThrowType);
+				activePopup = popupId;
+			}
+
+			ImGui::TextUnformatted(Localization::Pick("Mouse Buttons", "鼠标键位"));
+			int mouseIndex = 0;
+			if (draft.Mouse == "RB")
+				mouseIndex = 1;
+			else if (draft.Mouse == "LRB")
+				mouseIndex = 2;
+			const char* mouseTokens[] = { "LB", "RB", "LRB" };
+			const char* mouseItems[] = {
+				Localization::Pick("LB", "左键"),
+				Localization::Pick("RB", "右键"),
+				Localization::Pick("LRB", "双键")
+			};
+			if (ImGui::Combo("##ThrowMouse", &mouseIndex, mouseItems, IM_ARRAYSIZE(mouseItems)))
+				draft.Mouse = mouseTokens[std::clamp(mouseIndex, 0, 2)];
+
+			ImGui::Spacing();
+			ImGui::TextUnformatted(Localization::Pick("Keyboard Keys", "键盘按键"));
+			ImGui::Checkbox("W", &draft.W);
+			ImGui::SameLine();
+			ImGui::Checkbox("A", &draft.A);
+			ImGui::SameLine();
+			ImGui::Checkbox("S", &draft.S);
+			ImGui::SameLine();
+			ImGui::Checkbox("D", &draft.D);
+			ImGui::Checkbox(Localization::Pick("Ctrl", "蹲"), &draft.Ctrl);
+			ImGui::SameLine();
+			ImGui::Checkbox(Localization::Pick("Space", "跳"), &draft.Space);
+
+			const std::string preview = BuildCanonicalThrowType(draft);
+			ImGui::Spacing();
+			ImGui::TextUnformatted(Localization::Pick("Preview", "预览"));
+			DrawThrowTypeTagRow(preview, "ThrowPreview");
+
+			if (ImAdd::Button(Localization::Pick("Apply", "应用"), ImVec2(90.0f, 0.0f)))
+			{
+				inOutThrowType = preview;
+				changed = true;
+				activePopup.clear();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImAdd::Button(Localization::Pick("Cancel", "取消"), ImVec2(90.0f, 0.0f)))
+			{
+				activePopup.clear();
+				ImGui::CloseCurrentPopup();
+			}
+
+			ImGui::EndPopup();
+		}
+		else if (activePopup == popupId)
+		{
+			activePopup.clear();
+		}
+
+		return changed;
+	}
 }
 
 LRESULT CALLBACK window_procedure(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -350,10 +635,12 @@ void Overlay::StartRender()
 
 		if (shouldRenderMenu)
 		{
+			m_MenuJustOpened = true;
 			SetWindowLong(overlay, GWL_EXSTYLE, WS_EX_TOOLWINDOW);
 		}
 		else
 		{
+			m_MenuJustOpened = false;
 			SetWindowLong(overlay, GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED);
 		}
 	}
@@ -462,7 +749,7 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
 		m_iSelectedPage = 0;
 
 		m_Tabs.push_back("Aim");     // MenuPage_Aiming
-		m_Tabs.push_back("ESP");    // MenuPage_Visuals
+		m_Tabs.push_back("Visuals");    // MenuPage_Visuals
 		m_Tabs.push_back("Config");    // MenuPage_Configs
 		m_Tabs.push_back("Info");       // MenuPage_Info
 	}
@@ -532,7 +819,7 @@ void Overlay::RenderMenu()
 
 				for (int i = 0; i < m_Tabs.size(); i++)
 				{
-					ImAdd::RadioFrame(m_Tabs[i], &m_iSelectedPage, i, i % 2 == 0, ImVec2(i == m_Tabs.size() - 1 ? -0.1f : RadioWidth, ImGui::GetWindowHeight()));
+					ImAdd::RadioFrame(L(m_Tabs[i]), &m_iSelectedPage, i, i % 2 == 0, ImVec2(i == m_Tabs.size() - 1 ? -0.1f : RadioWidth, ImGui::GetWindowHeight()));
 					ImGui::SameLine();
 				}
 			}
@@ -802,29 +1089,20 @@ void Overlay::RenderMenu()
 
 			else if (m_iSelectedPage == MenuPage_Visuals)
 			{
-				ImGui::BeginChild("Visuals", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
+				ImGui::BeginChild("Visuals", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
 				{
-					if (ImGui::BeginMenuBar()) {
-						ImGui::Text("%s", L("ESP"));
-						ImGui::EndMenuBar();
-					}
 
-					const float panelSpacing = style.ItemSpacing.x;
-					const float fullWidth = ImGui::GetContentRegionAvail().x;
-					const float leftPanelWidth = (fullWidth - panelSpacing) * 0.50f;
-
-					ImGui::BeginChild("VisualsHeaderRow", ImVec2(0, ImGui::GetFrameHeight() + style.ItemSpacing.y), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+					if (ImGui::BeginTabBar("VisualsTopTabs"))
 					{
-						ImAdd::CheckBox(Localization::Pick("ESP Visuals", "透视ESP"), &config.Visuals.Enabled);
-						ImGui::SameLine(leftPanelWidth + panelSpacing + style.WindowPadding.x * 0.35f);
-						ImAdd::CheckBox(Localization::Pick("GHelper", "GHelper"), &config.Visuals.GrenadeHelper);
-					}
-					ImGui::EndChild();
-
-					ImGui::BeginChild("EspSettingsPanel", ImVec2(leftPanelWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
-					{
-						if (config.Visuals.Enabled)
+						if (ImGui::BeginTabItem(Localization::Pick("ESP", "透视")))
 						{
+							ImAdd::CheckBox(Localization::Pick("ESP", "透视"), &config.Visuals.Enabled);
+							ImGui::Spacing();
+
+							ImGui::BeginChild("EspSettingsPanel", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+							{
+								if (config.Visuals.Enabled)
+								{
 							ImAdd::SeparatorText("General");
 
 							ImGui::BeginGroup();
@@ -844,15 +1122,15 @@ void Overlay::RenderMenu()
 							ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
 							ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
 
-							ImGui::BeginGroup();
-							{
-								ImAdd::CheckBox("Hitmarker", &config.Visuals.Hitmarker);
-								if (config.Visuals.Hitmarker)
-								{
-									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-									ImAdd::ColorEdit4("##HitmarkerColor", (float*)&config.Visuals.HitmarkerColor);
-								}
-							}
+							// ImGui::BeginGroup();
+							// {
+							// 	ImAdd::CheckBox("Hitmarker", &config.Visuals.Hitmarker);
+							// 	if (config.Visuals.Hitmarker)
+							// 	{
+							// 		ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+							// 		ImAdd::ColorEdit4("##HitmarkerColor", (float*)&config.Visuals.HitmarkerColor);
+							// 	}
+							// }
 
 							ImAdd::SeparatorText("Players");
 
@@ -940,17 +1218,23 @@ void Overlay::RenderMenu()
 									ImAdd::SliderFloat("C4 Card Y", &config.Visuals.C4PanelPosY, 0.0f, 1.0f);
 								}
 							}
+								}
+								else
+								{
+									ImGui::TextDisabled("%s", Localization::Pick("Enable ESP to configure these settings.", "启用透视后可配置左侧设置。"));
+								}
+							}
+							ImGui::EndChild();
+							ImGui::EndTabItem();
 						}
-						else
-						{
-							ImGui::TextDisabled("%s", Localization::Pick("Enable ESP Visuals to configure ESP settings.", "启用透视ESP后可配置左侧透视设置。"));
-						}
-					}
-					ImGui::EndChild();
 
-					ImGui::SameLine(0.0f, panelSpacing);
-					ImGui::BeginChild("UtilityHelperPanel", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
-					{
+						if (ImGui::BeginTabItem(Localization::Pick("GHelper", "道具辅助")))
+						{
+							ImAdd::CheckBox(Localization::Pick("GHelper", "道具辅助"), &config.Visuals.GrenadeHelper);
+							ImGui::Spacing();
+
+							ImGui::BeginChild("UtilityHelperPanel", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
+							{
 						ImAdd::SeparatorText(Localization::Pick("GHelper Settings", "GHelper设置"));
 						ImGui::TextWrapped("%s", Localization::Pick("Independent utility helper settings panel.", "独立道具辅助设置面板。"));
 						ImGui::Spacing();
@@ -958,32 +1242,103 @@ void Overlay::RenderMenu()
 						if (config.Visuals.GrenadeHelper)
 						{
 							static char helperMapName[64] = "";
-							static char helperNote[128] = "";
-							static float helperRecordDistance = 8000.0f;
-							static int helperThrowTypeIndex = 0;
+							static char helperSpotName[128] = "";
+							static char helperSpotRemark[192] = "";
+							static std::string helperRecordThrowType = "LB";
 							static int helperSelectedRow = -1;
 							static std::vector<GrenadeSpotEditorRow> helperRows{};
 							static std::string helperStatus{};
+							static int helperOpenSnapshotTypeFilter = -1;
+							static bool helperScrollToSelectedRow = false;
+							constexpr float kRecordAimDistance = 10000.0f;
 
 							if (helperMapName[0] == '\0')
 							{
 								const std::string suggestedMap = esp.GetSuggestedGrenadeMapName();
 								strncpy_s(helperMapName, suggestedMap.c_str(), _TRUNCATE);
 								helperStatus = esp.GetGrenadeStatus();
+								helperRows = esp.GetGrenadeSpotEditorRows();
+								helperSelectedRow = helperRows.empty() ? -1 : 0;
+							}
+
+							auto rowVisibleByOpenFilter = [&](const GrenadeSpotEditorRow& row)
+							{
+								return helperOpenSnapshotTypeFilter < 0 || std::clamp(row.TypeIndex, 0, 4) == helperOpenSnapshotTypeFilter;
+							};
+
+							auto buildVisibleRows = [&]()
+							{
+								std::vector<int> visible{};
+								visible.reserve(helperRows.size());
+								for (int rowIndex = 0; rowIndex < static_cast<int>(helperRows.size()); ++rowIndex)
+								{
+									if (rowVisibleByOpenFilter(helperRows[static_cast<std::size_t>(rowIndex)]))
+										visible.push_back(rowIndex);
+								}
+								return visible;
+							};
+
+							auto alignSelectionToVisible = [&](const std::vector<int>& visibleRows)
+							{
+								if (visibleRows.empty())
+								{
+									helperSelectedRow = -1;
+									return;
+								}
+
+								const bool validIndex = helperSelectedRow >= 0 && helperSelectedRow < static_cast<int>(helperRows.size());
+								if (!validIndex)
+								{
+									helperSelectedRow = visibleRows.front();
+									return;
+								}
+
+								for (const int visibleIndex : visibleRows)
+								{
+									if (visibleIndex == helperSelectedRow)
+										return;
+								}
+
+								helperSelectedRow = visibleRows.front();
+							};
+
+							if (m_MenuJustOpened)
+							{
+								helperRows = esp.GetGrenadeSpotEditorRows();
+								helperOpenSnapshotTypeFilter = -1;
+								int detectedTypeIndex = -1;
+								if (esp.DetectCurrentGrenadeTypeIndex(detectedTypeIndex))
+									helperOpenSnapshotTypeFilter = std::clamp(detectedTypeIndex, 0, 4);
+
+								const int focusedSpotId = esp.GetCurrentGrenadeFocusedSpotId();
+								helperSelectedRow = -1;
+								if (focusedSpotId > 0)
+								{
+									for (int rowIndex = 0; rowIndex < static_cast<int>(helperRows.size()); ++rowIndex)
+									{
+										const GrenadeSpotEditorRow& row = helperRows[static_cast<std::size_t>(rowIndex)];
+										if (row.Id == focusedSpotId)
+										{
+											if (helperOpenSnapshotTypeFilter >= 0 && helperOpenSnapshotTypeFilter != std::clamp(row.TypeIndex, 0, 4))
+												helperOpenSnapshotTypeFilter = std::clamp(row.TypeIndex, 0, 4);
+											helperSelectedRow = rowIndex;
+											break;
+										}
+									}
+								}
+
+								const std::vector<int> visibleRowsOnOpen = buildVisibleRows();
+								alignSelectionToVisible(visibleRowsOnOpen);
+								helperScrollToSelectedRow = helperSelectedRow >= 0;
+								m_MenuJustOpened = false;
 							}
 
 							const char* grenadeTypeItems[] = {
-								Localization::Pick("Smoke", "烟雾"),
-								Localization::Pick("Flashbang", "闪光"),
-								Localization::Pick("HE Grenade", "高爆"),
-								Localization::Pick("Decoy", "诱饵"),
-								Localization::Pick("Molotov", "燃烧瓶")
-							};
-							const char* throwTypeItems[] = {
-								Localization::Pick("Stand Throw", "站投"),
-								Localization::Pick("Jump Throw", "跳投"),
-								Localization::Pick("Run Throw", "跑投"),
-								Localization::Pick("Run Jump Throw", "跑跳投")
+								Localization::Pick("Smoke", "烟"),
+								Localization::Pick("Flash", "闪"),
+								Localization::Pick("HE", "雷"),
+								Localization::Pick("Decoy", "饵"),
+								Localization::Pick("Molotov", "火")
 							};
 
 							ImAdd::CheckBox(Localization::Pick("Filter By Held Utility", "按手持道具过滤"), &config.Visuals.GrenadeHelperFilterByWeapon);
@@ -1011,22 +1366,36 @@ void Overlay::RenderMenu()
 							ImAdd::ColorEdit4(Localization::Pick("Guide Line Color", "引导线颜色"), (float*)&config.Visuals.GrenadeHelperGuideLineColor);
 							ImAdd::ColorEdit4(Localization::Pick("Font Color", "字体颜色"), (float*)&config.Visuals.GrenadeHelperFontColor);
 							ImAdd::SliderFloat(Localization::Pick("Font Size", "字体大小"), &config.Visuals.GrenadeHelperFontSize, 10.0f, 32.0f);
-							ImAdd::ColorEdit4(Localization::Pick("Throw Hint Color", "投掷提示颜色"), (float*)&config.Visuals.GrenadeHelperTopHintColor);
-							ImAdd::SliderFloat(Localization::Pick("Throw Hint Size", "投掷提示大小"), &config.Visuals.GrenadeHelperTopHintFontSize, 14.0f, 72.0f);
+							config.Visuals.GrenadeHelperTopHintFontSize = std::clamp(config.Visuals.GrenadeHelperTopHintFontSize, 20.0f, 100.0f);
+							ImAdd::SliderFloat(Localization::Pick("Throw Hint Size", "投掷提示大小"), &config.Visuals.GrenadeHelperTopHintFontSize, 20.0f, 100.0f);
 
-							ImAdd::SeparatorText(Localization::Pick("Spot Management", "点位管理"));
-							ImGui::InputText(Localization::Pick("Map Name", "地图名"), helperMapName, IM_ARRAYSIZE(helperMapName));
-							ImGui::InputText(Localization::Pick("Spot Note", "点位备注"), helperNote, IM_ARRAYSIZE(helperNote));
-							ImAdd::Combo(Localization::Pick("Record Throw Type", "记录投掷方式"), &helperThrowTypeIndex, throwTypeItems, IM_ARRAYSIZE(throwTypeItems));
-							ImAdd::SliderFloat(Localization::Pick("Record Aim Distance", "记录瞄点距离"), &helperRecordDistance, 500.0f, 50000.0f);
+							ImAdd::SeparatorText(Localization::Pick("Record Spot", "记录点位"));
+							ImGui::InputText(Localization::Pick("Spot Name", "点位名称"), helperSpotName, IM_ARRAYSIZE(helperSpotName));
+							ImGui::InputText(Localization::Pick("Remark", "备注"), helperSpotRemark, IM_ARRAYSIZE(helperSpotRemark));
 
-							if (ImAdd::Button(Localization::Pick("Reload Spots", "重载点位"), ImVec2(110.0f, 0.0f)))
+							helperRecordThrowType = BuildCanonicalThrowType(ParseThrowType(helperRecordThrowType));
+							ImGui::TextUnformatted(Localization::Pick("Throw Type", "投掷方式"));
+							DrawThrowTypeTagRow(helperRecordThrowType, "RecordThrowPreview");
+							if (ImAdd::Button(Localization::Pick("Set Throw Type", "设置投掷方式"), ImVec2(132.0f, 0.0f)))
+								ImGui::OpenPopup("RecordThrowTypePopup");
+							DrawThrowTypePopupEditor("RecordThrowTypePopup", helperRecordThrowType);
+
+							if (ImAdd::Button(Localization::Pick("Record Spot", "记录点位"), ImVec2(110.0f, 0.0f)))
 							{
 								std::string status{};
-								if (esp.ReloadGrenadeSpots(helperMapName, status))
+								if (esp.RecordCurrentGrenadeSpot(
+									helperMapName,
+									helperSpotName,
+									helperRecordThrowType,
+									helperSpotRemark,
+									kRecordAimDistance,
+									config.Visuals.GrenadeHelperManualTypeOverride,
+									config.Visuals.GrenadeHelperManualType,
+									status))
 								{
 									helperRows = esp.GetGrenadeSpotEditorRows();
-									helperSelectedRow = helperRows.empty() ? -1 : 0;
+									const std::vector<int> visibleRows = buildVisibleRows();
+									alignSelectionToVisible(visibleRows);
 								}
 								helperStatus = status;
 							}
@@ -1045,35 +1414,20 @@ void Overlay::RenderMenu()
 									helperStatus = Localization::Pick("Sync failed: not holding a utility grenade", "同步失败：当前未手持可识别道具");
 								}
 							}
-							ImGui::SameLine();
-							if (ImAdd::Button(Localization::Pick("Record Spot", "记录点位"), ImVec2(96.0f, 0.0f)))
+
+							ImAdd::SeparatorText(Localization::Pick("Manage Spots", "管理点位"));
+							ImGui::InputText(Localization::Pick("Map Name", "地图名"), helperMapName, IM_ARRAYSIZE(helperMapName));
+
+							if (ImAdd::Button(Localization::Pick("Reload Spots", "重载点位"), ImVec2(110.0f, 0.0f)))
 							{
 								std::string status{};
-								if (esp.RecordCurrentGrenadeSpot(
-									helperMapName,
-									helperNote,
-									helperThrowTypeIndex,
-									helperRecordDistance,
-									config.Visuals.GrenadeHelperManualTypeOverride,
-									config.Visuals.GrenadeHelperManualType,
-									status))
+								if (esp.ReloadGrenadeSpots(helperMapName, status))
 								{
 									helperRows = esp.GetGrenadeSpotEditorRows();
-									helperSelectedRow = helperRows.empty() ? -1 : 0;
+									const std::vector<int> visibleRows = buildVisibleRows();
+									alignSelectionToVisible(visibleRows);
 								}
 								helperStatus = status;
-							}
-
-							if (ImAdd::Button(Localization::Pick("Delete Selected", "删除选中"), ImVec2(110.0f, 0.0f)))
-							{
-								if (helperSelectedRow >= 0 && helperSelectedRow < static_cast<int>(helperRows.size()))
-								{
-									helperRows.erase(helperRows.begin() + helperSelectedRow);
-									if (helperRows.empty())
-										helperSelectedRow = -1;
-									else
-										helperSelectedRow = std::clamp(helperSelectedRow, 0, static_cast<int>(helperRows.size()) - 1);
-								}
 							}
 							ImGui::SameLine();
 							if (ImAdd::Button(Localization::Pick("Save List", "保存列表"), ImVec2(110.0f, 0.0f)))
@@ -1082,55 +1436,112 @@ void Overlay::RenderMenu()
 								if (esp.SaveGrenadeSpotEditorRows(helperMapName, helperRows, status))
 								{
 									helperRows = esp.GetGrenadeSpotEditorRows();
-									helperSelectedRow = helperRows.empty() ? -1 : std::clamp(helperSelectedRow, 0, static_cast<int>(helperRows.size()) - 1);
+									const std::vector<int> visibleRows = buildVisibleRows();
+									alignSelectionToVisible(visibleRows);
 								}
 								helperStatus = status;
+							}
+							ImGui::SameLine();
+							if (ImAdd::Button(Localization::Pick("Delete Selected", "删除选中"), ImVec2(110.0f, 0.0f)))
+							{
+								if (helperSelectedRow >= 0 && helperSelectedRow < static_cast<int>(helperRows.size()))
+								{
+									helperRows.erase(helperRows.begin() + helperSelectedRow);
+									const std::vector<int> visibleRows = buildVisibleRows();
+									alignSelectionToVisible(visibleRows);
+								}
 							}
 
 							if (!helperStatus.empty())
 								ImGui::TextWrapped("%s", helperStatus.c_str());
 
-							const ImVec2 listSize(0.0f, ImGui::GetTextLineHeightWithSpacing() * 11.0f);
-							if (ImGui::BeginTable("GHelperSpotTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable, listSize))
+							const std::vector<int> visibleRowsNow = buildVisibleRows();
+							alignSelectionToVisible(visibleRowsNow);
+
+							if (helperOpenSnapshotTypeFilter >= 0 && helperOpenSnapshotTypeFilter < IM_ARRAYSIZE(grenadeTypeItems))
 							{
-								ImGui::TableSetupColumn(Localization::Pick("ID", "编号"), ImGuiTableColumnFlags_WidthFixed, 40.0f);
+								ImGui::TextDisabled(
+									"%s: %s",
+									Localization::Pick("Open Snapshot Filter", "呼出快照过滤"),
+									grenadeTypeItems[helperOpenSnapshotTypeFilter]
+								);
+							}
+
+							const ImVec2 listSize(0.0f, ImGui::GetTextLineHeightWithSpacing() * 12.0f);
+							const ImGuiTableFlags tableFlags =
+								ImGuiTableFlags_Borders |
+								ImGuiTableFlags_RowBg |
+								ImGuiTableFlags_Resizable |
+								ImGuiTableFlags_ScrollY;
+							if (ImGui::BeginTable("GHelperSpotTable", 4, tableFlags, listSize))
+							{
 								ImGui::TableSetupColumn(Localization::Pick("Type", "类型"), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-								ImGui::TableSetupColumn(Localization::Pick("Throw", "投掷"), ImGuiTableColumnFlags_WidthFixed, 110.0f);
-								ImGui::TableSetupColumn(Localization::Pick("Name", "名称"), ImGuiTableColumnFlags_WidthStretch);
+								ImGui::TableSetupColumn(Localization::Pick("Throw", "投掷"), ImGuiTableColumnFlags_WidthFixed, 160.0f);
+								ImGui::TableSetupColumn(Localization::Pick("Name", "名称"), ImGuiTableColumnFlags_WidthStretch, 0.40f);
+								ImGui::TableSetupColumn(Localization::Pick("Remark", "备注"), ImGuiTableColumnFlags_WidthStretch, 0.45f);
 								ImGui::TableHeadersRow();
 
-								for (int rowIndex = 0; rowIndex < static_cast<int>(helperRows.size()); ++rowIndex)
+								for (const int rowIndex : visibleRowsNow)
 								{
 									GrenadeSpotEditorRow& row = helperRows[static_cast<std::size_t>(rowIndex)];
+									row.ThrowType = BuildCanonicalThrowType(ParseThrowType(row.ThrowType));
+									const bool rowSelected = helperSelectedRow == rowIndex;
+
 									ImGui::PushID(row.Id != 0 ? row.Id : rowIndex);
 									ImGui::TableNextRow();
+									if (rowSelected)
+									{
+										ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(255, 120, 72, 120));
+										ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, IM_COL32(255, 120, 72, 88));
+									}
 
 									ImGui::TableSetColumnIndex(0);
-									if (ImGui::Selectable("##SpotSelect", helperSelectedRow == rowIndex, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap))
+									if (ImGui::Selectable("##SpotSelect", rowSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap))
 										helperSelectedRow = rowIndex;
+									if (rowSelected && helperScrollToSelectedRow)
+									{
+										ImGui::SetScrollHereY(0.35f);
+										helperScrollToSelectedRow = false;
+									}
 									ImGui::SameLine();
-									ImGui::Text("%d", row.Id);
-
-									ImGui::TableSetColumnIndex(1);
 									int typeIndex = std::clamp(row.TypeIndex, 0, 4);
 									if (ImGui::Combo("##Type", &typeIndex, grenadeTypeItems, IM_ARRAYSIZE(grenadeTypeItems)))
 										row.TypeIndex = typeIndex;
 
-									ImGui::TableSetColumnIndex(2);
-									int throwIndex = std::clamp(row.ThrowTypeIndex, 0, 3);
-									if (ImGui::Combo("##Throw", &throwIndex, throwTypeItems, IM_ARRAYSIZE(throwTypeItems)))
-										row.ThrowTypeIndex = throwIndex;
+									ImGui::TableSetColumnIndex(1);
+									DrawThrowTypeTagRow(row.ThrowType, "RowThrowPreview", false);
 
-									ImGui::TableSetColumnIndex(3);
+									ImGui::TableSetColumnIndex(2);
 									char rowNameBuffer[128]{};
 									strncpy_s(rowNameBuffer, row.Name.c_str(), _TRUNCATE);
+									ImGui::SetNextItemWidth(-FLT_MIN);
 									if (ImGui::InputText("##Name", rowNameBuffer, IM_ARRAYSIZE(rowNameBuffer)))
 										row.Name = rowNameBuffer;
+
+									ImGui::TableSetColumnIndex(3);
+									char rowRemarkBuffer[192]{};
+									strncpy_s(rowRemarkBuffer, row.Remark.c_str(), _TRUNCATE);
+									ImGui::SetNextItemWidth(-FLT_MIN);
+									if (ImGui::InputText("##Remark", rowRemarkBuffer, IM_ARRAYSIZE(rowRemarkBuffer)))
+										row.Remark = rowRemarkBuffer;
 
 									ImGui::PopID();
 								}
 
 								ImGui::EndTable();
+							}
+
+							if (helperSelectedRow >= 0 && helperSelectedRow < static_cast<int>(helperRows.size()))
+							{
+								GrenadeSpotEditorRow& selected = helperRows[static_cast<std::size_t>(helperSelectedRow)];
+								selected.ThrowType = BuildCanonicalThrowType(ParseThrowType(selected.ThrowType));
+
+								ImGui::Spacing();
+								ImAdd::SeparatorText(Localization::Pick("Selected Spot Throw Type", "选中点位投掷方式"));
+								DrawThrowTypeTagRow(selected.ThrowType, "SelectedThrowPreview");
+								if (ImAdd::Button(Localization::Pick("Set Selected Throw Type", "设置选中投掷方式"), ImVec2(160.0f, 0.0f)))
+									ImGui::OpenPopup("SelectedThrowTypePopup");
+								DrawThrowTypePopupEditor("SelectedThrowTypePopup", selected.ThrowType);
 							}
 						}
 						else
@@ -1138,7 +1549,12 @@ void Overlay::RenderMenu()
 							ImGui::TextDisabled("%s", Localization::Pick("Enable GHelper Utility to configure helper settings.", "启用GHelper后可配置右侧道具辅助设置。"));
 						}
 					}
-					ImGui::EndChild();
+							ImGui::EndChild();
+							ImGui::EndTabItem();
+						}
+
+						ImGui::EndTabBar();
+					}
 				}
 				ImGui::EndChild();
 			}

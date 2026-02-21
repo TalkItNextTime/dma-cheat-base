@@ -316,7 +316,7 @@ namespace Structs
         ImVec4 GrenadeHelperGuideLineColor = ImVec4(1.0f, 1.0f, 1.0f, 0.75f);
         ImVec4 GrenadeHelperFontColor = ImVec4(0.96f, 0.96f, 0.96f, 1.0f);
         float GrenadeHelperFontSize = 16.0f;
-        ImVec4 GrenadeHelperTopHintColor = ImVec4(1.0f, 0.86f, 0.47f, 1.0f);
+        ImVec4 GrenadeHelperTopHintColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         float GrenadeHelperTopHintFontSize = 30.0f;
     };
 }

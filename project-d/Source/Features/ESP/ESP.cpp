@@ -1,13 +1,21 @@
-#include <Pch.hpp>
+﻿#include <Pch.hpp>
 #include <SDK.hpp>
 #include "ESP.hpp"
+#include "KeyIconsEmbedded.hpp"
 #include <Aimbot/Aimbot.hpp>
 #include <Overlay/Localization.hpp>
+#include <Overlay/Overlay.hpp>
 #include <array>
 #include <cfloat>
 #include <cstdio>
+#include <iterator>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
+#include <wincrypt.h>
+#include <wincodec.h>
+
+#pragma comment(lib, "Crypt32.lib")
 
 namespace
 {
@@ -246,27 +254,384 @@ namespace
         return -1;
     }
 
-    const char* ThrowTypeLabelByIndex(const int index)
+    std::string TrimAscii(std::string value)
     {
-        switch (index)
+        const auto isSpace = [](unsigned char ch) { return std::isspace(ch) != 0; };
+
+        while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
+            value.erase(value.begin());
+        while (!value.empty() && isSpace(static_cast<unsigned char>(value.back())))
+            value.pop_back();
+
+        return value;
+    }
+
+    std::string ToUpperAscii(std::string text)
+    {
+        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c)
         {
-        case 1: return "JumpThrow";
-        case 2: return "RunThrow";
-        case 3: return "RunJumpThrow";
-        default: return "StandThrow";
+            return static_cast<char>(std::toupper(c));
+        });
+        return text;
+    }
+
+    struct ThrowKeySet
+    {
+        std::string Mouse = "LB";
+        bool W = false;
+        bool A = false;
+        bool S = false;
+        bool D = false;
+        bool Ctrl = false;
+        bool Space = false;
+    };
+
+    bool ContainsAnyKeyword(const std::string& text, const std::initializer_list<const char*>& keys)
+    {
+        if (text.empty())
+            return false;
+
+        const std::string lowered = ToLowerAscii(text);
+        for (const char* raw : keys)
+        {
+            if (!raw || !*raw)
+                continue;
+
+            const std::string key(raw);
+            if (text.find(key) != std::string::npos || lowered.find(ToLowerAscii(key)) != std::string::npos)
+                return true;
+        }
+
+        return false;
+    }
+
+    std::string NormalizeThrowMouseToken(const std::string& tokenUpper)
+    {
+        if (tokenUpper == "LRB" || tokenUpper == "DUAL" || tokenUpper == "BOTH")
+            return "LRB";
+        if (tokenUpper == "RB" || tokenUpper == "RMB" || tokenUpper == "RIGHT" || tokenUpper == "RIGHTCLICK" || tokenUpper == "MOUSE2")
+            return "RB";
+        if (tokenUpper == "LB" || tokenUpper == "LMB" || tokenUpper == "LEFT" || tokenUpper == "LEFTCLICK" || tokenUpper == "MOUSE1")
+            return "LB";
+        return {};
+    }
+
+    void ParseThrowTokenIntoKeys(const std::string& token, ThrowKeySet& inOutKeys)
+    {
+        const std::string trimmed = TrimAscii(token);
+        if (trimmed.empty())
+            return;
+
+        const std::string tokenUpper = ToUpperAscii(trimmed);
+        if (const std::string mouse = NormalizeThrowMouseToken(tokenUpper); !mouse.empty())
+        {
+            inOutKeys.Mouse = mouse;
+            return;
+        }
+
+        if (tokenUpper == "W")
+        {
+            inOutKeys.W = true;
+            return;
+        }
+        if (tokenUpper == "A")
+        {
+            inOutKeys.A = true;
+            return;
+        }
+        if (tokenUpper == "S")
+        {
+            inOutKeys.S = true;
+            return;
+        }
+        if (tokenUpper == "D")
+        {
+            inOutKeys.D = true;
+            return;
+        }
+        if (tokenUpper == "CTRL" || tokenUpper == "CONTROL" || tokenUpper == "DUCK" || tokenUpper == "CROUCH")
+        {
+            inOutKeys.Ctrl = true;
+            return;
+        }
+        if (tokenUpper == "SPACE" || tokenUpper == "JUMP")
+        {
+            inOutKeys.Space = true;
+            return;
         }
     }
 
-    int ThrowTypeIndexByLabel(const std::string& throwType)
+    ThrowKeySet ParseThrowTypeToKeys(const std::string& throwTypeRaw)
     {
+        ThrowKeySet keys{};
+        const std::string throwType = TrimAscii(throwTypeRaw);
+        if (throwType.empty())
+            return keys;
+
         const std::string lowered = ToLowerAscii(throwType);
+        if (lowered == "standthrow")
+            return keys;
         if (lowered == "jumpthrow")
-            return 1;
+        {
+            keys.Space = true;
+            return keys;
+        }
         if (lowered == "runthrow")
-            return 2;
+        {
+            keys.W = true;
+            return keys;
+        }
         if (lowered == "runjumpthrow" || lowered == "runjump")
-            return 3;
-        return 0;
+        {
+            keys.W = true;
+            keys.Space = true;
+            return keys;
+        }
+
+        size_t begin = 0;
+        while (begin <= throwType.size())
+        {
+            const size_t plusPos = throwType.find('+', begin);
+            const size_t endPos = (plusPos == std::string::npos) ? throwType.size() : plusPos;
+            ParseThrowTokenIntoKeys(throwType.substr(begin, endPos - begin), keys);
+            if (plusPos == std::string::npos)
+                break;
+            begin = plusPos + 1;
+        }
+
+        return keys;
+    }
+
+    std::string BuildCanonicalThrowType(const ThrowKeySet& keys)
+    {
+        std::string result = keys.Mouse.empty() ? std::string("LB") : keys.Mouse;
+
+        const auto appendKey = [&](const char* key)
+        {
+            result += "+";
+            result += key;
+        };
+
+        if (keys.W) appendKey("W");
+        if (keys.A) appendKey("A");
+        if (keys.S) appendKey("S");
+        if (keys.D) appendKey("D");
+        if (keys.Ctrl) appendKey("Ctrl");
+        if (keys.Space) appendKey("Space");
+
+        return result;
+    }
+
+    std::vector<std::string> BuildThrowHintTokens(const ThrowKeySet& keys)
+    {
+        std::vector<std::string> keyboard{};
+        if (keys.W) keyboard.push_back("W");
+        if (keys.A) keyboard.push_back("A");
+        if (keys.S) keyboard.push_back("S");
+        if (keys.D) keyboard.push_back("D");
+        if (keys.Ctrl) keyboard.push_back("Ctrl");
+        if (keys.Space) keyboard.push_back("Space");
+
+        std::vector<std::string> out{};
+        out.reserve(keyboard.size() * 2 + 1);
+        out.push_back(keys.Mouse.empty() ? std::string("LB") : keys.Mouse);
+
+        if (!keyboard.empty())
+        {
+            out.push_back("Plus");
+            for (size_t i = 0; i < keyboard.size(); ++i)
+            {
+                if (i > 0)
+                    out.push_back("Plus");
+                out.push_back(keyboard[i]);
+            }
+        }
+
+        return out;
+    }
+
+    bool EndsWith(const std::string& text, const std::string& suffix)
+    {
+        if (suffix.empty())
+            return true;
+        if (text.size() < suffix.size())
+            return false;
+        return text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+
+    void MergeRemarkSegment(std::string& inOutRemark, const std::string& segment)
+    {
+        const std::string trimmedSegment = TrimAscii(segment);
+        if (trimmedSegment.empty())
+            return;
+
+        inOutRemark = TrimAscii(inOutRemark);
+        if (inOutRemark.empty())
+        {
+            inOutRemark = trimmedSegment;
+            return;
+        }
+
+        if (inOutRemark.find(trimmedSegment) != std::string::npos || trimmedSegment.find(inOutRemark) != std::string::npos)
+            return;
+
+        inOutRemark += " | ";
+        inOutRemark += trimmedSegment;
+    }
+
+    bool ExtractTrailingBracketRemark(std::string& inOutName, std::string& outRemark)
+    {
+        outRemark.clear();
+        std::string trimmedName = TrimAscii(inOutName);
+        if (trimmedName.empty())
+            return false;
+
+        struct BracketPair
+        {
+            const char* Open = nullptr;
+            const char* Close = nullptr;
+        };
+
+        static const std::array<BracketPair, 4> kPairs = {
+            BracketPair{ "(", ")" },
+            BracketPair{ "[", "]" },
+            BracketPair{ "（", "）" },
+            BracketPair{ "【", "】" }
+        };
+
+        for (const BracketPair& pair : kPairs)
+        {
+            if (!pair.Open || !pair.Close)
+                continue;
+
+            const std::string openToken = pair.Open;
+            const std::string closeToken = pair.Close;
+            if (openToken.empty() || closeToken.empty() || !EndsWith(trimmedName, closeToken))
+                continue;
+
+            const size_t closePos = trimmedName.size() - closeToken.size();
+            const size_t openPos = trimmedName.rfind(openToken, closePos);
+            if (openPos == std::string::npos || openPos + openToken.size() > closePos)
+                continue;
+
+            const std::string inside = TrimAscii(trimmedName.substr(
+                openPos + openToken.size(),
+                closePos - (openPos + openToken.size())
+            ));
+            const std::string baseName = TrimAscii(trimmedName.substr(0, openPos));
+            if (baseName.empty())
+                continue;
+
+            inOutName = baseName;
+            outRemark = inside;
+            return true;
+        }
+
+        inOutName = trimmedName;
+        return false;
+    }
+
+    void ApplyNameThrowHints(const std::string& spotName, ThrowKeySet& inOutKeys)
+    {
+        if (spotName.empty())
+            return;
+
+        if (ContainsAnyKeyword(spotName, { "双键", "双按", "双", "左右键", "dual", "both", "lrb", "鍙岄敭" }))
+            inOutKeys.Mouse = "LRB";
+        else if (ContainsAnyKeyword(spotName, { "右键", "right click", "rmb", "rb", "鍙抽敭" }))
+            inOutKeys.Mouse = "RB";
+
+        if (ContainsAnyKeyword(spotName, { "蹲下", "下蹲", "蹲", "crouch", "duck", "ctrl", "韫" }))
+            inOutKeys.Ctrl = true;
+
+        const bool runJumpThrow = ContainsAnyKeyword(spotName, {
+            "跑跳投", "跑跳", "助跑跳", "runjumpthrow", "runjump", "run jump throw", "run jump", "run-jump"
+        });
+        const bool runThrow = ContainsAnyKeyword(spotName, {
+            "跑投", "助跑投", "runthrow", "run throw", "run-throw"
+        });
+        const bool jumpThrow = ContainsAnyKeyword(spotName, {
+            "跳投", "jumpthrow", "jump throw", "jump-throw"
+        });
+
+        if (runJumpThrow)
+        {
+            inOutKeys.W = true;
+            inOutKeys.Space = true;
+            return;
+        }
+
+        if (runThrow)
+            inOutKeys.W = true;
+        if (jumpThrow)
+            inOutKeys.Space = true;
+    }
+
+    std::string ExtractArrivalRemarkFromName(const std::string& spotName)
+    {
+        if (spotName.empty())
+            return {};
+
+        const std::string lowered = ToLowerAscii(spotName);
+        struct Keyword
+        {
+            const char* Text = nullptr;
+            bool UseLowered = false;
+        };
+
+        static const std::array<Keyword, 11> keywords = {
+            Keyword{ "跑到", false },
+            Keyword{ "走到", false },
+            Keyword{ "跑至", false },
+            Keyword{ "走至", false },
+            Keyword{ "到达", false },
+            Keyword{ "run to", true },
+            Keyword{ "walk to", true },
+            Keyword{ "go to", true },
+            Keyword{ "到", false },
+            Keyword{ "至", false },
+            Keyword{ "to ", true }
+        };
+
+        size_t bestPos = std::string::npos;
+        for (const Keyword& keyword : keywords)
+        {
+            if (!keyword.Text || !*keyword.Text)
+                continue;
+
+            const std::string needle = keyword.Text;
+            const size_t pos = keyword.UseLowered ? lowered.find(needle) : spotName.find(needle);
+            if (pos == std::string::npos)
+                continue;
+            if (bestPos == std::string::npos || pos < bestPos)
+                bestPos = pos;
+        }
+
+        if (bestPos == std::string::npos)
+            return {};
+
+        return TrimAscii(spotName.substr(bestPos));
+    }
+
+    std::string NormalizeThrowType(const std::string& throwType, const std::string& spotName, std::string* inOutRemark)
+    {
+        std::string normalizedName = TrimAscii(spotName);
+        std::string extractedBracketRemark{};
+        ExtractTrailingBracketRemark(normalizedName, extractedBracketRemark);
+
+        ThrowKeySet keys = ParseThrowTypeToKeys(throwType);
+        ApplyNameThrowHints(normalizedName, keys);
+        ApplyNameThrowHints(extractedBracketRemark, keys);
+
+        if (inOutRemark)
+        {
+            *inOutRemark = TrimAscii(*inOutRemark);
+            ApplyNameThrowHints(*inOutRemark, keys);
+            MergeRemarkSegment(*inOutRemark, extractedBracketRemark);
+            MergeRemarkSegment(*inOutRemark, ExtractArrivalRemarkFromName(normalizedName));
+        }
+
+        return BuildCanonicalThrowType(keys);
     }
 
     bool IsUtilityGrenadeType(const std::string& grenadeType)
@@ -276,18 +641,394 @@ namespace
 
     std::string LocalizeThrowTypeLabel(std::string throwType)
     {
-        const std::string lowered = ToLowerAscii(throwType);
-        if (lowered == "standthrow")
-            return Localization::Pick("Stand Throw", "站投");
-        if (lowered == "jumpthrow")
-            return Localization::Pick("Jump Throw", "跳投");
-        if (lowered == "runthrow")
-            return Localization::Pick("Run Throw", "跑投");
-        if (lowered == "runjumpthrow" || lowered == "runjump")
-            return Localization::Pick("Run Jump Throw", "跑跳投");
-        return throwType.empty() ? Localization::Pick("Stand Throw", "站投") : throwType;
+        return NormalizeThrowType(throwType, {}, nullptr);
     }
 
+    std::string NormalizeThrowTokenName(const std::string& token)
+    {
+        const std::string upper = ToUpperAscii(TrimAscii(token));
+        if (upper == "LB" || upper == "LMB" || upper == "LEFT" || upper == "LEFTCLICK")
+            return "LB";
+        if (upper == "RB" || upper == "RMB" || upper == "RIGHT" || upper == "RIGHTCLICK")
+            return "RB";
+        if (upper == "LRB" || upper == "DUAL" || upper == "BOTH")
+            return "LRB";
+        if (upper == "PLUS" || upper == "+")
+            return "Plus";
+        if (upper == "W")
+            return "W";
+        if (upper == "A")
+            return "A";
+        if (upper == "S")
+            return "S";
+        if (upper == "D")
+            return "D";
+        if (upper == "CTRL" || upper == "CONTROL")
+            return "Ctrl";
+        if (upper == "SPACE")
+            return "Space";
+        if (upper == "SPACE_EN" || upper == "SPACEEN" || upper == "SPACE-EN")
+            return "Space_en";
+        return {};
+    }
+
+    std::string ThrowTokenFallbackText(const std::string& rawToken)
+    {
+        const std::string normalized = NormalizeThrowTokenName(rawToken);
+        if (normalized == "Plus")
+            return "+";
+        if (normalized == "LB")
+            return "LB";
+        if (normalized == "RB")
+            return "RB";
+        if (normalized == "LRB")
+            return "LRB";
+        if (normalized == "W")
+            return "W";
+        if (normalized == "A")
+            return "A";
+        if (normalized == "S")
+            return "S";
+        if (normalized == "D")
+            return "D";
+        if (normalized == "Ctrl")
+            return "Ctrl";
+        if (normalized == "Space")
+            return "Space";
+        if (normalized == "Space_en")
+            return "Space";
+        return rawToken;
+    }
+
+    std::string RepairMalformedGrenadeJsonText(const std::string& sourceText)
+    {
+        if (sourceText.empty())
+            return sourceText;
+
+        std::string repaired{};
+        repaired.reserve(sourceText.size() + 128);
+
+        size_t begin = 0;
+        while (begin <= sourceText.size())
+        {
+            const size_t lineEnd = sourceText.find('\n', begin);
+            const size_t sliceEnd = (lineEnd == std::string::npos) ? sourceText.size() : lineEnd;
+            std::string line = sourceText.substr(begin, sliceEnd - begin);
+
+            if (line.find("\"name\"") != std::string::npos)
+            {
+                int quoteCount = 0;
+                bool escaped = false;
+                for (const char ch : line)
+                {
+                    if (ch == '\\' && !escaped)
+                    {
+                        escaped = true;
+                        continue;
+                    }
+
+                    if (ch == '"' && !escaped)
+                        ++quoteCount;
+
+                    escaped = false;
+                }
+
+                if ((quoteCount % 2) != 0)
+                {
+                    const size_t commaPos = line.find_last_of(',');
+                    if (commaPos != std::string::npos)
+                        line.insert(commaPos, "\"");
+                    else
+                        line.push_back('"');
+                }
+            }
+
+            repaired += line;
+            if (lineEnd == std::string::npos)
+                break;
+
+            repaired.push_back('\n');
+            begin = lineEnd + 1;
+        }
+
+        return repaired;
+    }
+
+    template <typename T>
+    void ReleaseCom(T*& ptr)
+    {
+        if (ptr)
+        {
+            ptr->Release();
+            ptr = nullptr;
+        }
+    }
+
+    struct KeyIconTexture
+    {
+        ID3D11ShaderResourceView* Srv = nullptr;
+        int Width = 0;
+        int Height = 0;
+    };
+
+    struct KeyIconCache
+    {
+        std::mutex Mutex{};
+        bool Base64Loaded = false;
+        std::unordered_map<std::string, std::string> Base64ByToken{};
+        std::unordered_map<std::string, KeyIconTexture> Textures{};
+
+        ~KeyIconCache()
+        {
+            for (auto& pair : Textures)
+                ReleaseCom(pair.second.Srv);
+        }
+    };
+
+    KeyIconCache& GetKeyIconCache()
+    {
+        static KeyIconCache cache{};
+        return cache;
+    }
+
+    bool EnsureKeyIconBase64Loaded(KeyIconCache& cache)
+    {
+        if (cache.Base64Loaded)
+            return true;
+
+        std::unordered_map<std::string, std::string> parsed = EmbeddedKeyIcons::BuildKeyIconsBase64Map();
+        if (parsed.empty())
+            return false;
+
+        std::unordered_map<std::string, std::string> normalized{};
+        normalized.reserve(parsed.size());
+        for (auto& [rawToken, base64Text] : parsed)
+        {
+            const std::string token = NormalizeThrowTokenName(rawToken);
+            if (token.empty() || base64Text.empty())
+                continue;
+
+            normalized[token] = std::move(base64Text);
+        }
+
+        if (normalized.empty())
+            return false;
+
+        cache.Base64ByToken = std::move(normalized);
+        cache.Base64Loaded = true;
+        return true;
+    }
+
+    bool DecodeBase64ViaWinApi(const std::string& base64Text, std::vector<std::uint8_t>& outBytes)
+    {
+        if (base64Text.empty())
+            return false;
+        if (base64Text.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+            return false;
+
+        DWORD outSize = 0;
+        if (!CryptStringToBinaryA(base64Text.c_str(), static_cast<DWORD>(base64Text.size()), CRYPT_STRING_BASE64_ANY, nullptr, &outSize, nullptr, nullptr))
+            return false;
+
+        outBytes.assign(outSize, 0u);
+        if (!CryptStringToBinaryA(base64Text.c_str(), static_cast<DWORD>(base64Text.size()), CRYPT_STRING_BASE64_ANY, outBytes.data(), &outSize, nullptr, nullptr))
+        {
+            outBytes.clear();
+            return false;
+        }
+
+        outBytes.resize(outSize);
+        return true;
+    }
+
+    bool DecodePngViaWic(const std::vector<std::uint8_t>& pngBytes, std::vector<std::uint8_t>& outPixels, UINT& outWidth, UINT& outHeight)
+    {
+        outPixels.clear();
+        outWidth = 0;
+        outHeight = 0;
+        if (pngBytes.empty())
+            return false;
+
+        const HRESULT initHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const bool needUninit = SUCCEEDED(initHr);
+
+        IWICImagingFactory* factory = nullptr;
+        IWICStream* stream = nullptr;
+        IWICBitmapDecoder* decoder = nullptr;
+        IWICBitmapFrameDecode* frame = nullptr;
+        IWICFormatConverter* converter = nullptr;
+
+        bool success = false;
+        do
+        {
+            if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
+                break;
+            if (FAILED(factory->CreateStream(&stream)))
+                break;
+            if (pngBytes.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+                break;
+            if (FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(pngBytes.data()), static_cast<DWORD>(pngBytes.size()))))
+                break;
+            if (FAILED(factory->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnLoad, &decoder)))
+                break;
+            if (FAILED(decoder->GetFrame(0, &frame)))
+                break;
+            if (FAILED(factory->CreateFormatConverter(&converter)))
+                break;
+            if (FAILED(converter->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom)))
+                break;
+            if (FAILED(converter->GetSize(&outWidth, &outHeight)))
+                break;
+            if (outWidth == 0 || outHeight == 0)
+                break;
+
+            const UINT stride = outWidth * 4u;
+            const UINT totalSize = stride * outHeight;
+            outPixels.assign(totalSize, 0u);
+            if (FAILED(converter->CopyPixels(nullptr, stride, totalSize, outPixels.data())))
+            {
+                outPixels.clear();
+                break;
+            }
+
+            success = true;
+        }
+        while (false);
+
+        ReleaseCom(converter);
+        ReleaseCom(frame);
+        ReleaseCom(decoder);
+        ReleaseCom(stream);
+        ReleaseCom(factory);
+        if (needUninit)
+            CoUninitialize();
+
+        return success;
+    }
+
+    bool CreateTextureFromRgba(ID3D11Device* device, const std::vector<std::uint8_t>& rgbaPixels, const UINT width, const UINT height, KeyIconTexture& outTexture)
+    {
+        if (!device || rgbaPixels.empty() || width == 0 || height == 0)
+            return false;
+
+        D3D11_TEXTURE2D_DESC textureDesc{};
+        textureDesc.Width = width;
+        textureDesc.Height = height;
+        textureDesc.MipLevels = 1;
+        textureDesc.ArraySize = 1;
+        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        textureDesc.SampleDesc.Count = 1;
+        textureDesc.Usage = D3D11_USAGE_IMMUTABLE;
+        textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA initData{};
+        initData.pSysMem = rgbaPixels.data();
+        initData.SysMemPitch = static_cast<UINT>(width * 4u);
+
+        ID3D11Texture2D* texture = nullptr;
+        if (FAILED(device->CreateTexture2D(&textureDesc, &initData, &texture)))
+            return false;
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = textureDesc.Format;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
+
+        ID3D11ShaderResourceView* srv = nullptr;
+        const HRESULT srvHr = device->CreateShaderResourceView(texture, &srvDesc, &srv);
+        texture->Release();
+        if (FAILED(srvHr) || !srv)
+            return false;
+
+        outTexture.Srv = srv;
+        outTexture.Width = static_cast<int>(width);
+        outTexture.Height = static_cast<int>(height);
+        return true;
+    }
+
+    const KeyIconTexture* GetKeyIconTexture(const std::string& rawToken, ID3D11Device* device)
+    {
+        const std::string token = NormalizeThrowTokenName(rawToken);
+        if (token.empty() || !device)
+            return nullptr;
+
+        const std::string preferredToken = (token == "Space" && !Localization::IsChinese())
+            ? std::string("Space_en")
+            : token;
+        const bool hasFallbackToken = preferredToken != token;
+
+        KeyIconCache& cache = GetKeyIconCache();
+        std::lock_guard lock(cache.Mutex);
+
+        auto findLoadedTexture = [&](const std::string& key) -> const KeyIconTexture*
+        {
+            auto loaded = cache.Textures.find(key);
+            if (loaded == cache.Textures.end())
+                return nullptr;
+            return loaded->second.Srv ? &loaded->second : nullptr;
+        };
+
+        if (const KeyIconTexture* loaded = findLoadedTexture(preferredToken))
+            return loaded;
+        if (hasFallbackToken)
+        {
+            if (const KeyIconTexture* loaded = findLoadedTexture(token))
+                return loaded;
+        }
+
+        if (!EnsureKeyIconBase64Loaded(cache))
+            return nullptr;
+
+        auto loadEncodedTexture = [&](const std::string& key) -> const KeyIconTexture*
+        {
+            const auto encodedIt = cache.Base64ByToken.find(key);
+            if (encodedIt == cache.Base64ByToken.end())
+                return nullptr;
+
+            std::string base64Text = encodedIt->second;
+
+            std::vector<std::uint8_t> pngBytes{};
+            if (!DecodeBase64ViaWinApi(base64Text, pngBytes))
+                return nullptr;
+            base64Text.clear();
+            base64Text.shrink_to_fit();
+
+            std::vector<std::uint8_t> rgbaPixels{};
+            UINT width = 0;
+            UINT height = 0;
+            if (!DecodePngViaWic(pngBytes, rgbaPixels, width, height))
+                return nullptr;
+
+            KeyIconTexture texture{};
+            if (!CreateTextureFromRgba(device, rgbaPixels, width, height, texture))
+                return nullptr;
+
+            pngBytes.clear();
+            pngBytes.shrink_to_fit();
+            rgbaPixels.clear();
+            rgbaPixels.shrink_to_fit();
+
+            cache.Base64ByToken.erase(encodedIt);
+            if (cache.Base64ByToken.empty())
+            {
+                std::unordered_map<std::string, std::string> empty{};
+                cache.Base64ByToken.swap(empty);
+            }
+
+            cache.Textures[key] = texture;
+            return cache.Textures[key].Srv ? &cache.Textures[key] : nullptr;
+        };
+
+        if (const KeyIconTexture* created = loadEncodedTexture(preferredToken))
+            return created;
+        if (hasFallbackToken)
+        {
+            if (const KeyIconTexture* created = loadEncodedTexture(token))
+                return created;
+        }
+
+        return nullptr;
+    }
     float DistanceSquared3D(const Vector3& a, const Vector3& b)
     {
         const float dx = a.x - b.x;
@@ -582,7 +1323,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Name)
     {
-        const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "未知") : player.Name;
+        const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "鏈煡") : player.Name;
         const ImVec2 textSize = ImGui::CalcTextSize(nameText.c_str());
 
         const ImVec2 textPos(
@@ -873,7 +1614,7 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         drawList->AddText(
             ImVec2(c4.Screen.x + 9.0f, c4.Screen.y - 15.0f),
             markerColor,
-            c4.Planted ? Localization::Pick("C4(Planted)", "C4(已安放)") : "C4"
+            c4.Planted ? Localization::Pick("C4(Planted)", "C4(已下包)") : "C4"
         );
     }
 
@@ -887,19 +1628,19 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         siteName = "B";
 
     const std::string line1 =
-        std::string(Localization::Pick("C4 Site: ", "C4点位: ")) +
+        std::string(Localization::Pick("C4 Site: ", "C4包点: ")) +
         siteName + " | " +
-        (c4.BeingDefused ? Localization::Pick("Defusing", "拆弹中") : Localization::Pick("Not Defusing", "未拆弹"));
+        (c4.BeingDefused ? Localization::Pick("Defusing", "正在拆包") : Localization::Pick("Not Defusing", "未在拆包"));
 
-    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆弹: ");
+    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "鎷嗗脊: ");
     if (c4.BeingDefused)
         line2 += formatSeconds1(c4.DefuseCountDown) + "s";
     else
         line2 += "--";
 
-    std::string line3 = Localization::Pick("Defuse Result: --", "拆弹结果: --");
+    std::string line3 = Localization::Pick("Defuse Result: --", "拆包结果: --");
     if (c4.BeingDefused)
-        line3 = std::string(Localization::Pick("Defuse Result: ", "拆弹结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
+        line3 = std::string(Localization::Pick("Defuse Result: ", "拆包结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "鎴愬姛") : Localization::Pick("FAIL", "澶辫触"));
 
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     constexpr float panelW = 250.0f;
@@ -944,9 +1685,9 @@ void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot&
     const ImU32 aimPointColor = ToImColor(config.Visuals.GrenadeHelperAimColor);
     const ImU32 guideLineColor = ToImColor(config.Visuals.GrenadeHelperGuideLineColor);
     const ImU32 helperTextColor = ToImColor(config.Visuals.GrenadeHelperFontColor);
-    const ImU32 topHintColor = ToImColor(config.Visuals.GrenadeHelperTopHintColor);
+    const ImU32 topHintColor = IM_COL32(255, 255, 255, 255);
     const float helperFontSize = std::clamp(config.Visuals.GrenadeHelperFontSize, 10.0f, 32.0f);
-    const float topHintFontSize = std::clamp(config.Visuals.GrenadeHelperTopHintFontSize, 14.0f, 72.0f);
+    const float topHintFontSize = std::clamp(config.Visuals.GrenadeHelperTopHintFontSize, 20.0f, 100.0f);
 
     for (const GrenadeStandRenderItem& stand : helper.StandItems)
     {
@@ -987,12 +1728,11 @@ void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot&
         }
     }
 
-    if (!helper.TopText.empty())
+    if (!helper.TopHintTokens.empty())
     {
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
         const float screenWidth = displaySize.x > 1.0f ? displaySize.x : Screen.x;
         const float screenHeight = displaySize.y > 1.0f ? displaySize.y : Screen.y;
-        const ImVec2 textSize = ImGui::GetFont()->CalcTextSizeA(topHintFontSize, FLT_MAX, 0.0f, helper.TopText.c_str());
 
         float ratioX = config.Visuals.GrenadeHelperTopHintOffsetX;
         float ratioY = config.Visuals.GrenadeHelperTopHintOffsetY;
@@ -1003,24 +1743,112 @@ void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot&
         if (ratioY < 0.0f || ratioY > 1.0f)
             ratioY = std::clamp((28.0f + ratioY) / (std::max)(1.0f, screenHeight), 0.0f, 1.0f);
 
-        const float anchorX = ratioX * screenWidth;
-        const float anchorY = ratioY * screenHeight;
-        const float textX = std::clamp(
-            anchorX - textSize.x * 0.5f,
-            8.0f,
-            (std::max)(8.0f, screenWidth - textSize.x - 8.0f)
-        );
-        const float textY = std::clamp(
-            anchorY,
-            8.0f,
-            (std::max)(8.0f, screenHeight - topHintFontSize - 8.0f)
-        );
-        const ImVec2 textPos{
-            textX,
-            textY
+        struct HintItem
+        {
+            std::string Token{};
+            const KeyIconTexture* Icon = nullptr;
+            ImVec2 Size{};
+            bool IsText = false;
         };
 
-        drawList->AddText(ImGui::GetFont(), topHintFontSize, textPos, topHintColor, helper.TopText.c_str());
+        const float iconTargetHeight = std::clamp(topHintFontSize, 20.0f, 100.0f);
+        const float itemSpacing = std::clamp(iconTargetHeight * 0.15f, 4.0f, 14.0f);
+        std::vector<HintItem> hintItems{};
+        hintItems.reserve(helper.TopHintTokens.size());
+
+        float totalWidth = 0.0f;
+        float rowHeight = 0.0f;
+        for (const std::string& tokenRaw : helper.TopHintTokens)
+        {
+            HintItem item{};
+            item.Token = NormalizeThrowTokenName(tokenRaw);
+            if (item.Token.empty())
+                item.Token = tokenRaw;
+
+            item.Icon = GetKeyIconTexture(item.Token, Overlay::device);
+            if (item.Icon && item.Icon->Width > 0 && item.Icon->Height > 0)
+            {
+                item.Size.y = iconTargetHeight;
+                item.Size.x = iconTargetHeight * static_cast<float>(item.Icon->Width) / static_cast<float>(item.Icon->Height);
+                item.IsText = false;
+            }
+            else
+            {
+                item.IsText = true;
+                const std::string fallbackText = ThrowTokenFallbackText(item.Token);
+                item.Size = ImGui::GetFont()->CalcTextSizeA(topHintFontSize, FLT_MAX, 0.0f, fallbackText.c_str());
+            }
+
+            rowHeight = (std::max)(rowHeight, item.Size.y);
+            if (!hintItems.empty())
+                totalWidth += itemSpacing;
+            totalWidth += item.Size.x;
+            hintItems.push_back(std::move(item));
+        }
+
+        if (hintItems.empty())
+            return;
+
+        const float anchorX = ratioX * screenWidth;
+        const float anchorY = ratioY * screenHeight;
+        const float rowX = std::clamp(
+            anchorX - totalWidth * 0.5f,
+            8.0f,
+            (std::max)(8.0f, screenWidth - totalWidth - 8.0f)
+        );
+        const float rowY = std::clamp(
+            anchorY,
+            8.0f,
+            (std::max)(8.0f, screenHeight - rowHeight - 8.0f)
+        );
+
+        float cursorX = rowX;
+        for (const HintItem& item : hintItems)
+        {
+            const float drawY = rowY + (rowHeight - item.Size.y) * 0.5f;
+            if (!item.IsText && item.Icon && item.Icon->Srv)
+            {
+                drawList->AddImage(
+                    reinterpret_cast<ImTextureID>(item.Icon->Srv),
+                    ImVec2(cursorX, drawY),
+                    ImVec2(cursorX + item.Size.x, drawY + item.Size.y),
+                    ImVec2(0.0f, 0.0f),
+                    ImVec2(1.0f, 1.0f),
+                    topHintColor
+                );
+            }
+            else
+            {
+                const std::string fallbackText = ThrowTokenFallbackText(item.Token);
+                drawList->AddText(
+                    ImGui::GetFont(),
+                    topHintFontSize,
+                    ImVec2(cursorX, drawY),
+                    topHintColor,
+                    fallbackText.c_str()
+                );
+            }
+
+            cursorX += item.Size.x + itemSpacing;
+        }
+
+        const std::string remark = TrimAscii(helper.TopHintRemark);
+        if (!remark.empty())
+        {
+            const float remarkFontSize = std::clamp(config.Visuals.GrenadeHelperFontSize, 10.0f, topHintFontSize);
+            const ImVec2 remarkSize = ImGui::GetFont()->CalcTextSizeA(remarkFontSize, FLT_MAX, 0.0f, remark.c_str());
+            const float remarkY = std::clamp(
+                rowY + rowHeight + std::clamp(iconTargetHeight * 0.18f, 4.0f, 12.0f),
+                8.0f,
+                (std::max)(8.0f, screenHeight - remarkSize.y - 8.0f)
+            );
+            const float remarkX = std::clamp(
+                anchorX - remarkSize.x * 0.5f,
+                8.0f,
+                (std::max)(8.0f, screenWidth - remarkSize.x - 8.0f)
+            );
+            drawList->AddText(ImGui::GetFont(), remarkFontSize, ImVec2(remarkX, remarkY), helperTextColor, remark.c_str());
+        }
     }
 }
 
@@ -1459,7 +2287,7 @@ void ESP::UpdateVisCheckState()
     const std::string& mapName = m_LastPolledMapName;
     if (mapName.empty())
     {
-        m_MapStatus = Localization::Pick("Map Status: (No Map)", "地图状态: (无地图)");
+        m_MapStatus = Localization::Pick("Map Status: (No Map)", "地图状态：（无地图）");
         return;
     }
 
@@ -1706,22 +2534,46 @@ std::string ESP::ResolveGrenadeDataWritePath(const std::string& mapName) const
 
 bool ESP::LoadGrenadeMapFile(const std::string& filePath, GrenadeMapData& outMap, std::string& outError) const
 {
-    std::ifstream file(filePath);
+    std::ifstream file(filePath, std::ios::binary);
     if (!file.is_open())
     {
         outError = "open failed";
         return false;
     }
 
+    const std::string sourceText{
+        std::istreambuf_iterator<char>(file),
+        std::istreambuf_iterator<char>()
+    };
+    if (!file.good() && !file.eof())
+    {
+        outError = "read failed";
+        return false;
+    }
+
     json root{};
+    std::string parseError{};
     try
     {
-        file >> root;
+        root = json::parse(sourceText);
     }
     catch (const std::exception& ex)
     {
-        outError = ex.what();
-        return false;
+        parseError = ex.what();
+
+        try
+        {
+            const std::string repairedText = RepairMalformedGrenadeJsonText(sourceText);
+            root = json::parse(repairedText);
+            LOG_WARN("Grenade json repaired on load: {}", filePath);
+        }
+        catch (const std::exception& ex2)
+        {
+            outError = ex2.what();
+            if (!parseError.empty())
+                outError += std::string(" (orig: ") + parseError + ")";
+            return false;
+        }
     }
 
     if (!root.is_object() || !root.contains("grenades") || !root["grenades"].is_array())
@@ -1765,10 +2617,20 @@ bool ESP::LoadGrenadeMapFile(const std::string& filePath, GrenadeMapData& outMap
         if (spot.Name.empty())
             spot.Name = "Unnamed";
 
-        if (item.contains("throw_type") && item["throw_type"].is_string())
-            spot.ThrowType = item["throw_type"].get<std::string>();
-        if (spot.ThrowType.empty())
-            spot.ThrowType = "StandThrow";
+        if (item.contains("remark") && item["remark"].is_string())
+            spot.Remark = item["remark"].get<std::string>();
+        spot.Remark = TrimAscii(spot.Remark);
+
+        std::string bracketRemark{};
+        ExtractTrailingBracketRemark(spot.Name, bracketRemark);
+        MergeRemarkSegment(spot.Remark, bracketRemark);
+        if (spot.Name.empty())
+            spot.Name = "Unnamed";
+
+        const std::string rawThrowType = (item.contains("throw_type") && item["throw_type"].is_string())
+            ? item["throw_type"].get<std::string>()
+            : std::string("LB");
+        spot.ThrowType = NormalizeThrowType(rawThrowType, spot.Name, &spot.Remark);
 
         spot.StandPos = standPos;
         spot.AimPos = aimPos;
@@ -1794,11 +2656,25 @@ bool ESP::SaveGrenadeMapFile(const std::string& filePath, const GrenadeMapData& 
     root["grenades"] = json::array();
     for (const GrenadeSpot& spot : mapData.Spots)
     {
+        std::string spotName = spot.Name.empty() ? std::string("Unnamed") : spot.Name;
+        std::string spotRemark = TrimAscii(spot.Remark);
+        std::string bracketRemark{};
+        ExtractTrailingBracketRemark(spotName, bracketRemark);
+        MergeRemarkSegment(spotRemark, bracketRemark);
+        if (spotName.empty())
+            spotName = "Unnamed";
+        const std::string canonicalThrowType = NormalizeThrowType(
+            spot.ThrowType.empty() ? std::string("LB") : spot.ThrowType,
+            spotName,
+            &spotRemark
+        );
+
         json node{};
         node["id"] = spot.Id;
         node["type"] = spot.Type.empty() ? std::string("Unknown") : spot.Type;
-        node["name"] = spot.Name.empty() ? std::string("Unnamed") : spot.Name;
-        node["throw_type"] = spot.ThrowType.empty() ? std::string("StandThrow") : spot.ThrowType;
+        node["name"] = spotName;
+        node["throw_type"] = canonicalThrowType;
+        node["remark"] = spotRemark;
         node["position"] = {
             { "x", spot.StandPos.x },
             { "y", spot.StandPos.y },
@@ -1869,9 +2745,9 @@ bool ESP::ReloadGrenadeMapFromDisk(const std::string& mapName, std::string& outS
         m_LoadedGrenadeMap = normalizedMap;
         m_LastGrenadeSelectedSpotId = 0;
         if (filePath.empty())
-            m_GrenadeStatus = std::string(Localization::Pick("No grenade file found, using empty map cache: ", "未找到点位文件，使用空缓存：")) + normalizedMap;
+            m_GrenadeStatus = std::string(Localization::Pick("No grenade file found, using empty map cache: ", "未找到道具点位文件，使用空地图缓存")) + normalizedMap;
         else
-            m_GrenadeStatus = std::string(Localization::Pick("Loaded grenade spots: ", "已加载点位：")) + std::to_string(m_GrenadeMap.Spots.size());
+            m_GrenadeStatus = std::string(Localization::Pick("Loaded grenade spots: ", "道具点位加载成功")) + std::to_string(m_GrenadeMap.Spots.size());
         outStatus = m_GrenadeStatus;
     }
 
@@ -1887,7 +2763,7 @@ void ESP::EnsureGrenadeMapLoaded(const std::string& mapName)
         m_GrenadeMap = {};
         m_LoadedGrenadeMap.clear();
         m_LastGrenadeSelectedSpotId = 0;
-        m_GrenadeStatus = Localization::Pick("No map loaded", "当前无地图已加载");
+        m_GrenadeStatus = Localization::Pick("No map loaded", "无地图加载");
         return;
     }
 
@@ -2077,8 +2953,6 @@ void ESP::BuildGrenadeHelperSnapshot(
                 return;
 
             std::string line = spot->Name;
-            if (!spot->ThrowType.empty())
-                line += " [" + LocalizeThrowTypeLabel(spot->ThrowType) + "]";
             if (line.empty())
                 return;
 
@@ -2094,6 +2968,9 @@ void ESP::BuildGrenadeHelperSnapshot(
 
         for (const StandDrawItem& item : standDrawItems)
         {
+            if (focusByCrosshair && item.Spot != closestSpot)
+                continue;
+
             int bestCluster = -1;
             float bestDistSqr = clusterRadiusSqr;
             for (int i = 0; i < static_cast<int>(clusters.size()); ++i)
@@ -2147,19 +3024,19 @@ void ESP::BuildGrenadeHelperSnapshot(
             (!focusByCrosshair && renderItem.IsTarget && item.CrossDistanceSqr <= looseGuideDistanceSqr);
 
         renderItem.Label = item.Spot->Name;
-        if (!item.Spot->ThrowType.empty())
-            renderItem.Label += " [" + LocalizeThrowTypeLabel(item.Spot->ThrowType) + "]";
         outHelper.AimItems.push_back(std::move(renderItem));
     }
 
     if (selectedSpot && focusByCrosshair)
     {
-        const std::string throwType = LocalizeThrowTypeLabel(
-            selectedSpot->ThrowType.empty() ? std::string("StandThrow") : selectedSpot->ThrowType
+        std::string remark = TrimAscii(selectedSpot->Remark);
+        const std::string throwType = NormalizeThrowType(
+            selectedSpot->ThrowType.empty() ? std::string("LB") : selectedSpot->ThrowType,
+            selectedSpot->Name,
+            &remark
         );
-        outHelper.TopText = std::string(Localization::Pick("Throw Type: ", "投掷方式: ")) + throwType;
-        if (!selectedSpot->Name.empty())
-            outHelper.TopText += "  |  " + selectedSpot->Name;
+        outHelper.TopHintTokens = BuildThrowHintTokens(ParseThrowTypeToKeys(throwType));
+        outHelper.TopHintRemark = remark;
     }
 
     m_LastGrenadeSelectedSpotId = outHelper.SelectedSpotId;
@@ -2167,7 +3044,7 @@ void ESP::BuildGrenadeHelperSnapshot(
 
 std::string ESP::BuildMapStatus(const std::string& mapName, const char* suffix) const
 {
-    std::string status = Localization::Pick("Map Status: ", "地图状态: ");
+    std::string status = Localization::Pick("Map Status: ", "地图状态 ");
     status += mapName.empty() ? Localization::Pick("(Unknown)", "(未知)") : (mapName + ".opt");
     status += " (";
     status += Localization::Localize(suffix);
@@ -2301,7 +3178,8 @@ std::vector<GrenadeSpotEditorRow> ESP::GetGrenadeSpotEditorRows() const
         GrenadeSpotEditorRow row{};
         row.Id = spot.Id;
         row.TypeIndex = (std::max)(0, GrenadeTypeIndexByLabel(spot.Type));
-        row.ThrowTypeIndex = ThrowTypeIndexByLabel(spot.ThrowType);
+        row.ThrowType = NormalizeThrowType(spot.ThrowType, spot.Name, nullptr);
+        row.Remark = TrimAscii(spot.Remark);
         row.Name = spot.Name;
         row.StandPos = spot.StandPos;
         row.AimPos = spot.AimPos;
@@ -2320,7 +3198,7 @@ bool ESP::SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vecto
     const std::string normalizedMap = NormalizeMapName(mapName);
     if (normalizedMap.empty())
     {
-        outStatus = Localization::Pick("Save failed: empty map name", "保存失败：地图名为空");
+        outStatus = Localization::Pick("Save failed: empty map name", "保存失败：空地图名");
         return false;
     }
 
@@ -2346,8 +3224,18 @@ bool ESP::SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vecto
         GrenadeSpot spot{};
         spot.Id = id;
         spot.Type = GrenadeTypeLabelByIndex(std::clamp(row.TypeIndex, 0, 4));
-        spot.ThrowType = ThrowTypeLabelByIndex(std::clamp(row.ThrowTypeIndex, 0, 3));
         spot.Name = row.Name.empty() ? std::string("Unnamed") : row.Name;
+        spot.Remark = TrimAscii(row.Remark);
+        std::string bracketRemark{};
+        ExtractTrailingBracketRemark(spot.Name, bracketRemark);
+        MergeRemarkSegment(spot.Remark, bracketRemark);
+        if (spot.Name.empty())
+            spot.Name = "Unnamed";
+        spot.ThrowType = NormalizeThrowType(
+            row.ThrowType.empty() ? std::string("LB") : row.ThrowType,
+            spot.Name,
+            &spot.Remark
+        );
         spot.StandPos = row.StandPos;
         spot.AimPos = row.AimPos;
         mapData.Spots.push_back(std::move(spot));
@@ -2369,7 +3257,7 @@ bool ESP::SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vecto
     if (!ReloadGrenadeMapFromDisk(normalizedMap, outStatus))
         return false;
 
-    outStatus = Localization::Pick("Spot list saved and reloaded", "点位列表已保存并重载");
+    outStatus = Localization::Pick("Spot list saved and reloaded", "点位列表保存成功并刷新");
     {
         std::lock_guard lock(m_GrenadeMutex);
         m_GrenadeStatus = outStatus;
@@ -2379,11 +3267,12 @@ bool ESP::SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vecto
 
 bool ESP::RecordCurrentGrenadeSpot(
     const std::string& mapName,
-    const std::string& note,
-    const int throwTypeIndex,
-    const float recordDistance,
-    const bool manualTypeOverride,
-    const int manualTypeIndex,
+    const std::string& spotName,
+    const std::string& throwType,
+    const std::string& remark,
+    float recordDistance,
+    bool manualTypeOverride,
+    int manualTypeIndex,
     std::string& outStatus)
 {
     std::string normalizedMap = NormalizeMapName(mapName);
@@ -2395,7 +3284,7 @@ bool ESP::RecordCurrentGrenadeSpot(
     const SDK::CoreCache core = sdk.GetCoreCache();
     if (!core.IsValid || !core.LocalPawn)
     {
-        outStatus = Localization::Pick("Record failed: local player unavailable", "记录失败：本地玩家无效");
+        outStatus = Localization::Pick("Record failed: local player unavailable", "记录失败：本地玩家不可用");
         return false;
     }
 
@@ -2408,7 +3297,7 @@ bool ESP::RecordCurrentGrenadeSpot(
     const auto scatter = mem.CreateScatterHandle();
     if (!scatter)
     {
-        outStatus = Localization::Pick("Record failed: scatter allocation failed", "记录失败：散读句柄分配失败");
+        outStatus = Localization::Pick("Record failed: scatter allocation failed", "记录失败：Scatter分配失败");
         return false;
     }
 
@@ -2429,7 +3318,7 @@ bool ESP::RecordCurrentGrenadeSpot(
         : ReadGrenadeType(core.LocalPawn);
     if (!IsUtilityGrenadeType(grenadeType))
     {
-        outStatus = Localization::Pick("Record failed: current held item is not a utility grenade", "记录失败：当前手持不是可识别道具");
+        outStatus = Localization::Pick("Record failed: current held item is not a utility grenade", "记录失败：目前手持非道具");
         return false;
     }
 
@@ -2469,8 +3358,18 @@ bool ESP::RecordCurrentGrenadeSpot(
     GrenadeSpot newSpot{};
     newSpot.Id = nextId;
     newSpot.Type = grenadeType;
-    newSpot.Name = note.empty() ? std::string("Unnamed") : note;
-    newSpot.ThrowType = ThrowTypeLabelByIndex(std::clamp(throwTypeIndex, 0, 3));
+    newSpot.Name = spotName.empty() ? std::string("Unnamed") : spotName;
+    newSpot.Remark = TrimAscii(remark);
+    std::string bracketRemark{};
+    ExtractTrailingBracketRemark(newSpot.Name, bracketRemark);
+    MergeRemarkSegment(newSpot.Remark, bracketRemark);
+    if (newSpot.Name.empty())
+        newSpot.Name = "Unnamed";
+    newSpot.ThrowType = NormalizeThrowType(
+        throwType.empty() ? std::string("LB") : throwType,
+        newSpot.Name,
+        &newSpot.Remark
+    );
     newSpot.StandPos = local.Origin;
     newSpot.AimPos = aimPos;
     mapData.Spots.push_back(std::move(newSpot));
@@ -2486,11 +3385,11 @@ bool ESP::RecordCurrentGrenadeSpot(
     std::string afterReloadStatus{};
     if (!ReloadGrenadeMapFromDisk(normalizedMap, afterReloadStatus))
     {
-        outStatus = std::string(Localization::Pick("Record saved, but reload failed: ", "记录已保存，但重载失败：")) + afterReloadStatus;
+        outStatus = std::string(Localization::Pick("Record saved, but reload failed: ", "记录成功但刷新失败")) + afterReloadStatus;
         return false;
     }
 
-    outStatus = std::string(Localization::Pick("Recorded spot: ", "已记录点位：")) + mapData.Spots.back().Name;
+    outStatus = std::string(Localization::Pick("Recorded spot: ", "记录点位：")) + mapData.Spots.back().Name;
     {
         std::lock_guard lock(m_GrenadeMutex);
         m_GrenadeStatus = outStatus;
@@ -2512,6 +3411,12 @@ bool ESP::DetectCurrentGrenadeTypeIndex(int& outTypeIndex) const
 
     outTypeIndex = index;
     return true;
+}
+
+int ESP::GetCurrentGrenadeFocusedSpotId() const
+{
+    std::lock_guard lock(m_RenderFrameMutex);
+    return m_RenderFrame.GrenadeHelper.SelectedSpotId;
 }
 
 void ESP::EnsureSamplerStarted()
@@ -3215,7 +4120,7 @@ void ESP::Render(ImDrawList* drawList)
         float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
 
     const ImVec2 statusPos(12.0f, leftHudY);
-    const char* mapStatus = frame.MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态: (等待中)") : frame.MapStatus.c_str();
+    const char* mapStatus = frame.MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态：（等待中）") : frame.MapStatus.c_str();
     drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
     leftHudY += ImGui::GetFontSize() + 2.0f;
 
@@ -3234,12 +4139,12 @@ void ESP::Render(ImDrawList* drawList)
             aimbotColor = IM_COL32(220, 220, 220, 255);
             if (aimbotHotkeyActive)
             {
-                aimbotState = Localization::Pick("HOTKEY", "热键");
+                aimbotState = Localization::Pick("HOTKEY", "热键触发");
                 aimbotColor = IM_COL32(255, 220, 120, 255);
             }
             if (aimbotHasTarget)
             {
-                aimbotState = Localization::Pick("LOCK", "锁定");
+                aimbotState = Localization::Pick("LOCK", "锁定中");
                 aimbotColor = IM_COL32(120, 255, 155, 255);
             }
         }
@@ -3252,12 +4157,12 @@ void ESP::Render(ImDrawList* drawList)
             triggerColor = IM_COL32(220, 220, 220, 255);
             if (triggerHotkeyActive)
             {
-                triggerState = Localization::Pick("HOTKEY", "热键");
+                triggerState = Localization::Pick("HOTKEY", "热键触发");
                 triggerColor = IM_COL32(255, 220, 120, 255);
             }
             if (triggerHasTarget)
             {
-                triggerState = Localization::Pick("HIT", "命中");
+                triggerState = Localization::Pick("HIT", "击中");
                 triggerColor = IM_COL32(120, 255, 155, 255);
             }
         }
@@ -3289,7 +4194,7 @@ void ESP::Render(ImDrawList* drawList)
         char fovText[64]{};
         const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
         const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
-        const char* aimState = aimbotHasTarget ? Localization::Pick("LOCK", "锁定") : (aimbotHotkeyActive ? Localization::Pick("HOTKEY", "热键") : Localization::Pick("IDLE", "待机"));
+        const char* aimState = aimbotHasTarget ? Localization::Pick("LOCK", "锁定") : (aimbotHotkeyActive ? Localization::Pick("HOTKEY", "热键") : Localization::Pick("IDLE", "空闲"));
         std::snprintf(fovText, sizeof(fovText), Localization::Pick("FOV %.1f px [%s]", "FOV %.1f 像素 [%s]"), radius, aimState);
         drawList->AddText(
             ImVec2(ScreenCenter.x + radius + 8.0f, ScreenCenter.y - ImGui::GetFontSize() * 0.5f),

@@ -108,7 +108,8 @@ struct GrenadeHelperSnapshot
     bool Valid = false;
     int SelectedSpotId = 0;
     Vector2 Cross{};
-    std::string TopText{};
+    std::vector<std::string> TopHintTokens{};
+    std::string TopHintRemark{};
     std::vector<GrenadeStandRenderItem> StandItems{};
     std::vector<GrenadeAimRenderItem> AimItems{};
 };
@@ -117,7 +118,8 @@ struct GrenadeSpotEditorRow
 {
     int Id = 0;
     int TypeIndex = 0;
-    int ThrowTypeIndex = 0;
+    std::string ThrowType{};
+    std::string Remark{};
     std::string Name{};
     Vector3 StandPos{};
     Vector3 AimPos{};
@@ -131,6 +133,7 @@ private:
         int Id = 0;
         std::string Type{};
         std::string Name{};
+        std::string Remark{};
         std::string ThrowType{};
         Vector3 StandPos{};
         Vector3 AimPos{};
@@ -272,13 +275,15 @@ public:
     bool SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vector<GrenadeSpotEditorRow>& rows, std::string& outStatus);
     bool RecordCurrentGrenadeSpot(
         const std::string& mapName,
-        const std::string& note,
-        int throwTypeIndex,
+        const std::string& spotName,
+        const std::string& throwType,
+        const std::string& remark,
         float recordDistance,
         bool manualTypeOverride,
         int manualTypeIndex,
         std::string& outStatus);
     bool DetectCurrentGrenadeTypeIndex(int& outTypeIndex) const;
+    int GetCurrentGrenadeFocusedSpotId() const;
 
     void Update(ImDrawList* drawList)
     {

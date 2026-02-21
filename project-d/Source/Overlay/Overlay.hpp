@@ -67,6 +67,7 @@ private:
 
 	inline static float OverlayFps;
 	inline static bool m_InsertHeld;
+	inline static bool m_MenuJustOpened;
 	inline static std::chrono::steady_clock::time_point m_FrameStart{};
 
 };

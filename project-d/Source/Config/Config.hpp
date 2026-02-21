@@ -550,7 +550,7 @@ namespace Config
                 j["Visuals"]["GrenadeHelperGuideLineColor"] = { 1.0f, 1.0f, 1.0f, 0.75f };
                 j["Visuals"]["GrenadeHelperFontColor"] = { 0.96f, 0.96f, 0.96f, 1.0f };
                 j["Visuals"]["GrenadeHelperFontSize"] = 16.0f;
-                j["Visuals"]["GrenadeHelperTopHintColor"] = { 1.0f, 0.86f, 0.47f, 1.0f };
+                j["Visuals"]["GrenadeHelperTopHintColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["GrenadeHelperTopHintFontSize"] = 30.0f;
                 j["Info"]["Language"] = 0;
 
