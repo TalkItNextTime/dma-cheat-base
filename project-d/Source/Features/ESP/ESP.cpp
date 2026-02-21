@@ -150,6 +150,144 @@ namespace
         }
     }
 
+    std::string ToLowerAscii(std::string text)
+    {
+        std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return text;
+    }
+
+    std::string NormalizeMapName(std::string value)
+    {
+        if (value.empty())
+            return {};
+
+        std::string lowered = ToLowerAscii(value);
+        if (lowered.rfind("maps/", 0) == 0 || lowered.rfind("maps\\", 0) == 0)
+            value = value.substr(5);
+
+        lowered = ToLowerAscii(value);
+        constexpr const char* kBspSuffix = ".bsp";
+        if (lowered.size() > 4 && lowered.compare(lowered.size() - 4, 4, kBspSuffix) == 0)
+            value = value.substr(0, value.size() - 4);
+
+        return value;
+    }
+
+    bool ReadVectorField(const json& obj, const char* field, Vector3& out)
+    {
+        if (!obj.contains(field) || !obj[field].is_object())
+            return false;
+
+        const json& node = obj[field];
+        if (!node.contains("x") || !node["x"].is_number() ||
+            !node.contains("y") || !node["y"].is_number() ||
+            !node.contains("z") || !node["z"].is_number())
+        {
+            return false;
+        }
+
+        out.x = node["x"].get<float>();
+        out.y = node["y"].get<float>();
+        out.z = node["z"].get<float>();
+        return true;
+    }
+
+    float DistanceSquared2D(const Vector2& a, const Vector2& b)
+    {
+        const float dx = a.x - b.x;
+        const float dy = a.y - b.y;
+        return dx * dx + dy * dy;
+    }
+
+    bool IsOnScreen(const Vector2& point)
+    {
+        return point.x >= 0.0f && point.y >= 0.0f && point.x <= Screen.x && point.y <= Screen.y;
+    }
+
+    Vector2 ClampToScreenEdge(const Vector2& point, const float padding = 8.0f)
+    {
+        Vector2 clamped = point;
+        const float maxX = (std::max)(padding, Screen.x - padding);
+        const float maxY = (std::max)(padding, Screen.y - padding);
+        clamped.x = std::clamp(clamped.x, padding, maxX);
+        clamped.y = std::clamp(clamped.y, padding, maxY);
+        return clamped;
+    }
+
+    const char* GrenadeTypeLabelByIndex(const int index)
+    {
+        switch (index)
+        {
+        case 0: return "Smoke";
+        case 1: return "Flash";
+        case 2: return "HE";
+        case 3: return "Decoy";
+        case 4: return "Molotov";
+        default: return "Unknown";
+        }
+    }
+
+    int GrenadeTypeIndexByLabel(const std::string& grenadeType)
+    {
+        const std::string lowered = ToLowerAscii(grenadeType);
+        if (lowered == "smoke")
+            return 0;
+        if (lowered == "flash" || lowered == "flashbang")
+            return 1;
+        if (lowered == "he" || lowered == "he grenade")
+            return 2;
+        if (lowered == "decoy")
+            return 3;
+        if (lowered == "molotov" || lowered == "incendiary")
+            return 4;
+        return -1;
+    }
+
+    const char* ThrowTypeLabelByIndex(const int index)
+    {
+        switch (index)
+        {
+        case 1: return "JumpThrow";
+        case 2: return "RunThrow";
+        case 3: return "RunJumpThrow";
+        default: return "StandThrow";
+        }
+    }
+
+    int ThrowTypeIndexByLabel(const std::string& throwType)
+    {
+        const std::string lowered = ToLowerAscii(throwType);
+        if (lowered == "jumpthrow")
+            return 1;
+        if (lowered == "runthrow")
+            return 2;
+        if (lowered == "runjumpthrow" || lowered == "runjump")
+            return 3;
+        return 0;
+    }
+
+    bool IsUtilityGrenadeType(const std::string& grenadeType)
+    {
+        return GrenadeTypeIndexByLabel(grenadeType) >= 0;
+    }
+
+    std::string LocalizeThrowTypeLabel(std::string throwType)
+    {
+        const std::string lowered = ToLowerAscii(throwType);
+        if (lowered == "standthrow")
+            return Localization::Pick("Stand Throw", "站投");
+        if (lowered == "jumpthrow")
+            return Localization::Pick("Jump Throw", "跳投");
+        if (lowered == "runthrow")
+            return Localization::Pick("Run Throw", "跑投");
+        if (lowered == "runjumpthrow" || lowered == "runjump")
+            return Localization::Pick("Run Jump Throw", "跑跳投");
+        return throwType.empty() ? Localization::Pick("Stand Throw", "站投") : throwType;
+    }
+
     float DistanceSquared3D(const Vector3& a, const Vector3& b)
     {
         const float dx = a.x - b.x;
@@ -796,6 +934,96 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
     );
 }
 
+void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const
+{
+    if (!drawList || !config.Visuals.GrenadeHelper || !helper.Valid)
+        return;
+
+    const float aimCircleRadius = std::clamp(config.Visuals.GrenadeHelperFocusRadius, 5.0f, 50.0f);
+    const ImU32 standPointColor = ToImColor(config.Visuals.GrenadeHelperStandColor);
+    const ImU32 aimPointColor = ToImColor(config.Visuals.GrenadeHelperAimColor);
+    const ImU32 guideLineColor = ToImColor(config.Visuals.GrenadeHelperGuideLineColor);
+    const ImU32 helperTextColor = ToImColor(config.Visuals.GrenadeHelperFontColor);
+    const ImU32 topHintColor = ToImColor(config.Visuals.GrenadeHelperTopHintColor);
+    const float helperFontSize = std::clamp(config.Visuals.GrenadeHelperFontSize, 10.0f, 32.0f);
+    const float topHintFontSize = std::clamp(config.Visuals.GrenadeHelperTopHintFontSize, 14.0f, 72.0f);
+
+    for (const GrenadeStandRenderItem& stand : helper.StandItems)
+    {
+        drawList->AddCircleFilled(stand.Screen.ToImVec2(), 4.0f, standPointColor, 14);
+        if (!stand.Label.empty())
+            drawList->AddText(
+                ImGui::GetFont(),
+                helperFontSize,
+                ImVec2(stand.Screen.x + 6.0f, stand.Screen.y + 8.0f),
+                helperTextColor,
+                stand.Label.c_str()
+            );
+    }
+
+    for (const GrenadeAimRenderItem& aimItem : helper.AimItems)
+    {
+        drawList->AddCircle(aimItem.Screen.ToImVec2(), aimCircleRadius, aimPointColor, 24, aimItem.IsTarget ? 2.8f : 2.0f);
+
+        if (aimItem.DrawGuide)
+        {
+            drawList->AddLine(
+                helper.Cross.ToImVec2(),
+                aimItem.Screen.ToImVec2(),
+                guideLineColor,
+                aimItem.IsTarget ? 2.0f : 1.0f
+            );
+        }
+
+        if (!aimItem.Label.empty())
+        {
+            drawList->AddText(
+                ImGui::GetFont(),
+                helperFontSize,
+                ImVec2(aimItem.Screen.x + 12.0f, aimItem.Screen.y - 16.0f),
+                helperTextColor,
+                aimItem.Label.c_str()
+            );
+        }
+    }
+
+    if (!helper.TopText.empty())
+    {
+        const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        const float screenWidth = displaySize.x > 1.0f ? displaySize.x : Screen.x;
+        const float screenHeight = displaySize.y > 1.0f ? displaySize.y : Screen.y;
+        const ImVec2 textSize = ImGui::GetFont()->CalcTextSizeA(topHintFontSize, FLT_MAX, 0.0f, helper.TopText.c_str());
+
+        float ratioX = config.Visuals.GrenadeHelperTopHintOffsetX;
+        float ratioY = config.Visuals.GrenadeHelperTopHintOffsetY;
+
+        // Backward compatibility for old pixel-offset configs.
+        if (ratioX < 0.0f || ratioX > 1.0f)
+            ratioX = std::clamp(0.5f + ratioX / (std::max)(1.0f, screenWidth), 0.0f, 1.0f);
+        if (ratioY < 0.0f || ratioY > 1.0f)
+            ratioY = std::clamp((28.0f + ratioY) / (std::max)(1.0f, screenHeight), 0.0f, 1.0f);
+
+        const float anchorX = ratioX * screenWidth;
+        const float anchorY = ratioY * screenHeight;
+        const float textX = std::clamp(
+            anchorX - textSize.x * 0.5f,
+            8.0f,
+            (std::max)(8.0f, screenWidth - textSize.x - 8.0f)
+        );
+        const float textY = std::clamp(
+            anchorY,
+            8.0f,
+            (std::max)(8.0f, screenHeight - topHintFontSize - 8.0f)
+        );
+        const ImVec2 textPos{
+            textX,
+            textY
+        };
+
+        drawList->AddText(ImGui::GetFont(), topHintFontSize, textPos, topHintColor, helper.TopText.c_str());
+    }
+}
+
 bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapshot) const
 {
     if (!boneArray || !IsLikelyUserAddress(boneArray))
@@ -1157,24 +1385,24 @@ int ESP::ReadMoney(const uint64_t controller) const
     return mem.Read<int>(moneyServices + Offsets::Schema::m_iAccount);
 }
 
-std::string ESP::ReadWeaponName(const uint64_t pawn) const
+int ESP::ReadWeaponId(const uint64_t pawn) const
 {
     if (!pawn || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon)
-        return {};
+        return 0;
     if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
-        return {};
+        return 0;
 
     const uint64_t weaponServices = mem.Read<uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
     if (!weaponServices || !IsLikelyUserAddress(weaponServices))
-        return {};
+        return 0;
 
     const uint32_t activeWeaponHandle = mem.Read<uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
     if (!activeWeaponHandle)
-        return {};
+        return 0;
 
     const uint64_t weapon = sdk.ResolveEntityFromHandle(activeWeaponHandle);
     if (!weapon || !IsLikelyUserAddress(weapon))
-        return {};
+        return 0;
 
     const std::uint64_t itemDefinitionIndexAddress =
         weapon +
@@ -1182,8 +1410,12 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
         static_cast<uint64_t>(Offsets::Schema::m_Item) +
         static_cast<uint64_t>(Offsets::Schema::m_iItemDefinitionIndex);
 
-    const int weaponId = static_cast<int>(mem.Read<std::uint16_t>(itemDefinitionIndexAddress));
+    return static_cast<int>(mem.Read<std::uint16_t>(itemDefinitionIndexAddress));
+}
 
+std::string ESP::ReadWeaponName(const uint64_t pawn) const
+{
+    const int weaponId = ReadWeaponId(pawn);
     if (weaponId <= 0)
         return {};
 
@@ -1192,6 +1424,20 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
         return resolvedName;
 
     return std::string(Localization::Pick("Weapon ", "武器 ")) + std::to_string(weaponId);
+}
+
+std::string ESP::ReadGrenadeType(const uint64_t pawn) const
+{
+    switch (ReadWeaponId(pawn))
+    {
+    case 43: return "Flash";
+    case 44: return "HE";
+    case 45: return "Smoke";
+    case 46: return "Molotov";
+    case 47: return "Decoy";
+    case 48: return "Molotov";
+    default: return "Unknown";
+    }
 }
 
 void ESP::UpdateVisCheckState()
@@ -1359,6 +1605,566 @@ std::string ESP::ResolveOptPath(const std::string& mapName) const
     return {};
 }
 
+std::string ESP::ResolveGrenadeDataPath(const std::string& mapName) const
+{
+    if (mapName.empty())
+        return {};
+
+    const std::string fileName = mapName + ".json";
+    std::vector<std::filesystem::path> candidates{};
+    candidates.reserve(64);
+
+    auto appendCandidates = [&](std::filesystem::path base)
+    {
+        std::error_code ec{};
+        for (int depth = 0; depth < 6 && !base.empty(); ++depth)
+        {
+            candidates.push_back(base / "GrenadeData" / fileName);
+            candidates.push_back(base / "grenadedata" / fileName);
+            candidates.push_back(base / "project-d" / "GrenadeData" / fileName);
+            candidates.push_back(base / "project-d" / "grenadedata" / fileName);
+            candidates.push_back(base / fileName);
+
+            const std::filesystem::path parent = base.parent_path();
+            if (parent == base || parent.empty())
+                break;
+            base = parent;
+        }
+    };
+
+    std::error_code cwdError{};
+    const std::filesystem::path cwd = std::filesystem::current_path(cwdError);
+    if (!cwdError)
+        appendCandidates(cwd);
+
+    char modulePath[MAX_PATH]{};
+    if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) != 0)
+        appendCandidates(std::filesystem::path(modulePath).parent_path());
+
+    for (const std::filesystem::path& candidate : candidates)
+    {
+        if (candidate.empty())
+            continue;
+
+        std::error_code existsError{};
+        if (std::filesystem::exists(candidate, existsError) && !existsError)
+            return candidate.string();
+    }
+
+    return {};
+}
+
+std::string ESP::ResolveGrenadeDataWritePath(const std::string& mapName) const
+{
+    const std::string normalizedMap = NormalizeMapName(mapName);
+    if (normalizedMap.empty())
+        return {};
+
+    if (const std::string existingPath = ResolveGrenadeDataPath(normalizedMap); !existingPath.empty())
+        return existingPath;
+
+    const std::string fileName = normalizedMap + ".json";
+    std::vector<std::filesystem::path> candidateDirs{};
+    candidateDirs.reserve(16);
+
+    auto appendDirs = [&](const std::filesystem::path& base)
+    {
+        if (base.empty())
+            return;
+
+        candidateDirs.push_back(base / "GrenadeData");
+        candidateDirs.push_back(base / "grenadedata");
+        candidateDirs.push_back(base / "project-d" / "GrenadeData");
+        candidateDirs.push_back(base / "project-d" / "grenadedata");
+    };
+
+    std::error_code cwdError{};
+    const std::filesystem::path cwd = std::filesystem::current_path(cwdError);
+    if (!cwdError)
+        appendDirs(cwd);
+
+    char modulePath[MAX_PATH]{};
+    if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) != 0)
+        appendDirs(std::filesystem::path(modulePath).parent_path());
+
+    for (const std::filesystem::path& dir : candidateDirs)
+    {
+        std::error_code ec{};
+        if (dir.empty() || !std::filesystem::exists(dir, ec) || ec)
+            continue;
+        return (dir / fileName).string();
+    }
+
+    std::filesystem::path fallbackDir = cwdError ? std::filesystem::path("GrenadeData") : (cwd / "project-d" / "GrenadeData");
+    std::error_code createEc{};
+    std::filesystem::create_directories(fallbackDir, createEc);
+    if (createEc)
+        return (std::filesystem::path("GrenadeData") / fileName).string();
+
+    return (fallbackDir / fileName).string();
+}
+
+bool ESP::LoadGrenadeMapFile(const std::string& filePath, GrenadeMapData& outMap, std::string& outError) const
+{
+    std::ifstream file(filePath);
+    if (!file.is_open())
+    {
+        outError = "open failed";
+        return false;
+    }
+
+    json root{};
+    try
+    {
+        file >> root;
+    }
+    catch (const std::exception& ex)
+    {
+        outError = ex.what();
+        return false;
+    }
+
+    if (!root.is_object() || !root.contains("grenades") || !root["grenades"].is_array())
+    {
+        outError = "invalid grenades array";
+        return false;
+    }
+
+    outMap = {};
+    if (root.contains("map_name") && root["map_name"].is_string())
+        outMap.MapName = NormalizeMapName(root["map_name"].get<std::string>());
+    if (outMap.MapName.empty())
+        outMap.MapName = NormalizeMapName(std::filesystem::path(filePath).stem().string());
+
+    const auto& grenadeList = root["grenades"];
+    outMap.Spots.reserve(grenadeList.size());
+
+    for (const auto& item : grenadeList)
+    {
+        if (!item.is_object())
+            continue;
+
+        Vector3 standPos{};
+        Vector3 aimPos{};
+        if (!ReadVectorField(item, "position", standPos) || !ReadVectorField(item, "aim_target", aimPos))
+            continue;
+
+        GrenadeSpot spot{};
+        if (item.contains("id") && item["id"].is_number_integer())
+            spot.Id = item["id"].get<int>();
+        else
+            spot.Id = static_cast<int>(outMap.Spots.size()) + 1;
+
+        if (item.contains("type") && item["type"].is_string())
+            spot.Type = item["type"].get<std::string>();
+        if (spot.Type.empty())
+            spot.Type = "Unknown";
+
+        if (item.contains("name") && item["name"].is_string())
+            spot.Name = item["name"].get<std::string>();
+        if (spot.Name.empty())
+            spot.Name = "Unnamed";
+
+        if (item.contains("throw_type") && item["throw_type"].is_string())
+            spot.ThrowType = item["throw_type"].get<std::string>();
+        if (spot.ThrowType.empty())
+            spot.ThrowType = "StandThrow";
+
+        spot.StandPos = standPos;
+        spot.AimPos = aimPos;
+        outMap.Spots.push_back(std::move(spot));
+    }
+
+    return true;
+}
+
+bool ESP::SaveGrenadeMapFile(const std::string& filePath, const GrenadeMapData& mapData, std::string& outError) const
+{
+    if (filePath.empty())
+    {
+        outError = "empty path";
+        return false;
+    }
+
+    json root{};
+    root["map_name"] = NormalizeMapName(mapData.MapName);
+    if (root["map_name"].get<std::string>().empty())
+        root["map_name"] = NormalizeMapName(std::filesystem::path(filePath).stem().string());
+
+    root["grenades"] = json::array();
+    for (const GrenadeSpot& spot : mapData.Spots)
+    {
+        json node{};
+        node["id"] = spot.Id;
+        node["type"] = spot.Type.empty() ? std::string("Unknown") : spot.Type;
+        node["name"] = spot.Name.empty() ? std::string("Unnamed") : spot.Name;
+        node["throw_type"] = spot.ThrowType.empty() ? std::string("StandThrow") : spot.ThrowType;
+        node["position"] = {
+            { "x", spot.StandPos.x },
+            { "y", spot.StandPos.y },
+            { "z", spot.StandPos.z }
+        };
+        node["aim_target"] = {
+            { "x", spot.AimPos.x },
+            { "y", spot.AimPos.y },
+            { "z", spot.AimPos.z }
+        };
+
+        root["grenades"].push_back(std::move(node));
+    }
+
+    std::error_code createEc{};
+    const std::filesystem::path outPath(filePath);
+    if (!outPath.parent_path().empty())
+        std::filesystem::create_directories(outPath.parent_path(), createEc);
+    if (createEc)
+    {
+        outError = createEc.message();
+        return false;
+    }
+
+    std::ofstream out(filePath, std::ios::trunc);
+    if (!out.is_open())
+    {
+        outError = "open write failed";
+        return false;
+    }
+
+    out << root.dump(2);
+    if (!out.good())
+    {
+        outError = "write failed";
+        return false;
+    }
+
+    return true;
+}
+
+bool ESP::ReloadGrenadeMapFromDisk(const std::string& mapName, std::string& outStatus)
+{
+    const std::string normalizedMap = NormalizeMapName(mapName);
+    if (normalizedMap.empty())
+    {
+        outStatus = Localization::Pick("Reload failed: empty map name", "重载失败：地图名为空");
+        return false;
+    }
+
+    GrenadeMapData loadedMap{};
+    loadedMap.MapName = normalizedMap;
+
+    const std::string filePath = ResolveGrenadeDataPath(normalizedMap);
+    if (!filePath.empty())
+    {
+        std::string error{};
+        if (!LoadGrenadeMapFile(filePath, loadedMap, error))
+        {
+            outStatus = std::string(Localization::Pick("Reload failed: ", "重载失败：")) + error;
+            return false;
+        }
+    }
+
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        m_GrenadeMap = std::move(loadedMap);
+        m_LoadedGrenadeMap = normalizedMap;
+        m_LastGrenadeSelectedSpotId = 0;
+        if (filePath.empty())
+            m_GrenadeStatus = std::string(Localization::Pick("No grenade file found, using empty map cache: ", "未找到点位文件，使用空缓存：")) + normalizedMap;
+        else
+            m_GrenadeStatus = std::string(Localization::Pick("Loaded grenade spots: ", "已加载点位：")) + std::to_string(m_GrenadeMap.Spots.size());
+        outStatus = m_GrenadeStatus;
+    }
+
+    return true;
+}
+
+void ESP::EnsureGrenadeMapLoaded(const std::string& mapName)
+{
+    const std::string normalizedMap = NormalizeMapName(mapName);
+    if (normalizedMap.empty())
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        m_GrenadeMap = {};
+        m_LoadedGrenadeMap.clear();
+        m_LastGrenadeSelectedSpotId = 0;
+        m_GrenadeStatus = Localization::Pick("No map loaded", "当前无地图已加载");
+        return;
+    }
+
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        if (m_LoadedGrenadeMap == normalizedMap)
+            return;
+    }
+
+    std::string status{};
+    if (!ReloadGrenadeMapFromDisk(normalizedMap, status))
+        LOG_WARN("Failed to reload grenade map '{}': {}", normalizedMap, status);
+}
+
+void ESP::BuildGrenadeHelperSnapshot(
+    const Vector3& localOrigin,
+    const Vector3& localEye,
+    const Vector3& localViewAngles,
+    uint64_t localPawn,
+    const std::string& heldGrenadeType,
+    GrenadeHelperSnapshot& outHelper)
+{
+    outHelper = {};
+
+    if (!config.Visuals.GrenadeHelper || !localPawn)
+    {
+        m_LastGrenadeSelectedSpotId = 0;
+        return;
+    }
+
+    const std::string mapName = NormalizeMapName(m_LastPolledMapName.empty() ? sdk.GetCurrentMapName() : m_LastPolledMapName);
+    if (mapName.empty())
+    {
+        m_LastGrenadeSelectedSpotId = 0;
+        return;
+    }
+
+    EnsureGrenadeMapLoaded(mapName);
+
+    GrenadeMapData mapSnapshot{};
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        mapSnapshot = m_GrenadeMap;
+    }
+
+    if (mapSnapshot.Spots.empty())
+    {
+        m_LastGrenadeSelectedSpotId = 0;
+        return;
+    }
+
+    const std::string currentGrenade = config.Visuals.GrenadeHelperManualTypeOverride
+        ? GrenadeTypeLabelByIndex(std::clamp(config.Visuals.GrenadeHelperManualType, 0, 4))
+        : heldGrenadeType;
+
+    if (config.Visuals.GrenadeHelperFilterByWeapon && currentGrenade == "Unknown")
+    {
+        m_LastGrenadeSelectedSpotId = 0;
+        return;
+    }
+
+    struct StandDrawItem
+    {
+        const GrenadeSpot* Spot = nullptr;
+        Vector2 Screen{};
+    };
+
+    struct AimDrawItem
+    {
+        const GrenadeSpot* Spot = nullptr;
+        Vector2 Screen{};
+        float CrossDistanceSqr = FLT_MAX;
+    };
+
+    std::vector<StandDrawItem> standDrawItems{};
+    std::vector<AimDrawItem> aimDrawItems{};
+    standDrawItems.reserve(mapSnapshot.Spots.size());
+    aimDrawItems.reserve(mapSnapshot.Spots.size());
+
+    const auto grenadeTypeMatches = [&](const std::string& spotType) -> bool
+    {
+        const std::string spotLower = ToLowerAscii(spotType);
+        const std::string currentLower = ToLowerAscii(currentGrenade);
+        if (currentLower == "molotov")
+            return spotLower == "molotov" || spotLower == "incendiary";
+        return spotLower == currentLower;
+    };
+
+    const float pitchRad = localViewAngles.x * (math::PI / 180.0f);
+    const float yawRad = localViewAngles.y * (math::PI / 180.0f);
+    const Vector3 cameraForward{
+        std::cos(pitchRad) * std::cos(yawRad),
+        std::cos(pitchRad) * std::sin(yawRad),
+        -std::sin(pitchRad)
+    };
+
+    const float maxStandDrawDistance = std::clamp(config.Visuals.GrenadeHelperMaxStandDrawDistance, 200.0f, 10000.0f);
+    const float standTolerance = std::clamp(config.Visuals.GrenadeHelperStandTolerance, 5.0f, 250.0f);
+    const float stickyStandTolerance = standTolerance * 1.35f;
+    const float focusRadius = std::clamp(config.Visuals.GrenadeHelperFocusRadius, 5.0f, 50.0f);
+    const float looseGuideDistance = std::clamp(config.Visuals.GrenadeHelperLooseGuideDistance, 50.0f, 12000.0f);
+
+    const float maxStandDrawDistanceSqr = maxStandDrawDistance * maxStandDrawDistance;
+    const float standToleranceSqr = standTolerance * standTolerance;
+    const float stickyStandToleranceSqr = stickyStandTolerance * stickyStandTolerance;
+    const float focusRadiusSqr = focusRadius * focusRadius;
+    const float looseGuideDistanceSqr = looseGuideDistance * looseGuideDistance;
+
+    const Vector2 cross{ ScreenCenter.x, ScreenCenter.y };
+    const int previousSpotId = m_LastGrenadeSelectedSpotId;
+
+    const GrenadeSpot* closestSpot = nullptr;
+    float minCrossDistanceSqr = FLT_MAX;
+
+    for (const GrenadeSpot& spot : mapSnapshot.Spots)
+    {
+        if (config.Visuals.GrenadeHelperFilterByWeapon && !grenadeTypeMatches(spot.Type))
+            continue;
+
+        const float standDistanceSqr = DistanceSquared3D(localOrigin, spot.StandPos);
+        if (standDistanceSqr > maxStandDrawDistanceSqr)
+            continue;
+
+        const bool stickyCandidate = previousSpotId != 0 && previousSpotId == spot.Id;
+        const float activeToleranceSqr = stickyCandidate ? stickyStandToleranceSqr : standToleranceSqr;
+        const bool withinStandTolerance = standDistanceSqr <= activeToleranceSqr;
+
+        const Vector3 toStand = spot.StandPos - localEye;
+        const float forwardDot = Dot3(toStand, cameraForward);
+        if (!withinStandTolerance && forwardDot < 0.0f)
+            continue;
+
+        if (config.Visuals.GrenadeHelperDrawStand)
+        {
+            Vector2 standScreen{};
+            if (sdk.WorldToScreen(spot.StandPos, standScreen) && IsOnScreen(standScreen))
+                standDrawItems.push_back({ &spot, standScreen });
+        }
+
+        if (!config.Visuals.GrenadeHelperDrawAim || standDistanceSqr > activeToleranceSqr)
+            continue;
+
+        Vector2 aimScreen{};
+        if (!sdk.WorldToScreen(spot.AimPos, aimScreen))
+            continue;
+
+        if (!IsOnScreen(aimScreen))
+            aimScreen = ClampToScreenEdge(aimScreen);
+
+        const float crossDistanceSqr = DistanceSquared2D(aimScreen, cross);
+        aimDrawItems.push_back({ &spot, aimScreen, crossDistanceSqr });
+
+        if (crossDistanceSqr < minCrossDistanceSqr)
+        {
+            minCrossDistanceSqr = crossDistanceSqr;
+            closestSpot = &spot;
+        }
+    }
+
+    if (standDrawItems.empty() && aimDrawItems.empty())
+    {
+        m_LastGrenadeSelectedSpotId = 0;
+        return;
+    }
+
+    const bool focusByCrosshair = !aimDrawItems.empty() && minCrossDistanceSqr <= focusRadiusSqr;
+    const GrenadeSpot* selectedSpot = closestSpot;
+    if (!selectedSpot && !standDrawItems.empty())
+        selectedSpot = standDrawItems.front().Spot;
+
+    outHelper.Valid = true;
+    outHelper.Cross = cross;
+    outHelper.SelectedSpotId = selectedSpot ? selectedSpot->Id : 0;
+
+    if (config.Visuals.GrenadeHelperDrawStand)
+    {
+        struct StandCluster
+        {
+            Vector2 Center{};
+            std::string Text{};
+            int Count = 0;
+        };
+
+        auto appendStandText = [](StandCluster& cluster, const GrenadeSpot* spot)
+        {
+            if (!spot)
+                return;
+
+            std::string line = spot->Name;
+            if (!spot->ThrowType.empty())
+                line += " [" + LocalizeThrowTypeLabel(spot->ThrowType) + "]";
+            if (line.empty())
+                return;
+
+            if (!cluster.Text.empty())
+                cluster.Text += "\n";
+            cluster.Text += line;
+        };
+
+        std::vector<StandCluster> clusters{};
+        const float clusterRadius = std::clamp(focusRadius * 0.65f, 14.0f, 34.0f);
+        const float clusterRadiusSqr = clusterRadius * clusterRadius;
+        clusters.reserve(standDrawItems.size());
+
+        for (const StandDrawItem& item : standDrawItems)
+        {
+            int bestCluster = -1;
+            float bestDistSqr = clusterRadiusSqr;
+            for (int i = 0; i < static_cast<int>(clusters.size()); ++i)
+            {
+                const float distSqr = DistanceSquared2D(item.Screen, clusters[i].Center);
+                if (distSqr <= bestDistSqr)
+                {
+                    bestDistSqr = distSqr;
+                    bestCluster = i;
+                }
+            }
+
+            if (bestCluster >= 0)
+            {
+                StandCluster& cluster = clusters[bestCluster];
+                const int oldCount = cluster.Count;
+                cluster.Count += 1;
+                cluster.Center.x = (cluster.Center.x * oldCount + item.Screen.x) / static_cast<float>(cluster.Count);
+                cluster.Center.y = (cluster.Center.y * oldCount + item.Screen.y) / static_cast<float>(cluster.Count);
+                appendStandText(cluster, item.Spot);
+                continue;
+            }
+
+            StandCluster cluster{};
+            cluster.Center = item.Screen;
+            cluster.Count = 1;
+            appendStandText(cluster, item.Spot);
+            clusters.push_back(std::move(cluster));
+        }
+
+        outHelper.StandItems.reserve(clusters.size());
+        for (const StandCluster& cluster : clusters)
+        {
+            GrenadeStandRenderItem renderItem{};
+            renderItem.Screen = cluster.Center;
+            renderItem.Label = cluster.Text;
+            outHelper.StandItems.push_back(std::move(renderItem));
+        }
+    }
+
+    outHelper.AimItems.reserve(aimDrawItems.size());
+    for (const AimDrawItem& item : aimDrawItems)
+    {
+        if (focusByCrosshair && item.Spot != closestSpot)
+            continue;
+
+        GrenadeAimRenderItem renderItem{};
+        renderItem.Screen = item.Screen;
+        renderItem.IsTarget = (selectedSpot && item.Spot == selectedSpot);
+        renderItem.DrawGuide = (focusByCrosshair && renderItem.IsTarget) ||
+            (!focusByCrosshair && renderItem.IsTarget && item.CrossDistanceSqr <= looseGuideDistanceSqr);
+
+        renderItem.Label = item.Spot->Name;
+        if (!item.Spot->ThrowType.empty())
+            renderItem.Label += " [" + LocalizeThrowTypeLabel(item.Spot->ThrowType) + "]";
+        outHelper.AimItems.push_back(std::move(renderItem));
+    }
+
+    if (selectedSpot && focusByCrosshair)
+    {
+        const std::string throwType = LocalizeThrowTypeLabel(
+            selectedSpot->ThrowType.empty() ? std::string("StandThrow") : selectedSpot->ThrowType
+        );
+        outHelper.TopText = std::string(Localization::Pick("Throw Type: ", "投掷方式: ")) + throwType;
+        if (!selectedSpot->Name.empty())
+            outHelper.TopText += "  |  " + selectedSpot->Name;
+    }
+
+    m_LastGrenadeSelectedSpotId = outHelper.SelectedSpotId;
+}
+
 std::string ESP::BuildMapStatus(const std::string& mapName, const char* suffix) const
 {
     std::string status = Localization::Pick("Map Status: ", "地图状态: ");
@@ -1466,6 +2272,248 @@ std::vector<TriggerBoneSnapshot> ESP::GetTriggerBoneSnapshots() const
     return snapshots;
 }
 
+std::string ESP::GetSuggestedGrenadeMapName() const
+{
+    const std::string polledMap = NormalizeMapName(m_LastPolledMapName.empty() ? sdk.GetCurrentMapName() : m_LastPolledMapName);
+    if (!polledMap.empty())
+        return polledMap;
+
+    std::lock_guard lock(m_GrenadeMutex);
+    if (!m_LoadedGrenadeMap.empty())
+        return m_LoadedGrenadeMap;
+
+    return "de_dust2";
+}
+
+std::string ESP::GetGrenadeStatus() const
+{
+    std::lock_guard lock(m_GrenadeMutex);
+    return m_GrenadeStatus;
+}
+
+std::vector<GrenadeSpotEditorRow> ESP::GetGrenadeSpotEditorRows() const
+{
+    std::vector<GrenadeSpotEditorRow> rows{};
+    std::lock_guard lock(m_GrenadeMutex);
+    rows.reserve(m_GrenadeMap.Spots.size());
+    for (const GrenadeSpot& spot : m_GrenadeMap.Spots)
+    {
+        GrenadeSpotEditorRow row{};
+        row.Id = spot.Id;
+        row.TypeIndex = (std::max)(0, GrenadeTypeIndexByLabel(spot.Type));
+        row.ThrowTypeIndex = ThrowTypeIndexByLabel(spot.ThrowType);
+        row.Name = spot.Name;
+        row.StandPos = spot.StandPos;
+        row.AimPos = spot.AimPos;
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
+bool ESP::ReloadGrenadeSpots(const std::string& mapName, std::string& outStatus)
+{
+    return ReloadGrenadeMapFromDisk(mapName, outStatus);
+}
+
+bool ESP::SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vector<GrenadeSpotEditorRow>& rows, std::string& outStatus)
+{
+    const std::string normalizedMap = NormalizeMapName(mapName);
+    if (normalizedMap.empty())
+    {
+        outStatus = Localization::Pick("Save failed: empty map name", "保存失败：地图名为空");
+        return false;
+    }
+
+    GrenadeMapData mapData{};
+    mapData.MapName = normalizedMap;
+    mapData.Spots.reserve(rows.size());
+
+    std::unordered_set<int> usedIds{};
+    usedIds.reserve(rows.size() * 2 + 1);
+    int nextId = 1;
+
+    for (const GrenadeSpotEditorRow& row : rows)
+    {
+        int id = row.Id;
+        if (id <= 0 || usedIds.contains(id))
+        {
+            while (usedIds.contains(nextId))
+                ++nextId;
+            id = nextId++;
+        }
+        usedIds.insert(id);
+
+        GrenadeSpot spot{};
+        spot.Id = id;
+        spot.Type = GrenadeTypeLabelByIndex(std::clamp(row.TypeIndex, 0, 4));
+        spot.ThrowType = ThrowTypeLabelByIndex(std::clamp(row.ThrowTypeIndex, 0, 3));
+        spot.Name = row.Name.empty() ? std::string("Unnamed") : row.Name;
+        spot.StandPos = row.StandPos;
+        spot.AimPos = row.AimPos;
+        mapData.Spots.push_back(std::move(spot));
+    }
+
+    std::sort(mapData.Spots.begin(), mapData.Spots.end(), [](const GrenadeSpot& a, const GrenadeSpot& b)
+    {
+        return a.Id < b.Id;
+    });
+
+    const std::string filePath = ResolveGrenadeDataWritePath(normalizedMap);
+    std::string error{};
+    if (!SaveGrenadeMapFile(filePath, mapData, error))
+    {
+        outStatus = std::string(Localization::Pick("Save failed: ", "保存失败：")) + error;
+        return false;
+    }
+
+    if (!ReloadGrenadeMapFromDisk(normalizedMap, outStatus))
+        return false;
+
+    outStatus = Localization::Pick("Spot list saved and reloaded", "点位列表已保存并重载");
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        m_GrenadeStatus = outStatus;
+    }
+    return true;
+}
+
+bool ESP::RecordCurrentGrenadeSpot(
+    const std::string& mapName,
+    const std::string& note,
+    const int throwTypeIndex,
+    const float recordDistance,
+    const bool manualTypeOverride,
+    const int manualTypeIndex,
+    std::string& outStatus)
+{
+    std::string normalizedMap = NormalizeMapName(mapName);
+    if (normalizedMap.empty())
+        normalizedMap = GetSuggestedGrenadeMapName();
+    if (normalizedMap.empty())
+        normalizedMap = "de_dust2";
+
+    const SDK::CoreCache core = sdk.GetCoreCache();
+    if (!core.IsValid || !core.LocalPawn)
+    {
+        outStatus = Localization::Pick("Record failed: local player unavailable", "记录失败：本地玩家无效");
+        return false;
+    }
+
+    struct LocalRecordFields
+    {
+        Vector3 Origin{};
+        Vector3 ViewOffset{};
+    } local{};
+
+    const auto scatter = mem.CreateScatterHandle();
+    if (!scatter)
+    {
+        outStatus = Localization::Pick("Record failed: scatter allocation failed", "记录失败：散读句柄分配失败");
+        return false;
+    }
+
+    if (Offsets::Schema::m_vOldOrigin)
+        mem.AddScatterReadRequest(scatter, core.LocalPawn + Offsets::Schema::m_vOldOrigin, &local.Origin, sizeof(local.Origin));
+    if (Offsets::Schema::m_vecViewOffset)
+        mem.AddScatterReadRequest(scatter, core.LocalPawn + Offsets::Schema::m_vecViewOffset, &local.ViewOffset, sizeof(local.ViewOffset));
+
+    mem.ExecuteReadScatter(scatter);
+    mem.CloseScatterHandle(scatter);
+
+    Vector3 viewAngles{};
+    if (Globals::ClientBase && Offsets::Client::dwViewAngles)
+        mem.Read(Globals::ClientBase + Offsets::Client::dwViewAngles, &viewAngles, sizeof(viewAngles));
+
+    const std::string grenadeType = manualTypeOverride
+        ? GrenadeTypeLabelByIndex(std::clamp(manualTypeIndex, 0, 4))
+        : ReadGrenadeType(core.LocalPawn);
+    if (!IsUtilityGrenadeType(grenadeType))
+    {
+        outStatus = Localization::Pick("Record failed: current held item is not a utility grenade", "记录失败：当前手持不是可识别道具");
+        return false;
+    }
+
+    Vector3 eyePos = local.Origin + Vector3{ 0.0f, 0.0f, 64.0f };
+    if (std::abs(local.ViewOffset.x) > 0.001f || std::abs(local.ViewOffset.y) > 0.001f || std::abs(local.ViewOffset.z) > 0.001f)
+        eyePos = local.Origin + local.ViewOffset;
+
+    const float pitchRad = viewAngles.x * (math::PI / 180.0f);
+    const float yawRad = viewAngles.y * (math::PI / 180.0f);
+    const Vector3 forward{
+        std::cos(pitchRad) * std::cos(yawRad),
+        std::cos(pitchRad) * std::sin(yawRad),
+        -std::sin(pitchRad)
+    };
+
+    const float finalDistance = std::clamp(recordDistance, 500.0f, 50000.0f);
+    const Vector3 aimPos = eyePos + forward * finalDistance;
+
+    std::string reloadStatus{};
+    ReloadGrenadeMapFromDisk(normalizedMap, reloadStatus);
+
+    GrenadeMapData mapData{};
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        mapData = m_GrenadeMap;
+    }
+    if (NormalizeMapName(mapData.MapName) != normalizedMap)
+    {
+        mapData = {};
+        mapData.MapName = normalizedMap;
+    }
+
+    int nextId = 1;
+    for (const GrenadeSpot& spot : mapData.Spots)
+        nextId = (std::max)(nextId, spot.Id + 1);
+
+    GrenadeSpot newSpot{};
+    newSpot.Id = nextId;
+    newSpot.Type = grenadeType;
+    newSpot.Name = note.empty() ? std::string("Unnamed") : note;
+    newSpot.ThrowType = ThrowTypeLabelByIndex(std::clamp(throwTypeIndex, 0, 3));
+    newSpot.StandPos = local.Origin;
+    newSpot.AimPos = aimPos;
+    mapData.Spots.push_back(std::move(newSpot));
+
+    const std::string filePath = ResolveGrenadeDataWritePath(normalizedMap);
+    std::string writeError{};
+    if (!SaveGrenadeMapFile(filePath, mapData, writeError))
+    {
+        outStatus = std::string(Localization::Pick("Record failed: ", "记录失败：")) + writeError;
+        return false;
+    }
+
+    std::string afterReloadStatus{};
+    if (!ReloadGrenadeMapFromDisk(normalizedMap, afterReloadStatus))
+    {
+        outStatus = std::string(Localization::Pick("Record saved, but reload failed: ", "记录已保存，但重载失败：")) + afterReloadStatus;
+        return false;
+    }
+
+    outStatus = std::string(Localization::Pick("Recorded spot: ", "已记录点位：")) + mapData.Spots.back().Name;
+    {
+        std::lock_guard lock(m_GrenadeMutex);
+        m_GrenadeStatus = outStatus;
+    }
+    return true;
+}
+
+bool ESP::DetectCurrentGrenadeTypeIndex(int& outTypeIndex) const
+{
+    outTypeIndex = -1;
+
+    const SDK::CoreCache core = sdk.GetCoreCache();
+    if (!core.IsValid || !core.LocalPawn)
+        return false;
+
+    const int index = GrenadeTypeIndexByLabel(ReadGrenadeType(core.LocalPawn));
+    if (index < 0)
+        return false;
+
+    outTypeIndex = index;
+    return true;
+}
+
 void ESP::EnsureSamplerStarted()
 {
     bool expected = false;
@@ -1513,6 +2561,8 @@ void ESP::SamplerLoop()
 {
     constexpr auto kSampleIntervalIdle = std::chrono::milliseconds(4); // 250Hz
     constexpr auto kSampleIntervalHot = std::chrono::milliseconds(2);  // 500Hz
+    constexpr auto kHelperIdleInterval = std::chrono::milliseconds(17); // ~60Hz
+    constexpr auto kHelperHotInterval = std::chrono::milliseconds(7);   // ~144Hz
     constexpr auto kOverrunYield = std::chrono::milliseconds(1);
 
     while (Globals::Running)
@@ -1538,7 +2588,11 @@ void ESP::SamplerLoop()
             config.Aim.Trigger &&
             std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox &&
             aim.IsTriggerHotkeyActiveVisual();
-        const auto targetInterval = boneTriggerHot ? kSampleIntervalHot : kSampleIntervalIdle;
+        const bool helperOnlyMode = m_GrenadeHelperOnlyMode.load(std::memory_order_relaxed);
+        const bool helperHoldingUtility = m_GrenadeHelperHoldingUtility.load(std::memory_order_relaxed);
+        const auto targetInterval = helperOnlyMode
+            ? (helperHoldingUtility ? kHelperHotInterval : kHelperIdleInterval)
+            : (boneTriggerHot ? kSampleIntervalHot : kSampleIntervalIdle);
         const auto elapsed = std::chrono::steady_clock::now() - cycleStart;
         if (elapsed < targetInterval)
             std::this_thread::sleep_for(targetInterval - elapsed);
@@ -1556,13 +2610,32 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     const bool needTriggerBoneSampling =
         config.Aim.Trigger &&
         std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox;
-    const bool needEntitySampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
-    if (!needEntitySampling)
+    const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
+    const bool needGrenadeHelperSampling = config.Visuals.GrenadeHelper;
+    m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling, std::memory_order_relaxed);
+    if (!needGrenadeHelperSampling)
+        m_GrenadeHelperHoldingUtility.store(false, std::memory_order_relaxed);
+    if (!needEspSampling && !needGrenadeHelperSampling)
         return true;
 
     const SDK::CoreCache core = sdk.GetCoreCache();
     if (!core.IsValid || !core.LocalPawn || !core.EntityList)
         return true;
+
+    std::string heldGrenadeType = "Unknown";
+    if (needGrenadeHelperSampling)
+        heldGrenadeType = ReadGrenadeType(core.LocalPawn);
+
+    const bool isHoldingUtility = IsUtilityGrenadeType(heldGrenadeType);
+    m_GrenadeHelperHoldingUtility.store(needGrenadeHelperSampling && isHoldingUtility, std::memory_order_relaxed);
+
+    if (needGrenadeHelperSampling && !isHoldingUtility)
+    {
+        outFrame.GrenadeHelper = {};
+        m_LastGrenadeSelectedSpotId = 0;
+        if (!needEspSampling)
+            return true;
+    }
 
     struct LocalFields
     {
@@ -1596,7 +2669,30 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         localViewOffset = local.ViewOffset;
 
     const Vector3 localEyePosition = local.Origin + localViewOffset;
+    Vector3 localViewAngles{};
+    if (Globals::ClientBase && Offsets::Client::dwViewAngles)
+        mem.Read(Globals::ClientBase + Offsets::Client::dwViewAngles, &localViewAngles, sizeof(localViewAngles));
     const int localTeam = local.Team;
+
+    if (needGrenadeHelperSampling && isHoldingUtility)
+    {
+        BuildGrenadeHelperSnapshot(
+            local.Origin,
+            localEyePosition,
+            localViewAngles,
+            core.LocalPawn,
+            heldGrenadeType,
+            outFrame.GrenadeHelper
+        );
+    }
+    else
+    {
+        outFrame.GrenadeHelper = {};
+        m_LastGrenadeSelectedSpotId = 0;
+    }
+
+    if (!needEspSampling)
+        return true;
 
     UpdateRoundEpoch(core.LocalPawn, IsAlive(local.Health, local.LifeState));
     const auto now = std::chrono::steady_clock::now();
@@ -2096,7 +3192,9 @@ void ESP::Render(ImDrawList* drawList)
         return;
     }
 
-    if (!config.Visuals.Enabled)
+    const bool renderEsp = config.Visuals.Enabled;
+    const bool renderGrenadeHelper = config.Visuals.GrenadeHelper;
+    if (!renderEsp && !renderGrenadeHelper)
     {
         publishPerf();
         return;
@@ -2111,8 +3209,10 @@ void ESP::Render(ImDrawList* drawList)
     resolvedControllers = frame.ResolvedControllers;
     drawnPlayers = static_cast<std::uint32_t>(frame.Players.size());
 
-    RenderWatermark(drawList);
-    float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
+    if (renderEsp)
+    {
+        RenderWatermark(drawList);
+        float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
 
     const ImVec2 statusPos(12.0f, leftHudY);
     const char* mapStatus = frame.MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态: (等待中)") : frame.MapStatus.c_str();
@@ -2229,11 +3329,15 @@ void ESP::Render(ImDrawList* drawList)
         leftHudY += ImGui::GetFontSize() + 2.0f;
     }
 
-    for (const PlayerEspSnapshot& player : frame.Players)
-        RenderPlayer(drawList, player);
+        for (const PlayerEspSnapshot& player : frame.Players)
+            RenderPlayer(drawList, player);
 
-    if (config.Visuals.C4)
-        RenderC4(drawList, frame.C4);
+        if (config.Visuals.C4)
+            RenderC4(drawList, frame.C4);
+    }
+
+    if (renderGrenadeHelper)
+        RenderGrenadeHelper(drawList, frame.GrenadeHelper);
 
     publishPerf();
 }

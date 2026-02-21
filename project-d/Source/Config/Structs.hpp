@@ -298,5 +298,25 @@ namespace Structs
         float C4PanelPosY = 0.06f;
         bool Defuser = true;
         ImVec4 DefuserColor = ImVec4(1.0f, 0.82f, 0.2f, 1.0f);
+
+        bool GrenadeHelper = false;
+        bool GrenadeHelperFilterByWeapon = true;
+        bool GrenadeHelperDrawStand = true;
+        bool GrenadeHelperDrawAim = true;
+        bool GrenadeHelperManualTypeOverride = false;
+        int GrenadeHelperManualType = 0;
+        float GrenadeHelperStandTolerance = 35.0f;
+        float GrenadeHelperFocusRadius = 20.0f;
+        float GrenadeHelperMaxStandDrawDistance = 2000.0f;
+        float GrenadeHelperLooseGuideDistance = 200.0f;
+        float GrenadeHelperTopHintOffsetX = 0.5f;
+        float GrenadeHelperTopHintOffsetY = 0.03f;
+        ImVec4 GrenadeHelperStandColor = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+        ImVec4 GrenadeHelperAimColor = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+        ImVec4 GrenadeHelperGuideLineColor = ImVec4(1.0f, 1.0f, 1.0f, 0.75f);
+        ImVec4 GrenadeHelperFontColor = ImVec4(0.96f, 0.96f, 0.96f, 1.0f);
+        float GrenadeHelperFontSize = 16.0f;
+        ImVec4 GrenadeHelperTopHintColor = ImVec4(1.0f, 0.86f, 0.47f, 1.0f);
+        float GrenadeHelperTopHintFontSize = 30.0f;
     };
 }

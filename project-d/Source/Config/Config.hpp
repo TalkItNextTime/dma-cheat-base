@@ -197,6 +197,25 @@ namespace Config
             j["Visuals"]["C4PanelPosY"] = Visuals.C4PanelPosY;
             j["Visuals"]["Defuser"] = Visuals.Defuser;
             j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
+            j["Visuals"]["GrenadeHelper"] = Visuals.GrenadeHelper;
+            j["Visuals"]["GrenadeHelperFilterByWeapon"] = Visuals.GrenadeHelperFilterByWeapon;
+            j["Visuals"]["GrenadeHelperDrawStand"] = Visuals.GrenadeHelperDrawStand;
+            j["Visuals"]["GrenadeHelperDrawAim"] = Visuals.GrenadeHelperDrawAim;
+            j["Visuals"]["GrenadeHelperManualTypeOverride"] = Visuals.GrenadeHelperManualTypeOverride;
+            j["Visuals"]["GrenadeHelperManualType"] = Visuals.GrenadeHelperManualType;
+            j["Visuals"]["GrenadeHelperStandTolerance"] = Visuals.GrenadeHelperStandTolerance;
+            j["Visuals"]["GrenadeHelperFocusRadius"] = Visuals.GrenadeHelperFocusRadius;
+            j["Visuals"]["GrenadeHelperMaxStandDrawDistance"] = Visuals.GrenadeHelperMaxStandDrawDistance;
+            j["Visuals"]["GrenadeHelperLooseGuideDistance"] = Visuals.GrenadeHelperLooseGuideDistance;
+            j["Visuals"]["GrenadeHelperTopHintOffsetX"] = Visuals.GrenadeHelperTopHintOffsetX;
+            j["Visuals"]["GrenadeHelperTopHintOffsetY"] = Visuals.GrenadeHelperTopHintOffsetY;
+            j["Visuals"]["GrenadeHelperStandColor"] = { Visuals.GrenadeHelperStandColor.x, Visuals.GrenadeHelperStandColor.y, Visuals.GrenadeHelperStandColor.z, Visuals.GrenadeHelperStandColor.w };
+            j["Visuals"]["GrenadeHelperAimColor"] = { Visuals.GrenadeHelperAimColor.x, Visuals.GrenadeHelperAimColor.y, Visuals.GrenadeHelperAimColor.z, Visuals.GrenadeHelperAimColor.w };
+            j["Visuals"]["GrenadeHelperGuideLineColor"] = { Visuals.GrenadeHelperGuideLineColor.x, Visuals.GrenadeHelperGuideLineColor.y, Visuals.GrenadeHelperGuideLineColor.z, Visuals.GrenadeHelperGuideLineColor.w };
+            j["Visuals"]["GrenadeHelperFontColor"] = { Visuals.GrenadeHelperFontColor.x, Visuals.GrenadeHelperFontColor.y, Visuals.GrenadeHelperFontColor.z, Visuals.GrenadeHelperFontColor.w };
+            j["Visuals"]["GrenadeHelperFontSize"] = Visuals.GrenadeHelperFontSize;
+            j["Visuals"]["GrenadeHelperTopHintColor"] = { Visuals.GrenadeHelperTopHintColor.x, Visuals.GrenadeHelperTopHintColor.y, Visuals.GrenadeHelperTopHintColor.z, Visuals.GrenadeHelperTopHintColor.w };
+            j["Visuals"]["GrenadeHelperTopHintFontSize"] = Visuals.GrenadeHelperTopHintFontSize;
             j["Info"]["Language"] = std::clamp(Language, 0, 1);
 
             std::ofstream file(fullPath);
@@ -514,6 +533,25 @@ namespace Config
                 j["Visuals"]["C4PanelPosY"] = 0.06f;
                 j["Visuals"]["Defuser"] = true;
                 j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
+                j["Visuals"]["GrenadeHelper"] = false;
+                j["Visuals"]["GrenadeHelperFilterByWeapon"] = true;
+                j["Visuals"]["GrenadeHelperDrawStand"] = true;
+                j["Visuals"]["GrenadeHelperDrawAim"] = true;
+                j["Visuals"]["GrenadeHelperManualTypeOverride"] = false;
+                j["Visuals"]["GrenadeHelperManualType"] = 0;
+                j["Visuals"]["GrenadeHelperStandTolerance"] = 35.0f;
+                j["Visuals"]["GrenadeHelperFocusRadius"] = 20.0f;
+                j["Visuals"]["GrenadeHelperMaxStandDrawDistance"] = 2000.0f;
+                j["Visuals"]["GrenadeHelperLooseGuideDistance"] = 200.0f;
+                j["Visuals"]["GrenadeHelperTopHintOffsetX"] = 0.5f;
+                j["Visuals"]["GrenadeHelperTopHintOffsetY"] = 0.03f;
+                j["Visuals"]["GrenadeHelperStandColor"] = { 1.0f, 1.0f, 0.0f, 1.0f };
+                j["Visuals"]["GrenadeHelperAimColor"] = { 0.0f, 1.0f, 0.0f, 1.0f };
+                j["Visuals"]["GrenadeHelperGuideLineColor"] = { 1.0f, 1.0f, 1.0f, 0.75f };
+                j["Visuals"]["GrenadeHelperFontColor"] = { 0.96f, 0.96f, 0.96f, 1.0f };
+                j["Visuals"]["GrenadeHelperFontSize"] = 16.0f;
+                j["Visuals"]["GrenadeHelperTopHintColor"] = { 1.0f, 0.86f, 0.47f, 1.0f };
+                j["Visuals"]["GrenadeHelperTopHintFontSize"] = 30.0f;
                 j["Info"]["Language"] = 0;
 
                 file << j.dump(4);  // Write JSON with pretty print
@@ -902,6 +940,25 @@ namespace Config
                             else if (key == "C4PanelPosX") configSection.C4PanelPosX = value.get<float>();
                             else if (key == "C4PanelPosY") configSection.C4PanelPosY = value.get<float>();
                             else if (key == "Defuser") configSection.Defuser = value.get<bool>();
+                            else if (key == "GrenadeHelper") configSection.GrenadeHelper = value.get<bool>();
+                            else if (key == "GrenadeHelperFilterByWeapon") configSection.GrenadeHelperFilterByWeapon = value.get<bool>();
+                            else if (key == "GrenadeHelperDrawStand") configSection.GrenadeHelperDrawStand = value.get<bool>();
+                            else if (key == "GrenadeHelperDrawAim") configSection.GrenadeHelperDrawAim = value.get<bool>();
+                            else if (key == "GrenadeHelperManualTypeOverride") configSection.GrenadeHelperManualTypeOverride = value.get<bool>();
+                            else if (key == "GrenadeHelperManualType") configSection.GrenadeHelperManualType = value.get<int>();
+                            else if (key == "GrenadeHelperStandTolerance") configSection.GrenadeHelperStandTolerance = value.get<float>();
+                            else if (key == "GrenadeHelperFocusRadius") configSection.GrenadeHelperFocusRadius = value.get<float>();
+                            else if (key == "GrenadeHelperMaxStandDrawDistance") configSection.GrenadeHelperMaxStandDrawDistance = value.get<float>();
+                            else if (key == "GrenadeHelperLooseGuideDistance") configSection.GrenadeHelperLooseGuideDistance = value.get<float>();
+                            else if (key == "GrenadeHelperTopHintOffsetX") configSection.GrenadeHelperTopHintOffsetX = value.get<float>();
+                            else if (key == "GrenadeHelperTopHintOffsetY") configSection.GrenadeHelperTopHintOffsetY = value.get<float>();
+                            else if (key == "GrenadeHelperStandColor") configSection.GrenadeHelperStandColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeHelperAimColor") configSection.GrenadeHelperAimColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeHelperGuideLineColor") configSection.GrenadeHelperGuideLineColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeHelperFontColor") configSection.GrenadeHelperFontColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeHelperFontSize") configSection.GrenadeHelperFontSize = value.get<float>();
+                            else if (key == "GrenadeHelperTopHintColor") configSection.GrenadeHelperTopHintColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeHelperTopHintFontSize") configSection.GrenadeHelperTopHintFontSize = value.get<float>();
 
                             else if (key == "WatermarkColor") configSection.WatermarkColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "NameColor") configSection.NameColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());

@@ -89,9 +89,59 @@ struct TriggerBoneSnapshot
     std::array<bool, BoneCount> BoneValid{};
 };
 
+struct GrenadeStandRenderItem
+{
+    Vector2 Screen{};
+    std::string Label{};
+};
+
+struct GrenadeAimRenderItem
+{
+    Vector2 Screen{};
+    std::string Label{};
+    bool IsTarget = false;
+    bool DrawGuide = false;
+};
+
+struct GrenadeHelperSnapshot
+{
+    bool Valid = false;
+    int SelectedSpotId = 0;
+    Vector2 Cross{};
+    std::string TopText{};
+    std::vector<GrenadeStandRenderItem> StandItems{};
+    std::vector<GrenadeAimRenderItem> AimItems{};
+};
+
+struct GrenadeSpotEditorRow
+{
+    int Id = 0;
+    int TypeIndex = 0;
+    int ThrowTypeIndex = 0;
+    std::string Name{};
+    Vector3 StandPos{};
+    Vector3 AimPos{};
+};
+
 class ESP
 {
 private:
+    struct GrenadeSpot
+    {
+        int Id = 0;
+        std::string Type{};
+        std::string Name{};
+        std::string ThrowType{};
+        Vector3 StandPos{};
+        Vector3 AimPos{};
+    };
+
+    struct GrenadeMapData
+    {
+        std::string MapName{};
+        std::vector<GrenadeSpot> Spots{};
+    };
+
     struct PendingMapLoad
     {
         uint64_t RequestId = 0;
@@ -104,6 +154,7 @@ private:
     {
         std::vector<PlayerEspSnapshot> Players{};
         C4Snapshot C4{};
+        GrenadeHelperSnapshot GrenadeHelper{};
         std::string MapStatus = "Map Status: (Waiting)";
         std::uint32_t ResolvedControllers = 0;
     };
@@ -134,6 +185,7 @@ private:
     void RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, ImU32 color) const;
     void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
+    void RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const;
 
     void EnsureSamplerStarted();
     void SamplerLoop();
@@ -150,6 +202,22 @@ private:
     std::string ReadPlayerName(uint64_t controller) const;
     std::string ReadWeaponName(uint64_t pawn) const;
     int ReadMoney(uint64_t controller) const;
+    int ReadWeaponId(uint64_t pawn) const;
+    std::string ReadGrenadeType(uint64_t pawn) const;
+
+    void BuildGrenadeHelperSnapshot(
+        const Vector3& localOrigin,
+        const Vector3& localEye,
+        const Vector3& localViewAngles,
+        uint64_t localPawn,
+        const std::string& heldGrenadeType,
+        GrenadeHelperSnapshot& outHelper);
+    void EnsureGrenadeMapLoaded(const std::string& mapName);
+    std::string ResolveGrenadeDataPath(const std::string& mapName) const;
+    bool LoadGrenadeMapFile(const std::string& filePath, GrenadeMapData& outMap, std::string& outError) const;
+    std::string ResolveGrenadeDataWritePath(const std::string& mapName) const;
+    bool SaveGrenadeMapFile(const std::string& filePath, const GrenadeMapData& mapData, std::string& outError) const;
+    bool ReloadGrenadeMapFromDisk(const std::string& mapName, std::string& outStatus);
 
     void UpdateVisCheckState();
     void RequestMapLoad(const std::string& mapName, const std::string& optPath);
@@ -167,6 +235,10 @@ private:
     std::atomic<bool> m_SamplerStarted{ false };
     mutable std::mutex m_RenderFrameMutex{};
     RenderFrame m_RenderFrame{};
+    mutable std::mutex m_GrenadeMutex{};
+    GrenadeMapData m_GrenadeMap{};
+    std::string m_LoadedGrenadeMap{};
+    int m_LastGrenadeSelectedSpotId = 0;
 
     std::string m_CurrentMapName{};
     std::string m_CurrentOptPath{};
@@ -174,6 +246,9 @@ private:
     std::string m_LastPolledMapName{};
     std::chrono::steady_clock::time_point m_LastMapPoll{};
     bool m_VisCheckEnabled = false;
+    std::string m_GrenadeStatus{};
+    std::atomic<bool> m_GrenadeHelperOnlyMode{ false };
+    std::atomic<bool> m_GrenadeHelperHoldingUtility{ false };
 
     std::unordered_map<uint64_t, ControllerIdentityCache> m_ControllerIdentityCache{};
     std::unordered_map<uint64_t, PawnRuntimeCache> m_PawnRuntimeCache{};
@@ -190,6 +265,20 @@ public:
     bool IsPawnVisibleCached(uint64_t pawn) const;
     std::unordered_set<uint64_t> GetVisiblePawnSetSnapshot() const;
     std::vector<TriggerBoneSnapshot> GetTriggerBoneSnapshots() const;
+    std::string GetSuggestedGrenadeMapName() const;
+    std::string GetGrenadeStatus() const;
+    std::vector<GrenadeSpotEditorRow> GetGrenadeSpotEditorRows() const;
+    bool ReloadGrenadeSpots(const std::string& mapName, std::string& outStatus);
+    bool SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vector<GrenadeSpotEditorRow>& rows, std::string& outStatus);
+    bool RecordCurrentGrenadeSpot(
+        const std::string& mapName,
+        const std::string& note,
+        int throwTypeIndex,
+        float recordDistance,
+        bool manualTypeOverride,
+        int manualTypeIndex,
+        std::string& outStatus);
+    bool DetectCurrentGrenadeTypeIndex(int& outTypeIndex) const;
 
     void Update(ImDrawList* drawList)
     {

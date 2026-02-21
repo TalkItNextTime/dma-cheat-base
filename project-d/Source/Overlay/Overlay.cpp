@@ -1,5 +1,6 @@
-#include <Pch.hpp>
+﻿#include <Pch.hpp>
 #include <SDK.hpp>
+#include <ESP/ESP.hpp>
 #include <array>
 
 #include "Overlay.hpp"
@@ -365,7 +366,7 @@ void Overlay::EndRender()
 	ImGui::Render();
 
 	float color[4];
-	if (config.Visuals.Background) // Black bg
+	if (config.Visuals.Enabled && config.Visuals.Background) // Black bg
 	{
 		color[0] = 0; color[1] = 0; color[2] = 0; color[3] = 1;
 	}
@@ -461,7 +462,7 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
 		m_iSelectedPage = 0;
 
 		m_Tabs.push_back("Aim");     // MenuPage_Aiming
-		m_Tabs.push_back("Visuals");    // MenuPage_Visuals
+		m_Tabs.push_back("ESP");    // MenuPage_Visuals
 		m_Tabs.push_back("Config");    // MenuPage_Configs
 		m_Tabs.push_back("Info");       // MenuPage_Info
 	}
@@ -801,143 +802,346 @@ void Overlay::RenderMenu()
 
 			else if (m_iSelectedPage == MenuPage_Visuals)
 			{
-				ImGui::BeginChild("Visuals", ImVec2(fGroupWidth,
-					ImGui::GetFrameHeight() + // MenuBar
-					style.WindowPadding.y * 2 + // child padding
-					style.ItemSpacing.x * 15 + // spacing
-					ImGui::GetFontSize() * 10 // checkbox + separators
-				), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
+				ImGui::BeginChild("Visuals", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
 				{
 					if (ImGui::BeginMenuBar()) {
-						ImGui::SetCursorPos(style.FramePadding);
-						ImAdd::CheckBox("Visuals##Enable", &config.Visuals.Enabled); 
+						ImGui::Text("%s", L("ESP"));
 						ImGui::EndMenuBar();
 					}
 
-					if (config.Visuals.Enabled)
+					const float panelSpacing = style.ItemSpacing.x;
+					const float fullWidth = ImGui::GetContentRegionAvail().x;
+					const float leftPanelWidth = (fullWidth - panelSpacing) * 0.50f;
+
+					ImGui::BeginChild("VisualsHeaderRow", ImVec2(0, ImGui::GetFrameHeight() + style.ItemSpacing.y), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
 					{
-						ImAdd::SeparatorText("General");
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Watermark", &config.Visuals.Watermark);
-							if (config.Visuals.Watermark)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##WatermarkColor", (float*)&config.Visuals.WatermarkColor);
-							}
-						}
-
-						ImAdd::CheckBox("Background", &config.Visuals.Background);
-
-						ImAdd::SeparatorText("Visual");
-						ImAdd::CheckBox("VSync", &config.Visuals.VSync);
-						ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
-						ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Hitmarker", &config.Visuals.Hitmarker);
-							if (config.Visuals.Hitmarker)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##HitmarkerColor", (float*)&config.Visuals.HitmarkerColor);
-							}
-						}
-
-						ImAdd::SeparatorText("Players");
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Name", &config.Visuals.Name);
-							if (config.Visuals.Name)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##NameColor", (float*)&config.Visuals.NameColor);
-							}
-						}
-
-						ImAdd::CheckBox("Health", &config.Visuals.Health);
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Armor", &config.Visuals.Armor);
-							if (config.Visuals.Armor)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##ArmorColor", (float*)&config.Visuals.ArmorColor);
-							}
-						}
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Money", &config.Visuals.Money);
-							if (config.Visuals.Money)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##MoneyColor", (float*)&config.Visuals.MoneyColor);
-							}
-						}
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
-							if (config.Visuals.Defuser)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
-							}
-						}
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Box", &config.Visuals.Box);
-							if (config.Visuals.Box)
-							{
-								ImAdd::ColorEdit4("Box Color", (float*)&config.Visuals.BoxColor);
-								ImAdd::ColorEdit4("Box Color Visible", (float*)&config.Visuals.BoxColorVisible);
-							}
-						}
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Weapon", &config.Visuals.Weapon);
-							if (config.Visuals.Weapon)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##WeaponColor", (float*)&config.Visuals.WeaponColor);
-							}
-						}
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("Bones", &config.Visuals.Bones);
-							if (config.Visuals.Bones)
-							{
-								ImAdd::ColorEdit4("Bones Color", (float*)&config.Visuals.BonesColor);
-								ImAdd::ColorEdit4("Bones Color Visible", (float*)&config.Visuals.BonesColorVisible);
-							}
-						}
-
-						ImAdd::SeparatorText("World");
-
-						ImGui::BeginGroup();
-						{
-							ImAdd::CheckBox("C4", &config.Visuals.C4);
-							if (config.Visuals.C4)
-							{
-								ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-								ImAdd::ColorEdit4("##C4Color", (float*)&config.Visuals.C4Color);
-								ImAdd::SliderFloat("C4 Card X", &config.Visuals.C4PanelPosX, 0.0f, 1.0f);
-								ImAdd::SliderFloat("C4 Card Y", &config.Visuals.C4PanelPosY, 0.0f, 1.0f);
-							}
-						}
-
+						ImAdd::CheckBox(Localization::Pick("ESP Visuals", "透视ESP"), &config.Visuals.Enabled);
+						ImGui::SameLine(leftPanelWidth + panelSpacing + style.WindowPadding.x * 0.35f);
+						ImAdd::CheckBox(Localization::Pick("GHelper", "GHelper"), &config.Visuals.GrenadeHelper);
 					}
+					ImGui::EndChild();
+
+					ImGui::BeginChild("EspSettingsPanel", ImVec2(leftPanelWidth, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
+					{
+						if (config.Visuals.Enabled)
+						{
+							ImAdd::SeparatorText("General");
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Watermark", &config.Visuals.Watermark);
+								if (config.Visuals.Watermark)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##WatermarkColor", (float*)&config.Visuals.WatermarkColor);
+								}
+							}
+
+							ImAdd::CheckBox("Background", &config.Visuals.Background);
+
+							ImAdd::SeparatorText("Visual");
+							ImAdd::CheckBox("VSync", &config.Visuals.VSync);
+							ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
+							ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Hitmarker", &config.Visuals.Hitmarker);
+								if (config.Visuals.Hitmarker)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##HitmarkerColor", (float*)&config.Visuals.HitmarkerColor);
+								}
+							}
+
+							ImAdd::SeparatorText("Players");
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Name", &config.Visuals.Name);
+								if (config.Visuals.Name)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##NameColor", (float*)&config.Visuals.NameColor);
+								}
+							}
+
+							ImAdd::CheckBox("Health", &config.Visuals.Health);
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Armor", &config.Visuals.Armor);
+								if (config.Visuals.Armor)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##ArmorColor", (float*)&config.Visuals.ArmorColor);
+								}
+							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Money", &config.Visuals.Money);
+								if (config.Visuals.Money)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##MoneyColor", (float*)&config.Visuals.MoneyColor);
+								}
+							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
+								if (config.Visuals.Defuser)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
+								}
+							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Box", &config.Visuals.Box);
+								if (config.Visuals.Box)
+								{
+									ImAdd::ColorEdit4("Box Color", (float*)&config.Visuals.BoxColor);
+									ImAdd::ColorEdit4("Box Color Visible", (float*)&config.Visuals.BoxColorVisible);
+								}
+							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Weapon", &config.Visuals.Weapon);
+								if (config.Visuals.Weapon)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##WeaponColor", (float*)&config.Visuals.WeaponColor);
+								}
+							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Bones", &config.Visuals.Bones);
+								if (config.Visuals.Bones)
+								{
+									ImAdd::ColorEdit4("Bones Color", (float*)&config.Visuals.BonesColor);
+									ImAdd::ColorEdit4("Bones Color Visible", (float*)&config.Visuals.BonesColorVisible);
+								}
+							}
+
+							ImAdd::SeparatorText("World");
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("C4", &config.Visuals.C4);
+								if (config.Visuals.C4)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##C4Color", (float*)&config.Visuals.C4Color);
+									ImAdd::SliderFloat("C4 Card X", &config.Visuals.C4PanelPosX, 0.0f, 1.0f);
+									ImAdd::SliderFloat("C4 Card Y", &config.Visuals.C4PanelPosY, 0.0f, 1.0f);
+								}
+							}
+						}
+						else
+						{
+							ImGui::TextDisabled("%s", Localization::Pick("Enable ESP Visuals to configure ESP settings.", "启用透视ESP后可配置左侧透视设置。"));
+						}
+					}
+					ImGui::EndChild();
+
+					ImGui::SameLine(0.0f, panelSpacing);
+					ImGui::BeginChild("UtilityHelperPanel", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
+					{
+						ImAdd::SeparatorText(Localization::Pick("GHelper Settings", "GHelper设置"));
+						ImGui::TextWrapped("%s", Localization::Pick("Independent utility helper settings panel.", "独立道具辅助设置面板。"));
+						ImGui::Spacing();
+
+						if (config.Visuals.GrenadeHelper)
+						{
+							static char helperMapName[64] = "";
+							static char helperNote[128] = "";
+							static float helperRecordDistance = 8000.0f;
+							static int helperThrowTypeIndex = 0;
+							static int helperSelectedRow = -1;
+							static std::vector<GrenadeSpotEditorRow> helperRows{};
+							static std::string helperStatus{};
+
+							if (helperMapName[0] == '\0')
+							{
+								const std::string suggestedMap = esp.GetSuggestedGrenadeMapName();
+								strncpy_s(helperMapName, suggestedMap.c_str(), _TRUNCATE);
+								helperStatus = esp.GetGrenadeStatus();
+							}
+
+							const char* grenadeTypeItems[] = {
+								Localization::Pick("Smoke", "烟雾"),
+								Localization::Pick("Flashbang", "闪光"),
+								Localization::Pick("HE Grenade", "高爆"),
+								Localization::Pick("Decoy", "诱饵"),
+								Localization::Pick("Molotov", "燃烧瓶")
+							};
+							const char* throwTypeItems[] = {
+								Localization::Pick("Stand Throw", "站投"),
+								Localization::Pick("Jump Throw", "跳投"),
+								Localization::Pick("Run Throw", "跑投"),
+								Localization::Pick("Run Jump Throw", "跑跳投")
+							};
+
+							ImAdd::CheckBox(Localization::Pick("Filter By Held Utility", "按手持道具过滤"), &config.Visuals.GrenadeHelperFilterByWeapon);
+							ImAdd::CheckBox(Localization::Pick("Draw Stand Positions", "绘制站位点"), &config.Visuals.GrenadeHelperDrawStand);
+							ImAdd::CheckBox(Localization::Pick("Draw Aim Targets", "绘制瞄点"), &config.Visuals.GrenadeHelperDrawAim);
+							ImAdd::CheckBox(Localization::Pick("Manual Utility Type", "手动指定道具类型"), &config.Visuals.GrenadeHelperManualTypeOverride);
+
+							if (config.Visuals.GrenadeHelperManualTypeOverride)
+							{
+								int grenadeTypeIndex = std::clamp(config.Visuals.GrenadeHelperManualType, 0, 4);
+								if (ImAdd::Combo(Localization::Pick("Utility Type", "道具类型"), &grenadeTypeIndex, grenadeTypeItems, IM_ARRAYSIZE(grenadeTypeItems)))
+									config.Visuals.GrenadeHelperManualType = grenadeTypeIndex;
+							}
+
+							ImAdd::SliderFloat(Localization::Pick("Stand Tolerance", "站位容差"), &config.Visuals.GrenadeHelperStandTolerance, 10.0f, 120.0f);
+							config.Visuals.GrenadeHelperFocusRadius = std::clamp(config.Visuals.GrenadeHelperFocusRadius, 5.0f, 50.0f);
+							ImAdd::SliderFloat(Localization::Pick("Focus / Aim Radius", "聚焦/瞄点半径"), &config.Visuals.GrenadeHelperFocusRadius, 5.0f, 50.0f);
+							ImAdd::SliderFloat(Localization::Pick("Max Stand Draw Distance", "站位最远绘制距离"), &config.Visuals.GrenadeHelperMaxStandDrawDistance, 50.0f, 8000.0f);
+							ImAdd::SliderFloat(Localization::Pick("Guide Line Threshold", "引导线阈值"), &config.Visuals.GrenadeHelperLooseGuideDistance, 50.0f, 1000.0f);
+							ImAdd::SliderFloat(Localization::Pick("Top Hint X Ratio", "顶部提示X比例"), &config.Visuals.GrenadeHelperTopHintOffsetX, 0.0f, 1.0f);
+							ImAdd::SliderFloat(Localization::Pick("Top Hint Y Ratio", "顶部提示Y比例"), &config.Visuals.GrenadeHelperTopHintOffsetY, 0.0f, 1.0f);
+							ImAdd::SeparatorText(Localization::Pick("Helper Style", "辅助样式"));
+							ImAdd::ColorEdit4(Localization::Pick("Stand Point Color", "点位颜色"), (float*)&config.Visuals.GrenadeHelperStandColor);
+							ImAdd::ColorEdit4(Localization::Pick("Aim Point Color", "瞄点颜色"), (float*)&config.Visuals.GrenadeHelperAimColor);
+							ImAdd::ColorEdit4(Localization::Pick("Guide Line Color", "引导线颜色"), (float*)&config.Visuals.GrenadeHelperGuideLineColor);
+							ImAdd::ColorEdit4(Localization::Pick("Font Color", "字体颜色"), (float*)&config.Visuals.GrenadeHelperFontColor);
+							ImAdd::SliderFloat(Localization::Pick("Font Size", "字体大小"), &config.Visuals.GrenadeHelperFontSize, 10.0f, 32.0f);
+							ImAdd::ColorEdit4(Localization::Pick("Throw Hint Color", "投掷提示颜色"), (float*)&config.Visuals.GrenadeHelperTopHintColor);
+							ImAdd::SliderFloat(Localization::Pick("Throw Hint Size", "投掷提示大小"), &config.Visuals.GrenadeHelperTopHintFontSize, 14.0f, 72.0f);
+
+							ImAdd::SeparatorText(Localization::Pick("Spot Management", "点位管理"));
+							ImGui::InputText(Localization::Pick("Map Name", "地图名"), helperMapName, IM_ARRAYSIZE(helperMapName));
+							ImGui::InputText(Localization::Pick("Spot Note", "点位备注"), helperNote, IM_ARRAYSIZE(helperNote));
+							ImAdd::Combo(Localization::Pick("Record Throw Type", "记录投掷方式"), &helperThrowTypeIndex, throwTypeItems, IM_ARRAYSIZE(throwTypeItems));
+							ImAdd::SliderFloat(Localization::Pick("Record Aim Distance", "记录瞄点距离"), &helperRecordDistance, 500.0f, 50000.0f);
+
+							if (ImAdd::Button(Localization::Pick("Reload Spots", "重载点位"), ImVec2(110.0f, 0.0f)))
+							{
+								std::string status{};
+								if (esp.ReloadGrenadeSpots(helperMapName, status))
+								{
+									helperRows = esp.GetGrenadeSpotEditorRows();
+									helperSelectedRow = helperRows.empty() ? -1 : 0;
+								}
+								helperStatus = status;
+							}
+							ImGui::SameLine();
+							if (ImAdd::Button(Localization::Pick("Sync Held Type", "同步手持类型"), ImVec2(126.0f, 0.0f)))
+							{
+								int detectedTypeIndex = -1;
+								if (esp.DetectCurrentGrenadeTypeIndex(detectedTypeIndex))
+								{
+									config.Visuals.GrenadeHelperManualType = detectedTypeIndex;
+									config.Visuals.GrenadeHelperManualTypeOverride = true;
+									helperStatus = Localization::Pick("Synced current held grenade type", "已同步当前手持道具类型");
+								}
+								else
+								{
+									helperStatus = Localization::Pick("Sync failed: not holding a utility grenade", "同步失败：当前未手持可识别道具");
+								}
+							}
+							ImGui::SameLine();
+							if (ImAdd::Button(Localization::Pick("Record Spot", "记录点位"), ImVec2(96.0f, 0.0f)))
+							{
+								std::string status{};
+								if (esp.RecordCurrentGrenadeSpot(
+									helperMapName,
+									helperNote,
+									helperThrowTypeIndex,
+									helperRecordDistance,
+									config.Visuals.GrenadeHelperManualTypeOverride,
+									config.Visuals.GrenadeHelperManualType,
+									status))
+								{
+									helperRows = esp.GetGrenadeSpotEditorRows();
+									helperSelectedRow = helperRows.empty() ? -1 : 0;
+								}
+								helperStatus = status;
+							}
+
+							if (ImAdd::Button(Localization::Pick("Delete Selected", "删除选中"), ImVec2(110.0f, 0.0f)))
+							{
+								if (helperSelectedRow >= 0 && helperSelectedRow < static_cast<int>(helperRows.size()))
+								{
+									helperRows.erase(helperRows.begin() + helperSelectedRow);
+									if (helperRows.empty())
+										helperSelectedRow = -1;
+									else
+										helperSelectedRow = std::clamp(helperSelectedRow, 0, static_cast<int>(helperRows.size()) - 1);
+								}
+							}
+							ImGui::SameLine();
+							if (ImAdd::Button(Localization::Pick("Save List", "保存列表"), ImVec2(110.0f, 0.0f)))
+							{
+								std::string status{};
+								if (esp.SaveGrenadeSpotEditorRows(helperMapName, helperRows, status))
+								{
+									helperRows = esp.GetGrenadeSpotEditorRows();
+									helperSelectedRow = helperRows.empty() ? -1 : std::clamp(helperSelectedRow, 0, static_cast<int>(helperRows.size()) - 1);
+								}
+								helperStatus = status;
+							}
+
+							if (!helperStatus.empty())
+								ImGui::TextWrapped("%s", helperStatus.c_str());
+
+							const ImVec2 listSize(0.0f, ImGui::GetTextLineHeightWithSpacing() * 11.0f);
+							if (ImGui::BeginTable("GHelperSpotTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable, listSize))
+							{
+								ImGui::TableSetupColumn(Localization::Pick("ID", "编号"), ImGuiTableColumnFlags_WidthFixed, 40.0f);
+								ImGui::TableSetupColumn(Localization::Pick("Type", "类型"), ImGuiTableColumnFlags_WidthFixed, 90.0f);
+								ImGui::TableSetupColumn(Localization::Pick("Throw", "投掷"), ImGuiTableColumnFlags_WidthFixed, 110.0f);
+								ImGui::TableSetupColumn(Localization::Pick("Name", "名称"), ImGuiTableColumnFlags_WidthStretch);
+								ImGui::TableHeadersRow();
+
+								for (int rowIndex = 0; rowIndex < static_cast<int>(helperRows.size()); ++rowIndex)
+								{
+									GrenadeSpotEditorRow& row = helperRows[static_cast<std::size_t>(rowIndex)];
+									ImGui::PushID(row.Id != 0 ? row.Id : rowIndex);
+									ImGui::TableNextRow();
+
+									ImGui::TableSetColumnIndex(0);
+									if (ImGui::Selectable("##SpotSelect", helperSelectedRow == rowIndex, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap))
+										helperSelectedRow = rowIndex;
+									ImGui::SameLine();
+									ImGui::Text("%d", row.Id);
+
+									ImGui::TableSetColumnIndex(1);
+									int typeIndex = std::clamp(row.TypeIndex, 0, 4);
+									if (ImGui::Combo("##Type", &typeIndex, grenadeTypeItems, IM_ARRAYSIZE(grenadeTypeItems)))
+										row.TypeIndex = typeIndex;
+
+									ImGui::TableSetColumnIndex(2);
+									int throwIndex = std::clamp(row.ThrowTypeIndex, 0, 3);
+									if (ImGui::Combo("##Throw", &throwIndex, throwTypeItems, IM_ARRAYSIZE(throwTypeItems)))
+										row.ThrowTypeIndex = throwIndex;
+
+									ImGui::TableSetColumnIndex(3);
+									char rowNameBuffer[128]{};
+									strncpy_s(rowNameBuffer, row.Name.c_str(), _TRUNCATE);
+									if (ImGui::InputText("##Name", rowNameBuffer, IM_ARRAYSIZE(rowNameBuffer)))
+										row.Name = rowNameBuffer;
+
+									ImGui::PopID();
+								}
+
+								ImGui::EndTable();
+							}
+						}
+						else
+						{
+							ImGui::TextDisabled("%s", Localization::Pick("Enable GHelper Utility to configure helper settings.", "启用GHelper后可配置右侧道具辅助设置。"));
+						}
+					}
+					ImGui::EndChild();
 				}
 				ImGui::EndChild();
 			}
-
 			else if (m_iSelectedPage == MenuPage_Config)
 			{
 				ImGui::BeginChild("Configs", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
