@@ -1511,7 +1511,8 @@ void ESP::UpdateRoundEpoch(const uint64_t localPawn, const bool localAlive)
 
 void ESP::SamplerLoop()
 {
-    constexpr auto kSampleInterval = std::chrono::milliseconds(4); // 250Hz
+    constexpr auto kSampleIntervalIdle = std::chrono::milliseconds(4); // 250Hz
+    constexpr auto kSampleIntervalHot = std::chrono::milliseconds(2);  // 500Hz
     constexpr auto kOverrunYield = std::chrono::milliseconds(1);
 
     while (Globals::Running)
@@ -1533,9 +1534,14 @@ void ESP::SamplerLoop()
         if (sampleUs >= 0)
             PerfDebug::RecordEspSampleFrame(static_cast<std::uint64_t>(sampleUs));
 
+        const bool boneTriggerHot =
+            config.Aim.Trigger &&
+            std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox &&
+            aim.IsTriggerHotkeyActiveVisual();
+        const auto targetInterval = boneTriggerHot ? kSampleIntervalHot : kSampleIntervalIdle;
         const auto elapsed = std::chrono::steady_clock::now() - cycleStart;
-        if (elapsed < kSampleInterval)
-            std::this_thread::sleep_for(kSampleInterval - elapsed);
+        if (elapsed < targetInterval)
+            std::this_thread::sleep_for(targetInterval - elapsed);
         else
             std::this_thread::sleep_for(kOverrunYield);
     }

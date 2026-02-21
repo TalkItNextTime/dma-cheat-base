@@ -50,6 +50,13 @@ namespace PerfDebug
         std::atomic<std::uint64_t> TriggerScanUsSum{ 0 };
         std::atomic<std::uint64_t> TriggerScanUsMax{ 0 };
         std::atomic<std::uint64_t> TriggerScanCandidates{ 0 };
+        std::atomic<std::uint64_t> TriggerSnapshotFrames{ 0 };
+        std::atomic<std::uint64_t> TriggerSnapshotEmptyFrames{ 0 };
+        std::atomic<std::uint64_t> TriggerFallbackScans{ 0 };
+        std::atomic<std::uint64_t> TriggerCycles{ 0 };
+        std::atomic<std::uint64_t> TriggerCycleUsSum{ 0 };
+        std::atomic<std::uint64_t> TriggerCycleUsMax{ 0 };
+        std::atomic<std::uint64_t> TriggerPreFireGateHits{ 0 };
         std::atomic<std::uint64_t> TriggerFires{ 0 };
         std::atomic<std::uint64_t> TriggerTimeoutFires{ 0 };
         std::atomic<std::uint64_t> TriggerDetectFires{ 0 };
@@ -126,6 +133,30 @@ namespace PerfDebug
             Counters.TriggerScanCandidates.fetch_add(1, std::memory_order_relaxed);
     }
 
+    inline void RecordTriggerSnapshotFrame(const bool isEmpty)
+    {
+        Counters.TriggerSnapshotFrames.fetch_add(1, std::memory_order_relaxed);
+        if (isEmpty)
+            Counters.TriggerSnapshotEmptyFrames.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordTriggerFallbackScan()
+    {
+        Counters.TriggerFallbackScans.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordTriggerCycle(const std::uint64_t cycleUs)
+    {
+        Counters.TriggerCycles.fetch_add(1, std::memory_order_relaxed);
+        Counters.TriggerCycleUsSum.fetch_add(cycleUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.TriggerCycleUsMax, cycleUs);
+    }
+
+    inline void RecordTriggerPreFireGate()
+    {
+        Counters.TriggerPreFireGateHits.fetch_add(1, std::memory_order_relaxed);
+    }
+
     inline void RecordTriggerFire(
         const std::uint64_t hotkeyAgeUs,
         const std::uint64_t decisionUs,
@@ -180,6 +211,13 @@ namespace PerfDebug
         const std::uint64_t triggerScanUsSum = Counters.TriggerScanUsSum.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerScanUsMax = Counters.TriggerScanUsMax.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerScanCandidates = Counters.TriggerScanCandidates.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerSnapshotFrames = Counters.TriggerSnapshotFrames.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerSnapshotEmptyFrames = Counters.TriggerSnapshotEmptyFrames.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerFallbackScans = Counters.TriggerFallbackScans.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerCycles = Counters.TriggerCycles.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerCycleUsSum = Counters.TriggerCycleUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerCycleUsMax = Counters.TriggerCycleUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t triggerPreFireGateHits = Counters.TriggerPreFireGateHits.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerFires = Counters.TriggerFires.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerTimeoutFires = Counters.TriggerTimeoutFires.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerDetectFires = Counters.TriggerDetectFires.exchange(0, std::memory_order_relaxed);
@@ -191,7 +229,8 @@ namespace PerfDebug
         const std::uint64_t triggerSendUsMax = Counters.TriggerSendUsMax.exchange(0, std::memory_order_relaxed);
 
         if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && visChecks == 0 && mapPolls == 0 &&
-            triggerHotkeyDowns == 0 && triggerTimeoutChecks == 0 && triggerScans == 0 && triggerFires == 0)
+            triggerHotkeyDowns == 0 && triggerTimeoutChecks == 0 && triggerScans == 0 && triggerFires == 0 &&
+            triggerSnapshotFrames == 0 && triggerFallbackScans == 0 && triggerPreFireGateHits == 0)
             return;
 
         const double overlayFps = static_cast<double>(overlayFrames) / safeIntervalSeconds;
@@ -228,6 +267,8 @@ namespace PerfDebug
         const double triggerTimeoutAgeMaxMs = static_cast<double>(triggerTimeoutAgeUsMax) / 1000.0;
         const double triggerScanAvgMs = triggerScans ? (static_cast<double>(triggerScanUsSum) / static_cast<double>(triggerScans)) / 1000.0 : 0.0;
         const double triggerScanMaxMs = static_cast<double>(triggerScanUsMax) / 1000.0;
+        const double triggerCycleAvgMs = triggerCycles ? (static_cast<double>(triggerCycleUsSum) / static_cast<double>(triggerCycles)) / 1000.0 : 0.0;
+        const double triggerCycleMaxMs = static_cast<double>(triggerCycleUsMax) / 1000.0;
         const double triggerFireAgeAvgMs = triggerFires ? (static_cast<double>(triggerFireHotkeyAgeUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
         const double triggerFireAgeMaxMs = static_cast<double>(triggerFireHotkeyAgeUsMax) / 1000.0;
         const double triggerDecisionAvgMs = triggerFires ? (static_cast<double>(triggerDecisionUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
@@ -255,7 +296,7 @@ namespace PerfDebug
         // );
 
         LOG_INFO(
-            "[trigger dbg] hk_down={} | timeout hit/check={}/{} age={:.2f}/{:.2f}ms | scan cand/scan={}/{} time={:.2f}/{:.2f}ms | fire={} timeout={} detect={} | fire_age={:.2f}/{:.2f}ms decision={:.2f}/{:.2f}ms send={:.2f}/{:.2f}ms",
+            "[trigger dbg] hk_down={} | timeout hit/check={}/{} age={:.2f}/{:.2f}ms | scan cand/scan={}/{} time={:.2f}/{:.2f}ms | snapshot empty/all={}/{} fallback={} prefire_gate={} | cycle={:.2f}/{:.2f}ms | fire={} timeout={} detect={} | fire_age={:.2f}/{:.2f}ms decision={:.2f}/{:.2f}ms send={:.2f}/{:.2f}ms",
             triggerHotkeyDowns,
             triggerTimeoutHits,
             triggerTimeoutChecks,
@@ -265,6 +306,12 @@ namespace PerfDebug
             triggerScans,
             triggerScanAvgMs,
             triggerScanMaxMs,
+            triggerSnapshotEmptyFrames,
+            triggerSnapshotFrames,
+            triggerFallbackScans,
+            triggerPreFireGateHits,
+            triggerCycleAvgMs,
+            triggerCycleMaxMs,
             triggerFires,
             triggerTimeoutFires,
             triggerDetectFires,

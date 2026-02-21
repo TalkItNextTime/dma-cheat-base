@@ -1366,6 +1366,24 @@ void Aimbot::UpdateTriggerbot()
 {
     const auto now = std::chrono::steady_clock::now();
     const auto triggerCycleStart = now;
+    bool recordCycleMetrics = false;
+    struct TriggerCycleScope
+    {
+        bool& Enabled;
+        std::chrono::steady_clock::time_point Start;
+
+        ~TriggerCycleScope()
+        {
+            if (!Enabled)
+                return;
+
+            const std::uint64_t cycleUs = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - Start).count()
+            );
+            PerfDebug::RecordTriggerCycle(cycleUs);
+        }
+    };
+    const TriggerCycleScope triggerCycleScope{ recordCycleMetrics, triggerCycleStart };
     UpdateTriggerMouseState(now);
     auto setTriggerVisual = [&](const bool hotkeyActive, const bool hasTarget)
     {
@@ -1441,6 +1459,7 @@ void Aimbot::UpdateTriggerbot()
         PerfDebug::RecordTriggerHotkeyDown();
     }
     m_TriggerHotkeyWasActive = hotkeyActive;
+    recordCycleMetrics = hotkeyActive;
 
     if (!hotkeyActive)
     {
@@ -1609,6 +1628,8 @@ void Aimbot::UpdateTriggerbot()
         triggerDetectMode == Structs::TriggerDetect_BoneHitbox
         ? esp.GetTriggerBoneSnapshots()
         : std::vector<TriggerBoneSnapshot>{};
+    if (triggerDetectMode == Structs::TriggerDetect_BoneHitbox)
+        PerfDebug::RecordTriggerSnapshotFrame(triggerSnapshots.empty());
 
     auto canUseTargetSnapshot = [&](const TriggerBoneSnapshot& target) -> bool
     {
@@ -1705,32 +1726,6 @@ void Aimbot::UpdateTriggerbot()
         return true;
     };
 
-    auto tryEvaluateTriggerPawnByBone = [&](const std::uint64_t pawn)
-    {
-        if (!canUseTargetPawn(pawn))
-            return;
-
-        float bestDistance = FLT_MAX;
-        if (!IsCrosshairOnPawnBoneHitbox(
-            core,
-            pawn,
-            screenCenter,
-            triggerBoneMask,
-            effectiveBodyRadius,
-            effectiveHeadRadius,
-            bestDistance,
-            nullptr))
-        {
-            return;
-        }
-
-        if (!triggerPawn || bestDistance < triggerDistance)
-        {
-            triggerPawn = pawn;
-            triggerDistance = bestDistance;
-        }
-    };
-
     auto resolveHintedPawnFromCrosshairEntity = [&]() -> std::uint64_t
     {
         if (!Offsets::Schema::m_iIDEntIndex)
@@ -1777,25 +1772,6 @@ void Aimbot::UpdateTriggerbot()
                     tryEvaluateTriggerSnapshotByBone(snapshot);
             }
         }
-        else
-        {
-            // Fallback path when render snapshots are not ready yet.
-            if (m_LastTriggerPawn != 0)
-                tryEvaluateTriggerPawnByBone(m_LastTriggerPawn);
-
-            if (!triggerPawn)
-            {
-                for (int controllerIndex = 1; controllerIndex <= kMaxControllers; ++controllerIndex)
-                {
-                    const std::uint64_t controller = sdk.ResolveEntityFromHandle(static_cast<std::uint32_t>(controllerIndex));
-                    if (!IsLikelyUserAddress(controller))
-                        continue;
-
-                    const std::uint64_t pawn = sdk.ResolvePawnFromController(controller);
-                    tryEvaluateTriggerPawnByBone(pawn);
-                }
-            }
-        }
     }
 
     const std::uint64_t scanUs = static_cast<std::uint64_t>(
@@ -1804,6 +1780,7 @@ void Aimbot::UpdateTriggerbot()
     PerfDebug::RecordTriggerScan(scanUs, triggerPawn != 0);
 
     bool shouldFireByDetection = false;
+    bool preFireGateHit = false;
     if (triggerPawn)
     {
         if (m_LastTriggerPawn != triggerPawn)
@@ -1819,6 +1796,10 @@ void Aimbot::UpdateTriggerbot()
         {
             shouldFireByDetection = true;
         }
+        else
+        {
+            preFireGateHit = true;
+        }
     }
     else
     {
@@ -1827,6 +1808,8 @@ void Aimbot::UpdateTriggerbot()
 
     if (!shouldFireByDetection)
     {
+        if (preFireGateHit)
+            PerfDebug::RecordTriggerPreFireGate();
         setTriggerVisual(true, triggerPawn != 0);
         return;
     }
