@@ -33,7 +33,7 @@ private:
     {
         uint64_t requestId = 0;
         std::string mapName{};
-        std::string optPath{};
+        std::string cachePath{};
         std::unique_ptr<VisCheck> visCheck{};
         bool loaded = false;
     };
@@ -49,12 +49,12 @@ private:
 
     std::string NormalizeMapName(std::string mapName) const;
     std::string BuildStatusText(const std::string& mapName, const char* suffix) const;
-    std::string ResolveOptPath(const std::string& mapName) const;
+    std::string ResolveCachePath(const std::string& mapName) const;
 
 private:
     mutable std::shared_mutex mutex_{};
     mutable std::string currentMapName_{};
-    mutable std::string currentOptPath_{};
+    mutable std::string currentCachePath_{};
     mutable std::string statusText_ = "Map Status: (Disabled)";
     mutable std::unique_ptr<VisCheck> visCheck_{};
     mutable std::vector<PendingLoad> pendingLoads_{};

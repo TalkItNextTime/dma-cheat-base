@@ -1691,6 +1691,30 @@ void Overlay::RenderMenu()
 							ImAdd::CheckBox("VSync", &config.Visuals.VSync);
 							ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
 							ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
+							ImAdd::CheckBox(Localization::Pick("VisCheck Debug Overlay", "VisCheck调试叠加"), &config.Visuals.VisCheckDebug);
+
+							if (config.Visuals.VisCheckDebug)
+							{
+								ImGui::TextDisabled("%s", Localization::Pick("VisCheck full-map overlay is always enabled while debug is on.", "VisCheck调试开启时始终全量覆盖地图信息。"));
+
+								config.Visuals.VisCheckDebugMaxDistance = std::clamp(config.Visuals.VisCheckDebugMaxDistance, 300.0f, 12000.0f);
+								ImAdd::SliderFloat(
+									Localization::Pick("VisCheck Debug Distance", "VisCheck调试距离"),
+									&config.Visuals.VisCheckDebugMaxDistance,
+									300.0f,
+									12000.0f);
+
+								config.Visuals.VisCheckDebugMaxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
+								ImAdd::SliderInt(
+									Localization::Pick("VisCheck Debug Max Items", "VisCheck调试最大数量"),
+									&config.Visuals.VisCheckDebugMaxItems,
+									32,
+									5000);
+
+								ImAdd::ColorEdit4(
+									Localization::Pick("VisCheck Debug Color", "VisCheck调试颜色"),
+									(float*)&config.Visuals.VisCheckDebugColor);
+							}
 
 							// ImGui::BeginGroup();
 							// {

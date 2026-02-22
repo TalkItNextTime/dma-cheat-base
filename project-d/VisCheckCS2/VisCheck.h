@@ -1,35 +1,46 @@
 #pragma once
-#include <memory>
+#include <array>
+#include <cstdint>
+#include <string>
 #include <vector>
-#include "OptimizedGeometry.h"
 #include "Math.hpp"
-
-struct BVHNode {
-    AABB bounds;
-    std::unique_ptr<BVHNode> left;
-    std::unique_ptr<BVHNode> right;
-    const std::vector<TriangleCombined>* triangles = nullptr;
-    size_t begin = 0;
-    size_t end = 0;
-
-    bool IsLeaf() const {
-        return left == nullptr && right == nullptr;
-    }
-};
 
 class VisCheck
 {
 public:
-    VisCheck(const std::string& optimizedGeometryFile);
+    VisCheck(const std::string& cacheFilePath);
     bool IsPointVisible(const Vector3& point1, const Vector3& point2);
     bool IsReady() const;
-    bool RayIntersectsTriangle(const Vector3& rayOrigin, const Vector3& rayDir,
-        const TriangleCombined& triangle, float& t);
+    bool RayIntersectsTriangle(const Vector3& rayOrigin, const Vector3& rayDir, const TriangleCombined& triangle, float& t) const;
+    const std::vector<TriangleCombined>& GetDebugTriangles() const;
+    const std::vector<AABB>& GetDebugOccluderBounds() const;
 
 private:
-    OptimizedGeometry geometry;
+    struct CacheBvhChild
+    {
+        AABB bounds{};
+        std::uint32_t index = 0;
+        std::uint32_t count = 0;
+        bool isLeaf = false;
+    };
+
+    struct CacheBvhNode
+    {
+        std::uint32_t childCount = 0;
+        std::array<CacheBvhChild, 4> children{};
+    };
+
+private:
     bool ready = false;
-    std::vector<std::unique_ptr<BVHNode>> bvhNodes;
-    std::unique_ptr<BVHNode> BuildBVH(std::vector<TriangleCombined>& tris, size_t begin, size_t end);
-    bool IntersectBVH(const BVHNode* node, const Vector3& rayOrigin, const Vector3& rayDir, float maxDistance, float& hitDistance);
+    std::vector<Vector3> cacheVertices;
+    std::vector<std::uint32_t> cacheIndices;
+    std::vector<std::uint8_t> cacheTriangleKinds;
+    std::vector<CacheBvhNode> cacheNodes;
+    std::vector<std::uint32_t> cachePrimitiveOrder;
+    std::vector<TriangleCombined> debugTriangles;
+    std::vector<AABB> debugOccluderBounds;
+
+    bool LoadCacheGeometry(const std::string& cacheFilePath);
+    bool IntersectCacheBvh(const Vector3& rayOrigin, const Vector3& rayDir, float maxDistance, float& hitDistance) const;
+    void BuildCacheDebugGeometry();
 };

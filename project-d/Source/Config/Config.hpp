@@ -159,6 +159,16 @@ namespace Config
             j["Visuals"]["Enabled"] = Visuals.Enabled;
             j["Visuals"]["TeamCheck"] = Visuals.TeamCheck;
             j["Visuals"]["VisibleCheck"] = Visuals.VisibleCheck;
+            j["Visuals"]["VisCheckDebug"] = Visuals.VisCheckDebug;
+            j["Visuals"]["VisCheckDebugMode"] = Visuals.VisCheckDebugMode;
+            j["Visuals"]["VisCheckDebugMaxDistance"] = Visuals.VisCheckDebugMaxDistance;
+            j["Visuals"]["VisCheckDebugMaxItems"] = Visuals.VisCheckDebugMaxItems;
+            j["Visuals"]["VisCheckDebugColor"] = {
+                Visuals.VisCheckDebugColor.x,
+                Visuals.VisCheckDebugColor.y,
+                Visuals.VisCheckDebugColor.z,
+                Visuals.VisCheckDebugColor.w
+            };
 
             j["Visuals"]["Background"] = Visuals.Background;
             j["Visuals"]["Hitmarker"] = Visuals.Hitmarker;
@@ -521,6 +531,11 @@ namespace Config
                 j["Visuals"]["Enabled"] = false;
                 j["Visuals"]["TeamCheck"] = false;
                 j["Visuals"]["VisibleCheck"] = false;
+                j["Visuals"]["VisCheckDebug"] = false;
+                j["Visuals"]["VisCheckDebugMode"] = 1;
+                j["Visuals"]["VisCheckDebugMaxDistance"] = 3200.0f;
+                j["Visuals"]["VisCheckDebugMaxItems"] = 1400;
+                j["Visuals"]["VisCheckDebugColor"] = { 0.25f, 0.85f, 1.0f, 0.65f };
 
                 j["Visuals"]["Background"] = false;
                 j["Visuals"]["Hitmarker"] = false;
@@ -955,6 +970,11 @@ namespace Config
                             if (key == "Enabled") configSection.Enabled = value.get<bool>();
                             else if (key == "TeamCheck") configSection.TeamCheck = value.get<bool>();
                             else if (key == "VisibleCheck") configSection.VisibleCheck = value.get<bool>();
+                            else if (key == "VisCheckDebug") configSection.VisCheckDebug = value.get<bool>();
+                            else if (key == "VisCheckDebugMode") configSection.VisCheckDebugMode = value.get<int>();
+                            else if (key == "VisCheckDebugMaxDistance") configSection.VisCheckDebugMaxDistance = value.get<float>();
+                            else if (key == "VisCheckDebugMaxItems") configSection.VisCheckDebugMaxItems = value.get<int>();
+                            else if (key == "VisCheckDebugColor") configSection.VisCheckDebugColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
 
                             else if (key == "Background") configSection.Background = value.get<bool>();
                             else if (key == "Hitmarker") configSection.Hitmarker = value.get<bool>();

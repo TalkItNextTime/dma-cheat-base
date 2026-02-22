@@ -278,9 +278,6 @@
     <ClCompile Include="Source\Dma\DMA.cpp" />
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp" />
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
-    <ClCompile Include="VisCheckCS2\OptimizedGeometry.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="VisCheckCS2\Parser.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

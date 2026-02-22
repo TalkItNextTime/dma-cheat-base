@@ -24,9 +24,6 @@
     <ClCompile Include="vischeck_module.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="OptimizedGeometry.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser.h">
@@ -36,9 +33,6 @@
       <Filter>Исходные файлы</Filter>
     </ClInclude>
     <ClInclude Include="Math.hpp">
-      <Filter>Исходные файлы</Filter>
-    </ClInclude>
-    <ClInclude Include="OptimizedGeometry.h">
       <Filter>Исходные файлы</Filter>
     </ClInclude>
   </ItemGroup>

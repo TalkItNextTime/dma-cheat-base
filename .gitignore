@@ -39,3 +39,9 @@ lib/*
 
 # User-specific config files	
 /.json
+project-d/vphys/*
+project-d/Maps/*
+project-d/Build/*
+project-d/BonesShowCase/*
+project-d/GrenadeData/*
+project-d/Keys/*

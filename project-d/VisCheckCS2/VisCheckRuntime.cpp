@@ -51,15 +51,15 @@ void VisCheckRuntime::ConsumeReadyLoadsLocked() const
         {
             visCheck_ = std::move(result.visCheck);
             currentMapName_ = result.mapName;
-            currentOptPath_ = result.optPath;
+            currentCachePath_ = result.cachePath;
             statusText_ = BuildStatusText(result.mapName, "Loaded");
         }
         else
         {
             visCheck_.reset();
             currentMapName_ = result.mapName;
-            currentOptPath_ = result.optPath;
-            statusText_ = result.optPath.empty()
+            currentCachePath_ = result.cachePath;
+            statusText_ = result.cachePath.empty()
                 ? BuildStatusText(result.mapName, "Not Found")
                 : BuildStatusText(result.mapName, "Load Failed");
         }
@@ -80,7 +80,7 @@ void VisCheckRuntime::SetEnabled(bool enabled)
     {
         visCheck_.reset();
         currentMapName_.clear();
-        currentOptPath_.clear();
+        currentCachePath_.clear();
         loadingMapName_.clear();
         activeRequestId_.store(0);
         statusText_ = "Map Status: (Disabled)";
@@ -114,7 +114,7 @@ void VisCheckRuntime::UpdateMap(const std::string& mapName)
     {
         visCheck_.reset();
         currentMapName_.clear();
-        currentOptPath_.clear();
+        currentCachePath_.clear();
         loadingMapName_.clear();
         activeRequestId_.store(0);
         statusText_ = "Map Status: (No Map)";
@@ -125,12 +125,12 @@ void VisCheckRuntime::UpdateMap(const std::string& mapName)
         (normalizedMapName == loadingMapName_ && activeRequestId_.load() != 0))
         return;
 
-    const std::string optPath = ResolveOptPath(normalizedMapName);
-    if (optPath.empty())
+    const std::string cachePath = ResolveCachePath(normalizedMapName);
+    if (cachePath.empty())
     {
         visCheck_.reset();
         currentMapName_ = normalizedMapName;
-        currentOptPath_.clear();
+        currentCachePath_.clear();
         loadingMapName_.clear();
         activeRequestId_.store(0);
         statusText_ = BuildStatusText(normalizedMapName, "Not Found");
@@ -145,13 +145,13 @@ void VisCheckRuntime::UpdateMap(const std::string& mapName)
     PendingLoad pending{};
     pending.requestId = requestId;
     pending.mapName = normalizedMapName;
-    pending.future = std::async(std::launch::async, [requestId = pending.requestId, normalizedMapName, optPath]() mutable {
+    pending.future = std::async(std::launch::async, [requestId = pending.requestId, normalizedMapName, cachePath]() mutable {
         LoadResult result{};
         result.requestId = requestId;
         result.mapName = normalizedMapName;
-        result.optPath = optPath;
+        result.cachePath = cachePath;
 
-        auto nextVisCheck = std::make_unique<VisCheck>(optPath);
+        auto nextVisCheck = std::make_unique<VisCheck>(cachePath);
         if (nextVisCheck && nextVisCheck->IsReady())
         {
             result.loaded = true;
@@ -216,36 +216,43 @@ std::string VisCheckRuntime::NormalizeMapName(std::string mapName) const
 std::string VisCheckRuntime::BuildStatusText(const std::string& mapName, const char* suffix) const
 {
     std::string text = "Map Status: ";
-    text += mapName.empty() ? "(Unknown)" : (mapName + ".opt");
+    text += mapName.empty() ? "(Unknown)" : mapName;
     text += " (";
     text += suffix;
     text += ")";
     return text;
 }
 
-std::string VisCheckRuntime::ResolveOptPath(const std::string& mapName) const
+std::string VisCheckRuntime::ResolveCachePath(const std::string& mapName) const
 {
     if (mapName.empty())
         return {};
 
-    const std::string optFileName = mapName + ".opt";
+    const std::string cacheFileName = mapName;
     std::vector<std::filesystem::path> candidates{};
 
     std::error_code ec{};
     const std::filesystem::path cwd = std::filesystem::current_path(ec);
     if (!ec)
     {
-        candidates.push_back(cwd / "maps" / optFileName);
-        candidates.push_back(cwd / optFileName);
-        candidates.push_back(cwd.parent_path() / "maps" / optFileName);
+        candidates.push_back(cwd / "maps" / cacheFileName);
+        candidates.push_back(cwd / "Maps" / cacheFileName);
+        candidates.push_back(cwd / cacheFileName);
+        candidates.push_back(cwd.parent_path() / "maps" / cacheFileName);
+        candidates.push_back(cwd.parent_path() / "Maps" / cacheFileName);
+        candidates.push_back(cwd.parent_path() / cacheFileName);
     }
 
     char modulePath[MAX_PATH]{};
     if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) != 0)
     {
         std::filesystem::path exeDir = std::filesystem::path(modulePath).parent_path();
-        candidates.push_back(exeDir / "maps" / optFileName);
-        candidates.push_back(exeDir.parent_path() / "maps" / optFileName);
+        candidates.push_back(exeDir / "maps" / cacheFileName);
+        candidates.push_back(exeDir / "Maps" / cacheFileName);
+        candidates.push_back(exeDir / cacheFileName);
+        candidates.push_back(exeDir.parent_path() / "maps" / cacheFileName);
+        candidates.push_back(exeDir.parent_path() / "Maps" / cacheFileName);
+        candidates.push_back(exeDir.parent_path() / cacheFileName);
     }
 
     for (const auto& candidate : candidates)

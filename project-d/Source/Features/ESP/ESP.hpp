@@ -116,6 +116,20 @@ struct GrenadeHelperSnapshot
     std::vector<GrenadeAimRenderItem> AimItems{};
 };
 
+struct MapDebugTriangle
+{
+    Vector3 V0{};
+    Vector3 V1{};
+    Vector3 V2{};
+    std::uint8_t SourceKind = 0;
+};
+
+struct MapDebugBox
+{
+    Vector3 Min{};
+    Vector3 Max{};
+};
+
 struct GrenadeSpotEditorRow
 {
     int Id = 0;
@@ -151,7 +165,7 @@ private:
     {
         uint64_t RequestId = 0;
         std::string MapName{};
-        std::string OptPath{};
+        std::string CachePath{};
         std::future<std::unique_ptr<VisCheck>> Future{};
     };
 
@@ -193,6 +207,7 @@ private:
     void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
     void RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const;
+    void RenderVisCheckDebug(ImDrawList* drawList) const;
 
     void EnsureSamplerStarted();
     void SamplerLoop();
@@ -227,11 +242,13 @@ private:
     bool ReloadGrenadeMapFromDisk(const std::string& mapName, std::string& outStatus);
 
     void UpdateVisCheckState();
-    void RequestMapLoad(const std::string& mapName, const std::string& optPath);
+    void RequestMapLoad(const std::string& mapName, const std::string& cachePath);
     void ConsumeMapLoadResult();
-    std::string ResolveOptPath(const std::string& mapName) const;
+    std::string ResolveCachePath(const std::string& mapName) const;
     std::string BuildMapStatus(const std::string& mapName, const char* suffix) const;
     bool CheckVisibility(const Vector3& src, const Vector3& dst) const;
+    void ClearMapDebugCache();
+    void UpdateMapDebugCacheFromVisCheck(const VisCheck& visCheck);
 
 private:
     std::unique_ptr<VisCheck> m_VisCheck{};
@@ -248,11 +265,14 @@ private:
     int m_LastGrenadeSelectedSpotId = 0;
 
     std::string m_CurrentMapName{};
-    std::string m_CurrentOptPath{};
+    std::string m_CurrentCachePath{};
     std::string m_MapStatus = "Map Status: (Waiting)";
     std::string m_LastPolledMapName{};
     std::chrono::steady_clock::time_point m_LastMapPoll{};
     bool m_VisCheckEnabled = false;
+    mutable std::mutex m_MapDebugMutex{};
+    std::vector<MapDebugTriangle> m_MapDebugTriangles{};
+    std::vector<MapDebugBox> m_MapDebugBoxes{};
     std::string m_GrenadeStatus{};
     std::atomic<bool> m_GrenadeHelperOnlyMode{ false };
     std::atomic<bool> m_GrenadeHelperHoldingUtility{ false };

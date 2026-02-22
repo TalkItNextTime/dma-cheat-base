@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <limits>
 #include <cmath>
+#include <cstdint>
 #include <initializer_list>
 
 #include "../Source/Math/Vector.hpp"
@@ -80,10 +81,11 @@ struct AABB {
 
 struct TriangleCombined {
     Vector3 v0, v1, v2;
+    std::uint8_t source_kind = 0;
 
     TriangleCombined() = default;
-    TriangleCombined(const Vector3& v0_, const Vector3& v1_, const Vector3& v2_)
-        : v0(v0_), v1(v1_), v2(v2_) {
+    TriangleCombined(const Vector3& v0_, const Vector3& v1_, const Vector3& v2_, std::uint8_t source_kind_ = 0)
+        : v0(v0_), v1(v1_), v2(v2_), source_kind(source_kind_) {
     }
 
     AABB ComputeAABB() const {

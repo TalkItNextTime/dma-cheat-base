@@ -491,9 +491,6 @@
     <ClCompile Include="Source\Misc\Animation\Animation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="VisCheckCS2\OptimizedGeometry.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="VisCheckCS2\Parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

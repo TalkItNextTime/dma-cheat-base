@@ -1990,6 +1990,200 @@ void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot&
     }
 }
 
+void ESP::RenderVisCheckDebug(ImDrawList* drawList) const
+{
+    if (!drawList || !config.Visuals.Enabled || !config.Visuals.VisCheckDebug)
+        return;
+
+    std::vector<MapDebugTriangle> triangleSnapshot{};
+    std::vector<MapDebugBox> boxSnapshot{};
+    {
+        std::lock_guard lock(m_MapDebugMutex);
+        triangleSnapshot = m_MapDebugTriangles;
+        boxSnapshot = m_MapDebugBoxes;
+    }
+
+    if (triangleSnapshot.empty() && boxSnapshot.empty())
+        return;
+
+    const SDK::CoreCache core = sdk.GetCoreCache();
+    if (!core.IsValid)
+        return;
+
+    const Matrix viewMatrix = core.ViewMatrix;
+    Vector3 localEye{};
+    bool hasLocalEye = false;
+    if (core.LocalPawn && IsLikelyUserAddress(core.LocalPawn))
+    {
+        const Vector3 localOrigin = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_vOldOrigin);
+        const Vector3 localViewOffset = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_vecViewOffset);
+        localEye = localOrigin + localViewOffset;
+        hasLocalEye = true;
+    }
+
+    const float maxDistance = std::clamp(config.Visuals.VisCheckDebugMaxDistance, 300.0f, 12000.0f);
+    const float maxDistanceSqr = maxDistance * maxDistance;
+    const int maxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
+    const bool drawTriangles = true;
+    const bool drawBoxes = true;
+    const ImVec4 debugColor = config.Visuals.VisCheckDebugColor;
+    const auto triColorBySource = [&](const std::uint8_t sourceKind)
+    {
+        const float alpha = std::clamp(debugColor.w, 0.0f, 1.0f);
+        if (sourceKind == 2u) // hull
+            return ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.20f, 0.20f, alpha));
+        if (sourceKind == 1u) // mesh
+            return ImGui::ColorConvertFloat4ToU32(ImVec4(0.20f, 0.55f, 1.0f, alpha));
+        return ImGui::ColorConvertFloat4ToU32(debugColor);
+    };
+
+    auto withinDebugDistance = [&](const Vector3& point)
+    {
+        return !hasLocalEye || DistanceSquared3D(localEye, point) <= maxDistanceSqr;
+    };
+
+    if (drawTriangles && !triangleSnapshot.empty())
+    {
+        struct Candidate
+        {
+            std::size_t index = 0;
+            float distanceSqr = 0.0f;
+        };
+
+        std::vector<Candidate> candidates{};
+        candidates.reserve(triangleSnapshot.size());
+        for (std::size_t i = 0; i < triangleSnapshot.size(); ++i)
+        {
+            const MapDebugTriangle& tri = triangleSnapshot[i];
+            const Vector3 center = (tri.V0 + tri.V1 + tri.V2) / 3.0f;
+            if (!withinDebugDistance(center))
+                continue;
+
+            float distanceSqr = 0.0f;
+            if (hasLocalEye)
+                distanceSqr = DistanceSquared3D(localEye, center);
+            candidates.push_back({ i, distanceSqr });
+        }
+
+        if (static_cast<int>(candidates.size()) > maxItems)
+        {
+            std::nth_element(
+                candidates.begin(),
+                candidates.begin() + maxItems,
+                candidates.end(),
+                [](const Candidate& lhs, const Candidate& rhs)
+                {
+                    return lhs.distanceSqr < rhs.distanceSqr;
+                });
+            candidates.resize(static_cast<std::size_t>(maxItems));
+        }
+
+        for (const Candidate& candidate : candidates)
+        {
+            const MapDebugTriangle& tri = triangleSnapshot[candidate.index];
+            Vector2 s0{};
+            Vector2 s1{};
+            Vector2 s2{};
+            if (!sdk.WorldToScreen(tri.V0, s0, viewMatrix) ||
+                !sdk.WorldToScreen(tri.V1, s1, viewMatrix) ||
+                !sdk.WorldToScreen(tri.V2, s2, viewMatrix))
+            {
+                continue;
+            }
+
+            const ImU32 triColor = triColorBySource(tri.SourceKind);
+            drawList->AddLine(s0.ToImVec2(), s1.ToImVec2(), triColor, 1.0f);
+            drawList->AddLine(s1.ToImVec2(), s2.ToImVec2(), triColor, 1.0f);
+            drawList->AddLine(s2.ToImVec2(), s0.ToImVec2(), triColor, 1.0f);
+        }
+    }
+
+    if (!drawBoxes || boxSnapshot.empty())
+        return;
+
+    static constexpr int kBoxEdges[12][2] = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 0},
+        {4, 5}, {5, 6}, {6, 7}, {7, 4},
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}
+    };
+
+    struct Candidate
+    {
+        std::size_t index = 0;
+        float distanceSqr = 0.0f;
+    };
+
+    std::vector<Candidate> candidates{};
+    candidates.reserve(boxSnapshot.size());
+    for (std::size_t i = 0; i < boxSnapshot.size(); ++i)
+    {
+        const MapDebugBox& box = boxSnapshot[i];
+        const Vector3 center = (box.Min + box.Max) * 0.5f;
+        if (!withinDebugDistance(center))
+            continue;
+
+        float distanceSqr = 0.0f;
+        if (hasLocalEye)
+            distanceSqr = DistanceSquared3D(localEye, center);
+        candidates.push_back({ i, distanceSqr });
+    }
+
+    if (candidates.empty())
+        return;
+
+    if (static_cast<int>(candidates.size()) > maxItems)
+    {
+        std::nth_element(
+            candidates.begin(),
+            candidates.begin() + maxItems,
+            candidates.end(),
+            [](const Candidate& lhs, const Candidate& rhs)
+            {
+                return lhs.distanceSqr < rhs.distanceSqr;
+            });
+        candidates.resize(static_cast<std::size_t>(maxItems));
+    }
+
+    for (const Candidate& candidate : candidates)
+    {
+        const MapDebugBox& box = boxSnapshot[candidate.index];
+        const std::array<Vector3, 8> corners = {
+            Vector3{ box.Min.x, box.Min.y, box.Min.z },
+            Vector3{ box.Max.x, box.Min.y, box.Min.z },
+            Vector3{ box.Max.x, box.Max.y, box.Min.z },
+            Vector3{ box.Min.x, box.Max.y, box.Min.z },
+            Vector3{ box.Min.x, box.Min.y, box.Max.z },
+            Vector3{ box.Max.x, box.Min.y, box.Max.z },
+            Vector3{ box.Max.x, box.Max.y, box.Max.z },
+            Vector3{ box.Min.x, box.Max.y, box.Max.z }
+        };
+
+        std::array<Vector2, 8> projected{};
+        bool allProjected = true;
+        for (std::size_t corner = 0; corner < corners.size(); ++corner)
+        {
+            if (!sdk.WorldToScreen(corners[corner], projected[corner], viewMatrix))
+            {
+                allProjected = false;
+                break;
+            }
+        }
+        if (!allProjected)
+            continue;
+
+        const ImU32 cubeColor = ImGui::ColorConvertFloat4ToU32(
+            ImVec4(1.0f, 0.92f, 0.24f, std::clamp(debugColor.w, 0.0f, 1.0f)));
+        for (const auto& edge : kBoxEdges)
+        {
+            drawList->AddLine(
+                projected[edge[0]].ToImVec2(),
+                projected[edge[1]].ToImVec2(),
+                cubeColor,
+                1.0f);
+        }
+    }
+}
+
 bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapshot) const
 {
     if (!boneArray || !IsLikelyUserAddress(boneArray))
@@ -2410,7 +2604,7 @@ void ESP::UpdateVisCheckState()
 {
     ConsumeMapLoadResult();
 
-    // Keep map/.opt status alive by default; VisibleCheck only controls usage, not loading state.
+    // Keep map-cache status alive by default; VisibleCheck only controls usage, not loading state.
     m_VisCheckEnabled = true;
 
     const auto now = std::chrono::steady_clock::now();
@@ -2425,6 +2619,10 @@ void ESP::UpdateVisCheckState()
     const std::string& mapName = m_LastPolledMapName;
     if (mapName.empty())
     {
+        m_VisCheck.reset();
+        ClearMapDebugCache();
+        m_CurrentMapName.clear();
+        m_CurrentCachePath.clear();
         m_MapStatus = Localization::Pick("Map Status: (No Map)", "地图状态：（无地图）");
         return;
     }
@@ -2435,7 +2633,7 @@ void ESP::UpdateVisCheckState()
         return;
     }
 
-    if (!m_VisCheck && mapName == m_CurrentMapName && m_CurrentOptPath.empty())
+    if (!m_VisCheck && mapName == m_CurrentMapName && m_CurrentCachePath.empty())
     {
         m_MapStatus = BuildMapStatus(mapName, "Not Found");
         return;
@@ -2447,28 +2645,29 @@ void ESP::UpdateVisCheckState()
             return;
     }
 
-    const std::string optPath = ResolveOptPath(mapName);
-    if (optPath.empty())
+    const std::string cachePath = ResolveCachePath(mapName);
+    if (cachePath.empty())
     {
         m_VisCheck.reset();
+        ClearMapDebugCache();
         m_CurrentMapName = mapName;
-        m_CurrentOptPath.clear();
+        m_CurrentCachePath.clear();
         m_MapStatus = BuildMapStatus(mapName, "Not Found");
         return;
     }
 
-    RequestMapLoad(mapName, optPath);
+    RequestMapLoad(mapName, cachePath);
 }
 
-void ESP::RequestMapLoad(const std::string& mapName, const std::string& optPath)
+void ESP::RequestMapLoad(const std::string& mapName, const std::string& cachePath)
 {
     PendingMapLoad pending{};
     pending.RequestId = ++m_NextMapRequestId;
     pending.MapName = mapName;
-    pending.OptPath = optPath;
-    pending.Future = std::async(std::launch::async, [optPath]()
+    pending.CachePath = cachePath;
+    pending.Future = std::async(std::launch::async, [cachePath]()
     {
-        auto visCheck = std::make_unique<VisCheck>(optPath);
+        auto visCheck = std::make_unique<VisCheck>(cachePath);
         if (visCheck && visCheck->IsReady())
             return visCheck;
 
@@ -2505,15 +2704,17 @@ void ESP::ConsumeMapLoadResult()
             if (loadedVisCheck)
             {
                 m_VisCheck = std::move(loadedVisCheck);
+                UpdateMapDebugCacheFromVisCheck(*m_VisCheck);
                 m_CurrentMapName = pending.MapName;
-                m_CurrentOptPath = pending.OptPath;
+                m_CurrentCachePath = pending.CachePath;
                 m_MapStatus = BuildMapStatus(pending.MapName, "Loaded");
             }
             else
             {
                 m_VisCheck.reset();
+                ClearMapDebugCache();
                 m_CurrentMapName = pending.MapName;
-                m_CurrentOptPath = pending.OptPath;
+                m_CurrentCachePath = pending.CachePath;
                 m_MapStatus = BuildMapStatus(pending.MapName, "Load Failed");
             }
         }
@@ -2522,14 +2723,14 @@ void ESP::ConsumeMapLoadResult()
     }
 }
 
-std::string ESP::ResolveOptPath(const std::string& mapName) const
+std::string ESP::ResolveCachePath(const std::string& mapName) const
 {
     if (mapName.empty())
         return {};
 
-    const std::string fileName = mapName + ".opt";
+    const std::string fileName = mapName;
     std::vector<std::filesystem::path> candidates{};
-    candidates.reserve(64);
+    candidates.reserve(80);
 
     auto appendCandidates = [&](std::filesystem::path base)
     {
@@ -2538,8 +2739,12 @@ std::string ESP::ResolveOptPath(const std::string& mapName) const
         {
             candidates.push_back(base / "maps" / fileName);
             candidates.push_back(base / "Maps" / fileName);
-            candidates.push_back(base / "project-d" / "maps" / fileName);
+            candidates.push_back(base / "cache" / fileName);
+            candidates.push_back(base / "Cache" / fileName);
+            candidates.push_back(base / "MyVisCheckDemo" / "cache" / fileName);
             candidates.push_back(base / "project-d" / "Maps" / fileName);
+            candidates.push_back(base / "project-d" / "maps" / fileName);
+            candidates.push_back(base / "project-d" / "cache" / fileName);
             candidates.push_back(base / fileName);
 
             const std::filesystem::path parent = base.parent_path();
@@ -3183,11 +3388,47 @@ void ESP::BuildGrenadeHelperSnapshot(
 std::string ESP::BuildMapStatus(const std::string& mapName, const char* suffix) const
 {
     std::string status = Localization::Pick("Map Status: ", "地图状态 ");
-    status += mapName.empty() ? Localization::Pick("(Unknown)", "(未知)") : (mapName + ".opt");
+    status += mapName.empty() ? Localization::Pick("(Unknown)", "(未知)") : mapName;
     status += " (";
     status += LocalizeMapStatusSuffix(suffix);
     status += ")";
     return status;
+}
+
+void ESP::ClearMapDebugCache()
+{
+    std::lock_guard lock(m_MapDebugMutex);
+    m_MapDebugTriangles.clear();
+    m_MapDebugBoxes.clear();
+}
+
+void ESP::UpdateMapDebugCacheFromVisCheck(const VisCheck& visCheck)
+{
+    std::lock_guard lock(m_MapDebugMutex);
+    m_MapDebugTriangles.clear();
+    m_MapDebugBoxes.clear();
+
+    const std::vector<TriangleCombined>& visTriangles = visCheck.GetDebugTriangles();
+    m_MapDebugTriangles.reserve(visTriangles.size());
+    for (const TriangleCombined& tri : visTriangles)
+    {
+        m_MapDebugTriangles.push_back({
+            tri.v0,
+            tri.v1,
+            tri.v2,
+            tri.source_kind
+            });
+    }
+
+    const std::vector<AABB>& visBoxes = visCheck.GetDebugOccluderBounds();
+    m_MapDebugBoxes.reserve(visBoxes.size());
+    for (const AABB& bounds : visBoxes)
+    {
+        m_MapDebugBoxes.push_back({
+            bounds.min,
+            bounds.max
+            });
+    }
 }
 
 bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
@@ -4272,6 +4513,27 @@ void ESP::Render(ImDrawList* drawList)
     drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
     leftHudY += ImGui::GetFontSize() + 2.0f;
 
+    if (config.Visuals.VisCheckDebug)
+    {
+        std::size_t triangleCount = 0;
+        std::size_t boxCount = 0;
+        {
+            std::lock_guard lock(m_MapDebugMutex);
+            triangleCount = m_MapDebugTriangles.size();
+            boxCount = m_MapDebugBoxes.size();
+        }
+
+        char visDebugLine[160]{};
+        std::snprintf(
+            visDebugLine,
+            sizeof(visDebugLine),
+            Localization::Pick("VisDbg: Full | tri=%zu box=%zu", "Vis调试: 全量 | 三角=%zu 盒体=%zu"),
+            triangleCount,
+            boxCount);
+        drawList->AddText(ImVec2(12.0f, leftHudY), IM_COL32(120, 220, 255, 255), visDebugLine);
+        leftHudY += ImGui::GetFontSize() + 2.0f;
+    }
+
     if (config.DebugEnabled && (config.Aim.Aimbot || config.Aim.Trigger))
     {
         const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
@@ -4384,6 +4646,8 @@ void ESP::Render(ImDrawList* drawList)
         );
         leftHudY += ImGui::GetFontSize() + 2.0f;
     }
+
+        RenderVisCheckDebug(drawList);
 
         for (const PlayerEspSnapshot& player : frame.Players)
             RenderPlayer(drawList, player);

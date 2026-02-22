@@ -1,0 +1,5 @@
+C:/Users/Admin/source/repos/dma-cheat-base/project-d/VisCacheCompiler/build/CMakeFiles/viscore_core.dir
+C:/Users/Admin/source/repos/dma-cheat-base/project-d/VisCacheCompiler/build/CMakeFiles/map_compiler.dir
+C:/Users/Admin/source/repos/dma-cheat-base/project-d/VisCacheCompiler/build/CMakeFiles/vis_test.dir
+C:/Users/Admin/source/repos/dma-cheat-base/project-d/VisCacheCompiler/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Admin/source/repos/dma-cheat-base/project-d/VisCacheCompiler/build/CMakeFiles/ZERO_CHECK.dir
