@@ -985,7 +985,7 @@
                                             "y":  1880.6176069900464,
                                             "z":  7065.2396099627294
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  59,
@@ -1002,7 +1002,7 @@
                                             "y":  6601.1428652175846,
                                             "z":  6192.7002903352068
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  60,
@@ -1240,7 +1240,7 @@
                                             "y":  7301.981256932937,
                                             "z":  5642.6682304938131
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  74,
@@ -1988,7 +1988,7 @@
                                             "y":  5625.9601032752516,
                                             "z":  5205.5149825360277
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  118,
@@ -2855,7 +2855,7 @@
                                             "y":  6768.924883812173,
                                             "z":  5044.1402881640934
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  169,
@@ -3042,7 +3042,7 @@
                                             "y":  2724.4740435400595,
                                             "z":  7273.9200915086813
                                         },
-                         "throw_type":  "LB+W"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  180,
@@ -3127,7 +3127,7 @@
                                             "y":  -6832.6919374608242,
                                             "z":  4562.9887732499956
                                         },
-                         "throw_type":  "LRB+Space"
+                         "throw_type":  "LRB+Shift+Space"
                      },
                      {
                          "id":  185,
@@ -3212,7 +3212,7 @@
                                             "y":  7515.9650618794531,
                                             "z":  5439.767460004512
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  190,

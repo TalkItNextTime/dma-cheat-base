@@ -19,12 +19,72 @@
 
 namespace
 {
-    std::string LocalizeRuntimeText(const std::string& text)
+    std::string LocalizeWeaponName(const std::string& weaponName)
     {
-        if (text.empty() || !Localization::IsChinese())
-            return text;
+        if (weaponName.empty())
+            return weaponName;
 
-        return Localization::TranslateImpl(text);
+        if (weaponName == "Deagle") return Localization::Pick("Deagle", "沙鹰");
+        if (weaponName == "Dual Berettas") return Localization::Pick("Dual Berettas", "双持贝瑞塔");
+        if (weaponName == "Five-Seven") return Localization::Pick("Five-Seven", "FN57");
+        if (weaponName == "Glock-18") return Localization::Pick("Glock-18", "格洛克18");
+        if (weaponName == "AK-47") return Localization::Pick("AK-47", "AK-47");
+        if (weaponName == "AUG") return Localization::Pick("AUG", "AUG");
+        if (weaponName == "AWP") return Localization::Pick("AWP", "AWP");
+        if (weaponName == "FAMAS") return Localization::Pick("FAMAS", "法玛斯");
+        if (weaponName == "G3SG1") return Localization::Pick("G3SG1", "G3SG1");
+        if (weaponName == "Galil AR") return Localization::Pick("Galil AR", "加利尔 AR");
+        if (weaponName == "M249") return Localization::Pick("M249", "M249");
+        if (weaponName == "M4A4") return Localization::Pick("M4A4", "M4A4");
+        if (weaponName == "MAC-10") return Localization::Pick("MAC-10", "MAC-10");
+        if (weaponName == "P90") return Localization::Pick("P90", "P90");
+        if (weaponName == "MP5-SD") return Localization::Pick("MP5-SD", "MP5-SD");
+        if (weaponName == "UMP-45") return Localization::Pick("UMP-45", "UMP-45");
+        if (weaponName == "XM1014") return Localization::Pick("XM1014", "XM1014");
+        if (weaponName == "PP-Bizon") return Localization::Pick("PP-Bizon", "PP-野牛");
+        if (weaponName == "MAG-7") return Localization::Pick("MAG-7", "MAG-7");
+        if (weaponName == "Negev") return Localization::Pick("Negev", "内格夫");
+        if (weaponName == "Sawed-Off") return Localization::Pick("Sawed-Off", "截短霰弹枪");
+        if (weaponName == "Tec-9") return Localization::Pick("Tec-9", "Tec-9");
+        if (weaponName == "Zeus x27") return Localization::Pick("Zeus x27", "宙斯电击枪");
+        if (weaponName == "P2000") return Localization::Pick("P2000", "P2000");
+        if (weaponName == "MP7") return Localization::Pick("MP7", "MP7");
+        if (weaponName == "MP9") return Localization::Pick("MP9", "MP9");
+        if (weaponName == "Nova") return Localization::Pick("Nova", "新星");
+        if (weaponName == "P250") return Localization::Pick("P250", "P250");
+        if (weaponName == "SCAR-20") return Localization::Pick("SCAR-20", "SCAR-20");
+        if (weaponName == "SG 553") return Localization::Pick("SG 553", "SG 553");
+        if (weaponName == "SSG 08") return Localization::Pick("SSG 08", "SSG 08");
+        if (weaponName == "Knife") return Localization::Pick("Knife", "刀");
+        if (weaponName == "Flashbang") return Localization::Pick("Flashbang", "闪光弹");
+        if (weaponName == "HE Grenade") return Localization::Pick("HE Grenade", "高爆手雷");
+        if (weaponName == "Smoke") return Localization::Pick("Smoke", "烟雾弹");
+        if (weaponName == "Molotov") return Localization::Pick("Molotov", "燃烧瓶");
+        if (weaponName == "Decoy") return Localization::Pick("Decoy", "诱饵弹");
+        if (weaponName == "Incendiary") return Localization::Pick("Incendiary", "燃烧弹");
+        if (weaponName == "C4") return Localization::Pick("C4", "C4");
+        if (weaponName == "Healthshot") return Localization::Pick("Healthshot", "治疗针");
+        if (weaponName == "Knife (T)") return Localization::Pick("Knife (T)", "刀(T)");
+        if (weaponName == "M4A1-S") return Localization::Pick("M4A1-S", "M4A1-S");
+        if (weaponName == "USP-S") return Localization::Pick("USP-S", "USP-S");
+        if (weaponName == "CZ75 Auto") return Localization::Pick("CZ75 Auto", "CZ75 自动手枪");
+        if (weaponName == "R8 Revolver") return Localization::Pick("R8 Revolver", "R8 左轮");
+
+        return weaponName;
+    }
+
+    std::string LocalizeMapStatusSuffix(const char* suffix)
+    {
+        const std::string suffixText = suffix ? suffix : "";
+        if (suffixText == "Loaded")
+            return Localization::Pick("Loaded", "已加载");
+        if (suffixText == "Not Found")
+            return Localization::Pick("Not Found", "未找到");
+        if (suffixText == "Loading")
+            return Localization::Pick("Loading", "加载中");
+        if (suffixText == "Load Failed")
+            return Localization::Pick("Load Failed", "加载失败");
+        return suffixText;
     }
 
     struct BoneDataRaw
@@ -41,6 +101,8 @@ namespace
     constexpr float kTriggerTorsoScaleFixed = 8.0f;
     constexpr float kTriggerArmsScaleFixed = 6.0f;
     constexpr float kTriggerLegsScaleFixed = 5.0f;
+    constexpr float kFlashedStatusStrongThreshold = 0.60f; // 强致盲强度阈值；值越高，致盲状态越早消失。
+    constexpr float kFlashedStatusSoftThreshold = 0.30f; // 软致盲强度阈值（需配合 duration）；值越高，恢复越早判定为未致盲。
 
     constexpr std::array<int, 17> kTrackedBones = {
         0, 2, 4, 5, 6,
@@ -282,6 +344,7 @@ namespace
         bool A = false;
         bool S = false;
         bool D = false;
+        bool Shift = false;
         bool Ctrl = false;
         bool Space = false;
     };
@@ -349,6 +412,13 @@ namespace
             inOutKeys.D = true;
             return;
         }
+        if (tokenUpper == "SHIFT" || tokenUpper == "SHIFT_EN" || tokenUpper == "SHIFTEN" || tokenUpper == "SHIFT-EN" ||
+            tokenUpper == "WALK" || tokenUpper == "SLOWWALK" || tokenUpper == "SILENTWALK" ||
+            trimmed == "静步" || trimmed == "静走" || trimmed == "慢走" || trimmed == "走" || trimmed == "静")
+        {
+            inOutKeys.Shift = true;
+            return;
+        }
         if (tokenUpper == "CTRL" || tokenUpper == "CONTROL" || tokenUpper == "DUCK" || tokenUpper == "CROUCH")
         {
             inOutKeys.Ctrl = true;
@@ -387,6 +457,17 @@ namespace
             keys.Space = true;
             return keys;
         }
+        if (lowered == "walkthrow" || lowered == "shiftthrow" || lowered == "silentwalkthrow")
+        {
+            keys.Shift = true;
+            return keys;
+        }
+        if (lowered == "walkjumpthrow" || lowered == "walkjump" || lowered == "shiftjumpthrow" || lowered == "silentwalkjumpthrow")
+        {
+            keys.Shift = true;
+            keys.Space = true;
+            return keys;
+        }
 
         size_t begin = 0;
         while (begin <= throwType.size())
@@ -416,6 +497,7 @@ namespace
         if (keys.A) appendKey("A");
         if (keys.S) appendKey("S");
         if (keys.D) appendKey("D");
+        if (keys.Shift) appendKey("Shift");
         if (keys.Ctrl) appendKey("Ctrl");
         if (keys.Space) appendKey("Space");
 
@@ -429,6 +511,7 @@ namespace
         if (keys.A) keyboard.push_back("A");
         if (keys.S) keyboard.push_back("S");
         if (keys.D) keyboard.push_back("D");
+        if (keys.Shift) keyboard.push_back("Shift");
         if (keys.Ctrl) keyboard.push_back("Ctrl");
         if (keys.Space) keyboard.push_back("Space");
 
@@ -663,6 +746,11 @@ namespace
             return "S";
         if (upper == "D")
             return "D";
+        if (upper == "SHIFT" || upper == "WALK" || upper == "SLOWWALK" || upper == "SILENTWALK" ||
+            upper == "静步" || upper == "静走" || upper == "慢走" || upper == "走" || upper == "静")
+            return "Shift";
+        if (upper == "SHIFT_EN" || upper == "SHIFTEN" || upper == "SHIFT-EN")
+            return "Shift_en";
         if (upper == "CTRL" || upper == "CONTROL")
             return "Ctrl";
         if (upper == "SPACE")
@@ -691,6 +779,10 @@ namespace
             return "S";
         if (normalized == "D")
             return "D";
+        if (normalized == "Shift")
+            return Localization::Pick("Shift", "静步");
+        if (normalized == "Shift_en")
+            return "Shift";
         if (normalized == "Ctrl")
             return "Ctrl";
         if (normalized == "Space")
@@ -952,9 +1044,10 @@ namespace
         if (token.empty() || !device)
             return nullptr;
 
-        const std::string preferredToken = (token == "Space" && !Localization::IsChinese())
-            ? std::string("Space_en")
-            : token;
+        const std::string preferredToken =
+            (token == "Space" && !Localization::IsChinese()) ? std::string("Space_en") :
+            (token == "Shift" && !Localization::IsChinese()) ? std::string("Shift_en") :
+            token;
         const bool hasFallbackToken = preferredToken != token;
 
         KeyIconCache& cache = GetKeyIconCache();
@@ -1047,6 +1140,49 @@ namespace
         return std::abs(position.x) > 0.01f ||
             std::abs(position.y) > 0.01f ||
             std::abs(position.z) > 0.01f;
+    }
+
+    float ComputeFlashOverlayNormalized(const float overlayAlphaRaw, const float maxAlphaRaw)
+    {
+        const float overlayAlpha = (std::max)(0.0f, overlayAlphaRaw);
+        const float maxAlpha = (std::max)(0.0f, maxAlphaRaw);
+
+        const bool overlayLooksUnit = overlayAlpha <= 1.5f;
+        const bool maxLooksUnit = maxAlpha <= 1.5f;
+
+        const float overlay01 = overlayLooksUnit
+            ? std::clamp(overlayAlpha, 0.0f, 1.0f)
+            : std::clamp(overlayAlpha / 255.0f, 0.0f, 1.0f);
+
+        if (maxAlpha <= 0.001f)
+            return overlay01;
+
+        const float max01 = maxLooksUnit
+            ? std::clamp(maxAlpha, 0.0f, 1.0f)
+            : std::clamp(maxAlpha / 255.0f, 0.0f, 1.0f);
+
+        if (max01 <= 0.001f)
+            return overlay01;
+
+        // Mixed scales (for example overlay in 0..1 but max in 0..255): trust overlay itself.
+        if (overlayLooksUnit != maxLooksUnit)
+            return overlay01;
+
+        const float ratio = std::clamp(overlay01 / max01, 0.0f, 1.0f);
+        return (std::max)(overlay01, ratio);
+    }
+
+    bool IsFlashedForStatus(
+        const float flashDuration,
+        const float flashOverlayAlpha,
+        const float flashMaxAlpha)
+    {
+        const float flashStrength = ComputeFlashOverlayNormalized(flashOverlayAlpha, flashMaxAlpha);
+        if (flashStrength >= kFlashedStatusStrongThreshold)
+            return true;
+        if (flashStrength >= kFlashedStatusSoftThreshold && flashDuration > 0.01f)
+            return true;
+        return false;
     }
 
     float Dot3(const Vector3& a, const Vector3& b)
@@ -1262,6 +1398,8 @@ namespace
         bool IsScoped = false;
         bool HasDefuser = false;
         float FlashDuration = 0.0f;
+        float FlashOverlayAlpha = 0.0f;
+        float FlashMaxAlpha = 255.0f;
         bool RefreshStatus = false;
     };
 }
@@ -1323,7 +1461,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Name)
     {
-        const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "鏈煡") : player.Name;
+        const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "未知") : player.Name;
         const ImVec2 textSize = ImGui::CalcTextSize(nameText.c_str());
 
         const ImVec2 textPos(
@@ -1336,7 +1474,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Weapon && !player.WeaponName.empty())
     {
-        const std::string weaponText = LocalizeRuntimeText(player.WeaponName);
+        const std::string weaponText = LocalizeWeaponName(player.WeaponName);
         const ImVec2 textSize = ImGui::CalcTextSize(weaponText.c_str());
         const ImVec2 textPos(
             player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - textSize.x) * 0.5f,
@@ -1371,7 +1509,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     if (player.IsScoped)
         statusLines.push_back({ Localization::Pick("Scoped", "开镜"), IM_COL32(220, 220, 220, 255) });
 
-    if (player.FlashDuration > 0.01f)
+    if (IsFlashedForStatus(player.FlashDuration, player.FlashOverlayAlpha, player.FlashMaxAlpha))
         statusLines.push_back({ Localization::Pick("Flashed", "致盲"), IM_COL32(255, 214, 120, 255) });
 
     if (config.Visuals.Armor)
@@ -3047,7 +3185,7 @@ std::string ESP::BuildMapStatus(const std::string& mapName, const char* suffix) 
     std::string status = Localization::Pick("Map Status: ", "地图状态 ");
     status += mapName.empty() ? Localization::Pick("(Unknown)", "(未知)") : (mapName + ".opt");
     status += " (";
-    status += Localization::Localize(suffix);
+    status += LocalizeMapStatusSuffix(suffix);
     status += ")";
     return status;
 }
@@ -3829,6 +3967,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 entity->IsScoped = runtimeCache.IsScoped;
                 entity->HasDefuser = runtimeCache.HasDefuser;
                 entity->FlashDuration = runtimeCache.FlashDuration;
+                entity->FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
+                entity->FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
             }
             else
             {
@@ -3840,6 +3980,10 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
                 if (Offsets::Schema::m_flFlashDuration)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
+                if (Offsets::Schema::m_flFlashOverlayAlpha)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashOverlayAlpha, &entity->FlashOverlayAlpha, sizeof(entity->FlashOverlayAlpha));
+                if (Offsets::Schema::m_flFlashMaxAlpha)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashMaxAlpha, &entity->FlashMaxAlpha, sizeof(entity->FlashMaxAlpha));
             }
         }
 
@@ -3863,6 +4007,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             runtimeCache.IsScoped = entity->IsScoped;
             runtimeCache.HasDefuser = entity->HasDefuser;
             runtimeCache.FlashDuration = (std::max)(0.0f, entity->FlashDuration);
+            runtimeCache.FlashOverlayAlpha = (std::max)(0.0f, entity->FlashOverlayAlpha);
+            runtimeCache.FlashMaxAlpha = std::clamp(entity->FlashMaxAlpha, 0.0f, 255.0f);
             runtimeCache.LastStatusRead = now;
         }
 
@@ -3988,6 +4134,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         snapshot.IsScoped = runtimeCache.IsScoped;
         snapshot.HasDefuser = runtimeCache.HasDefuser;
         snapshot.FlashDuration = runtimeCache.FlashDuration;
+        snapshot.FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
+        snapshot.FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
 
         snapshot.Origin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
         snapshot.EyePosition = snapshot.Origin + entity->ViewOffset;
@@ -4124,7 +4272,7 @@ void ESP::Render(ImDrawList* drawList)
     drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
     leftHudY += ImGui::GetFontSize() + 2.0f;
 
-    if (config.Aim.Aimbot || config.Aim.Trigger)
+    if (config.DebugEnabled && (config.Aim.Aimbot || config.Aim.Trigger))
     {
         const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
         const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
@@ -4191,16 +4339,19 @@ void ESP::Render(ImDrawList* drawList)
             1.3f
         );
 
-        char fovText[64]{};
-        const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
-        const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
-        const char* aimState = aimbotHasTarget ? Localization::Pick("LOCK", "锁定") : (aimbotHotkeyActive ? Localization::Pick("HOTKEY", "热键") : Localization::Pick("IDLE", "空闲"));
-        std::snprintf(fovText, sizeof(fovText), Localization::Pick("FOV %.1f px [%s]", "FOV %.1f 像素 [%s]"), radius, aimState);
-        drawList->AddText(
-            ImVec2(ScreenCenter.x + radius + 8.0f, ScreenCenter.y - ImGui::GetFontSize() * 0.5f),
-            ToImColor(config.Aim.AimbotFovColor),
-            fovText
-        );
+        if (config.DebugEnabled)
+        {
+            char fovText[64]{};
+            const bool aimbotHasTarget = aim.HasAimbotTargetVisual();
+            const bool aimbotHotkeyActive = aim.IsAimbotHotkeyActiveVisual();
+            const char* aimState = aimbotHasTarget ? Localization::Pick("LOCK", "锁定") : (aimbotHotkeyActive ? Localization::Pick("HOTKEY", "热键") : Localization::Pick("IDLE", "空闲"));
+            std::snprintf(fovText, sizeof(fovText), Localization::Pick("FOV %.1f px [%s]", "FOV %.1f 像素 [%s]"), radius, aimState);
+            drawList->AddText(
+                ImVec2(ScreenCenter.x + radius + 8.0f, ScreenCenter.y - ImGui::GetFontSize() * 0.5f),
+                ToImColor(config.Aim.AimbotFovColor),
+                fovText
+            );
+        }
     }
 
     if (config.Aim.TriggerHitboxDebug)
@@ -4221,7 +4372,7 @@ void ESP::Render(ImDrawList* drawList)
             triggerDebugText,
             sizeof(triggerDebugText),
             Localization::Pick("Trigger Debug: %s | Body %.1f px | Head %.1f px", "扳机调试: %s | 身体 %.1f 像素 | 头部 %.1f 像素"),
-            Localization::Localize(Structs::TriggerDetectModeNames[detectMode]),
+            Localization::Pick(Structs::TriggerDetectModeNames[detectMode], Structs::TriggerDetectModeNamesZh[detectMode]),
             bodyRadius,
             headRadius
         );

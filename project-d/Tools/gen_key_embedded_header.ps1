@@ -18,7 +18,7 @@ if ($ChunkSize -lt 16) {
     throw "ChunkSize must be >= 16"
 }
 
-$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Ctrl", "Space", "Space_en")
+$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Shift", "Shift_en", "Ctrl", "Space", "Space_en")
 $jsonText = Get-Content -LiteralPath $JsonPath -Raw -Encoding UTF8
 $icons = $jsonText | ConvertFrom-Json
 
@@ -32,10 +32,11 @@ $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine("inline std::unordered_map<std::string, std::string> BuildKeyIconsBase64Map()")
 [void]$sb.AppendLine("{")
 [void]$sb.AppendLine("    std::unordered_map<std::string, std::string> out{};")
-[void]$sb.AppendLine("    out.reserve(11);")
+[void]$sb.AppendLine(("    out.reserve({0});" -f $tokenOrder.Count))
 
 foreach ($token in $tokenOrder) {
-    $value = [string]$icons.$token
+    $prop = $icons.PSObject.Properties[$token]
+    $value = if ($null -ne $prop) { [string]$prop.Value } else { "" }
     if ([string]::IsNullOrWhiteSpace($value)) {
         throw "Missing or empty token in json: $token"
     }

@@ -1,4 +1,4 @@
-#include "imgui_addons.h"
+﻿#include "imgui_addons.h"
 #include "Localization.hpp"
 
 #include <map>
@@ -13,7 +13,7 @@ namespace
 {
     const char* L(const char* text)
     {
-        return Localization::Localize(text);
+        return Localization::Pick(text);
     }
 
     bool IsHostVkDown(const int virtualKey)

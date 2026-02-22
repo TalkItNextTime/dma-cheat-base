@@ -14,28 +14,30 @@ function New-CjkText([int[]]$Codes) {
     return -join ($Codes | ForEach-Object { [char]$_ })
 }
 
-$KW_DOUBLE_KEY = New-CjkText @(0x53CC, 0x952E)        # 双键
-$KW_DOUBLE_PRESS = New-CjkText @(0x53CC, 0x6309)      # 双按
-$KW_DOUBLE = New-CjkText @(0x53CC)                    # 双
-$KW_LEFT_RIGHT = New-CjkText @(0x5DE6, 0x53F3, 0x952E) # 左右键
-$KW_RIGHT_KEY = New-CjkText @(0x53F3, 0x952E)         # 右键
+$KW_DOUBLE_KEY = New-CjkText @(0x53CC, 0x952E)
+$KW_DOUBLE_PRESS = New-CjkText @(0x53CC, 0x6309)
+$KW_DOUBLE = New-CjkText @(0x53CC)
+$KW_LEFT_RIGHT = New-CjkText @(0x5DE6, 0x53F3, 0x952E)
+$KW_RIGHT_KEY = New-CjkText @(0x53F3, 0x952E)
 
-$KW_CROUCH_DOWN = New-CjkText @(0x8E72, 0x4E0B)       # 蹲下
-$KW_DOWN_CROUCH = New-CjkText @(0x4E0B, 0x8E72)       # 下蹲
-$KW_CROUCH = New-CjkText @(0x8E72)                    # 蹲
-
-$KW_JUMP_THROW = New-CjkText @(0x8DF3, 0x6295)        # 跳投
-$KW_RUN_THROW = New-CjkText @(0x8DD1, 0x6295)         # 跑投
-$KW_RUN_JUMP = New-CjkText @(0x8DD1, 0x8DF3)          # 跑跳
-$KW_RUN_JUMP_THROW = New-CjkText @(0x8DD1, 0x8DF3, 0x6295) # 跑跳投
-
-$KW_RUN_TO = New-CjkText @(0x8DD1, 0x5230)            # 跑到
-$KW_WALK_TO = New-CjkText @(0x8D70, 0x5230)           # 走到
-$KW_RUN_UNTIL = New-CjkText @(0x8DD1, 0x81F3)         # 跑至
-$KW_WALK_UNTIL = New-CjkText @(0x8D70, 0x81F3)        # 走至
-$KW_ARRIVE = New-CjkText @(0x5230, 0x8FBE)            # 到达
-$KW_TO = New-CjkText @(0x5230)                        # 到
-$KW_UNTIL = New-CjkText @(0x81F3)                     # 至
+$KW_CROUCH_DOWN = New-CjkText @(0x8E72, 0x4E0B)
+$KW_DOWN_CROUCH = New-CjkText @(0x4E0B, 0x8E72)
+$KW_CROUCH = New-CjkText @(0x8E72)
+$KW_JUMP_THROW = New-CjkText @(0x8DF3, 0x6295)
+$KW_RUN_THROW = New-CjkText @(0x8DD1, 0x6295)
+$KW_RUN_JUMP = New-CjkText @(0x8DD1, 0x8DF3)
+$KW_RUN_JUMP_THROW = New-CjkText @(0x8DD1, 0x8DF3, 0x6295)
+$KW_RUN_TO = New-CjkText @(0x8DD1, 0x5230)
+$KW_WALK_TO = New-CjkText @(0x8D70, 0x5230)
+$KW_RUN_UNTIL = New-CjkText @(0x8DD1, 0x81F3)
+$KW_WALK_UNTIL = New-CjkText @(0x8D70, 0x81F3)
+$KW_ARRIVE = New-CjkText @(0x5230, 0x8FBE)
+$KW_TO = New-CjkText @(0x5230)
+$KW_UNTIL = New-CjkText @(0x81F3)
+$KW_SILENT_WALK = New-CjkText @(0x9759, 0x6B65)
+$KW_SILENT_MOVE = New-CjkText @(0x9759, 0x8D70)
+$KW_SILENT = New-CjkText @(0x9759)
+$KW_WALK = New-CjkText @(0x8D70)
 
 function Trim-Ascii([string]$Value) {
     if ($null -eq $Value) { return "" }
@@ -54,6 +56,7 @@ function New-ThrowKeyState {
         A = $false
         S = $false
         D = $false
+        Shift = $false
         Ctrl = $false
         Space = $false
     }
@@ -73,6 +76,13 @@ function Parse-ThrowType([string]$ThrowTypeRaw) {
         "runthrow" { $state.W = $true; return $state }
         "runjumpthrow" { $state.W = $true; $state.Space = $true; return $state }
         "runjump" { $state.W = $true; $state.Space = $true; return $state }
+        "walkthrow" { $state.Shift = $true; return $state }
+        "shiftthrow" { $state.Shift = $true; return $state }
+        "silentwalkthrow" { $state.Shift = $true; return $state }
+        "walkjumpthrow" { $state.Shift = $true; $state.Space = $true; return $state }
+        "walkjump" { $state.Shift = $true; $state.Space = $true; return $state }
+        "shiftjumpthrow" { $state.Shift = $true; $state.Space = $true; return $state }
+        "silentwalkjumpthrow" { $state.Shift = $true; $state.Space = $true; return $state }
     }
 
     $parts = $throwType -split '\+'
@@ -99,6 +109,13 @@ function Parse-ThrowType([string]$ThrowTypeRaw) {
             "A" { $state.A = $true; continue }
             "S" { $state.S = $true; continue }
             "D" { $state.D = $true; continue }
+            "SHIFT" { $state.Shift = $true; continue }
+            "SHIFT_EN" { $state.Shift = $true; continue }
+            "SHIFTEN" { $state.Shift = $true; continue }
+            "SHIFT-EN" { $state.Shift = $true; continue }
+            "WALK" { $state.Shift = $true; continue }
+            "SLOWWALK" { $state.Shift = $true; continue }
+            "SILENTWALK" { $state.Shift = $true; continue }
             "CTRL" { $state.Ctrl = $true; continue }
             "CONTROL" { $state.Ctrl = $true; continue }
             "CROUCH" { $state.Ctrl = $true; continue }
@@ -119,6 +136,7 @@ function Build-CanonicalThrowType($State) {
     if ($State.A) { $result += "+A" }
     if ($State.S) { $result += "+S" }
     if ($State.D) { $result += "+D" }
+    if ($State.Shift) { $result += "+Shift" }
     if ($State.Ctrl) { $result += "+Ctrl" }
     if ($State.Space) { $result += "+Space" }
 
@@ -219,8 +237,23 @@ function Apply-ThrowHintsFromText([string]$Text, $State) {
         return
     }
 
+    $hasSilentWalk = Contains-AnyKeyword $Text @(
+        $KW_SILENT_WALK,
+        $KW_SILENT_MOVE,
+        $KW_SILENT,
+        $KW_WALK,
+        "walk",
+        "shift",
+        "slowwalk",
+        "silentwalk"
+    )
+
     if ($hasRun) { $State.W = $true }
     if ($hasJump) { $State.Space = $true }
+    if ($hasSilentWalk) {
+        $State.Shift = $true
+        $State.W = $false
+    }
 }
 
 function Extract-ArrivalRemark([string]$Name) {

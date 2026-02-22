@@ -1,4 +1,4 @@
-#include <Pch.hpp>
+﻿#include <Pch.hpp>
 #include <SDK.hpp>
 #include <ESP/ESP.hpp>
 #include "Aimbot.hpp"
@@ -73,6 +73,9 @@ namespace
     constexpr float kTriggerTorsoScaleFixed = 8.0f;
     constexpr float kTriggerArmsScaleFixed = 6.0f;
     constexpr float kTriggerLegsScaleFixed = 5.0f;
+    constexpr float kFlashBlockOverlayStrongThreshold = 0.60f; // 强致盲暂停阈值；值越高，越早恢复自瞄/扳机。
+    constexpr float kFlashBlockOverlaySoftThreshold = 0.60f; // 软致盲暂停阈值（需配合 duration）；值越高，恢复越早。
+    constexpr float kFlashBlockDurationAssistSec = 0.08f;
 
     constexpr std::array<BoneLink, 16> kTriggerBoneLinks = {
         BoneLink{ 0, 2, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(2) },
@@ -112,6 +115,73 @@ namespace
     bool IsNonZeroPosition(const Vector3& value)
     {
         return std::fabs(value.x) > 0.01f || std::fabs(value.y) > 0.01f || std::fabs(value.z) > 0.01f;
+    }
+
+    float ComputeFlashOverlayNormalized(const float overlayAlphaRaw, const float maxAlphaRaw)
+    {
+        const float overlayAlpha = (std::max)(0.0f, overlayAlphaRaw);
+        const float maxAlpha = (std::max)(0.0f, maxAlphaRaw);
+
+        const bool overlayLooksUnit = overlayAlpha <= 1.5f;
+        const bool maxLooksUnit = maxAlpha <= 1.5f;
+
+        const float overlay01 = overlayLooksUnit
+            ? std::clamp(overlayAlpha, 0.0f, 1.0f)
+            : std::clamp(overlayAlpha / 255.0f, 0.0f, 1.0f);
+
+        if (maxAlpha <= 0.001f)
+            return overlay01;
+
+        const float max01 = maxLooksUnit
+            ? std::clamp(maxAlpha, 0.0f, 1.0f)
+            : std::clamp(maxAlpha / 255.0f, 0.0f, 1.0f);
+
+        if (max01 <= 0.001f)
+            return overlay01;
+
+        // Mixed scales (for example overlay in 0..1 but max in 0..255): trust overlay itself.
+        if (overlayLooksUnit != maxLooksUnit)
+            return overlay01;
+
+        const float ratio = std::clamp(overlay01 / max01, 0.0f, 1.0f);
+        return (std::max)(overlay01, ratio);
+    }
+
+    bool IsPlayerEffectivelyFlashed(const std::uint64_t localPawn)
+    {
+        if (!IsLikelyUserAddress(localPawn))
+            return false;
+
+        const float flashDuration = Offsets::Schema::m_flFlashDuration
+            ? (std::max)(0.0f, mem.Read<float>(localPawn + Offsets::Schema::m_flFlashDuration))
+            : 0.0f;
+
+        // Prefer current overlay alpha to avoid over-blocking during the fade-out phase.
+        if (Offsets::Schema::m_flFlashOverlayAlpha)
+        {
+            const float overlayAlpha = (std::max)(
+                0.0f,
+                mem.Read<float>(localPawn + Offsets::Schema::m_flFlashOverlayAlpha)
+            );
+
+            float maxAlpha = 0.0f;
+            if (Offsets::Schema::m_flFlashMaxAlpha)
+            {
+                maxAlpha = (std::max)(
+                    0.0f,
+                    mem.Read<float>(localPawn + Offsets::Schema::m_flFlashMaxAlpha)
+                );
+            }
+
+            const float flashStrength = ComputeFlashOverlayNormalized(overlayAlpha, maxAlpha);
+            if (flashStrength >= kFlashBlockOverlayStrongThreshold)
+                return true;
+            if (flashStrength >= kFlashBlockOverlaySoftThreshold && flashDuration >= kFlashBlockDurationAssistSec)
+                return true;
+            return false;
+        }
+
+        return false;
     }
 
     std::uint64_t NormalizeBoneMask(std::uint64_t mask, const std::uint64_t fallbackMask)
@@ -842,22 +912,18 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_AimbotHotkeyWasActive = false;
-        m_LastFovProbeAt = {};
-        m_LastFovProbeRadiusPx = 0.0f;
         m_LastTargetScanAt = {};
         setAimbotVisual(false, false);
         return;
     }
 
-    if (overlay.shouldRenderMenu)
+    const bool menuOpen = overlay.shouldRenderMenu;
+    if (menuOpen)
     {
-        m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        // Block actual aimbot action while menu is open.
         m_LockedTargetPawn = 0;
-        m_LastFovProbeAt = {};
-        m_LastFovProbeRadiusPx = 0.0f;
+        m_AimbotHotkeyWasActive = false;
         m_LastTargetScanAt = {};
-        setAimbotVisual(false, false);
-        return;
     }
 
     if (!Offsets::Schema::m_iHealth || !Offsets::Schema::m_iTeamNum || !Offsets::Schema::m_lifeState)
@@ -882,8 +948,6 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_LastTargetScanAt = {};
-        m_LastFovProbeAt = {};
-        m_LastFovProbeRadiusPx = 0.0f;
         setAimbotVisual(false, false);
         return;
     }
@@ -905,10 +969,7 @@ void Aimbot::UpdateAimbot()
         return;
     }
 
-    const float flashDuration = Offsets::Schema::m_flFlashDuration
-        ? mem.Read<float>(core.LocalPawn + Offsets::Schema::m_flFlashDuration)
-        : 0.0f;
-    if (config.Aim.BlockAimbotWhenFlashed && flashDuration > 0.05f)
+    if (config.Aim.BlockAimbotWhenFlashed && IsPlayerEffectivelyFlashed(core.LocalPawn))
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
@@ -956,7 +1017,7 @@ void Aimbot::UpdateAimbot()
         setAimbotVisual(false, false);
         return;
     }
-    const bool aimbotEnabled = config.Aim.Aimbot;
+    const bool aimbotEnabled = config.Aim.Aimbot && !menuOpen;
     const bool hotkeyActive = aimbotEnabled ? IsAnyAimbotHotkeyActive() : false;
     const bool justReleased = m_AimbotHotkeyWasActive && !hotkeyActive;
     m_AimbotHotkeyWasActive = hotkeyActive;
@@ -1087,12 +1148,7 @@ void Aimbot::UpdateAimbot()
             std::pow(targetWorld.z - localEye.z, 2.0f)
         );
 
-        float allowedFovPx = baseFovPx;
-        if (config.Aim.DynamicFov && profile.DynamicFov)
-        {
-            const float distanceScale = std::clamp(worldDistance / (std::max)(profile.DynamicFovDistanceScale, 1.0f), 0.65f, 4.5f);
-            allowedFovPx = std::clamp(baseFovPx / distanceScale, config.Aim.DynamicFovMinPx, baseFovPx);
-        }
+        const float allowedFovPx = baseFovPx;
 
         outCandidate.Pawn = pawn;
         outCandidate.World = targetWorld;
@@ -1162,28 +1218,6 @@ void Aimbot::UpdateAimbot()
                 m_TargetSwitchReadyAt = now + std::chrono::milliseconds(profile.TargetSwitchDelayMs);
             }
         }
-    }
-
-    if (config.Aim.DrawFov && config.Aim.DynamicFov && profile.DynamicFov && (!aimbotEnabled || !hotkeyActive))
-    {
-        constexpr auto kFovProbeInterval = std::chrono::milliseconds(16); // ~62Hz preview
-        if (m_LastFovProbeAt.time_since_epoch().count() == 0 || now - m_LastFovProbeAt >= kFovProbeInterval)
-        {
-            TargetCandidate probeCandidate{};
-            if (findBestTargetCandidate(probeCandidate))
-                m_LastFovProbeRadiusPx = probeCandidate.AllowedFovPx;
-            else
-                m_LastFovProbeRadiusPx = baseFovPx;
-
-            m_LastFovProbeAt = now;
-        }
-
-        displayFovPx = (std::max)(config.Aim.DynamicFovMinPx, m_LastFovProbeRadiusPx);
-    }
-    else if (!aimbotEnabled || !hotkeyActive)
-    {
-        m_LastFovProbeAt = {};
-        m_LastFovProbeRadiusPx = baseFovPx;
     }
 
     if (!aimbotEnabled || !hotkeyActive)
@@ -1425,10 +1459,7 @@ void Aimbot::UpdateTriggerbot()
         return;
     }
 
-    const float flashDuration = Offsets::Schema::m_flFlashDuration
-        ? mem.Read<float>(core.LocalPawn + Offsets::Schema::m_flFlashDuration)
-        : 0.0f;
-    if (config.Aim.BlockTriggerWhenFlashed && flashDuration > 0.05f)
+    if (config.Aim.BlockTriggerWhenFlashed && IsPlayerEffectivelyFlashed(core.LocalPawn))
     {
         ResetTriggerWindow();
         ReleaseTriggerMouseIfHeld();

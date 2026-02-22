@@ -237,7 +237,7 @@
                                             "y":  5599.1884765625,
                                             "z":  -7223.0078125
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "RB+Ctrl+Space"
                      },
                      {
                          "id":  16,
@@ -441,7 +441,7 @@
                                             "y":  2386.59130859375,
                                             "z":  7436.1826171875
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  28,

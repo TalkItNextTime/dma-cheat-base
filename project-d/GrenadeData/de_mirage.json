@@ -67,7 +67,7 @@
                                             "y":  6670.46630859375,
                                             "z":  -5005.154296875
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "RB+Space"
                      },
                      {
                          "id":  5,
@@ -118,7 +118,7 @@
                                             "y":  6946.61181640625,
                                             "z":  -3968.875732421875
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "RB+Space"
                      },
                      {
                          "id":  8,
@@ -254,7 +254,7 @@
                                             "y":  6946.61181640625,
                                             "z":  -3968.875732421875
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "RB+Space"
                      },
                      {
                          "id":  16,
@@ -390,7 +390,7 @@
                                             "y":  6946.61181640625,
                                             "z":  -3968.875732421875
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "RB+Space"
                      },
                      {
                          "id":  24,
@@ -526,7 +526,7 @@
                                             "y":  2503.194580078125,
                                             "z":  -1113.4896240234375
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "RB+Space"
                      },
                      {
                          "id":  32,
@@ -900,7 +900,7 @@
                                             "y":  7743.18017578125,
                                             "z":  3328.2041015625
                                         },
-                         "throw_type":  "LB"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  54,
@@ -934,7 +934,7 @@
                                             "y":  3518.520751953125,
                                             "z":  2133.760498046875
                                         },
-                         "throw_type":  "LB"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  56,
@@ -1036,7 +1036,7 @@
                                             "y":  7792.3359375,
                                             "z":  850.57806396484364
                                         },
-                         "throw_type":  "LB"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  62,
@@ -1189,7 +1189,7 @@
                                             "y":  8768.890625,
                                             "z":  2039.177001953125
                                         },
-                         "throw_type":  "LB"
+                         "throw_type":  "RB"
                      },
                      {
                          "id":  71,
@@ -2073,7 +2073,7 @@
                                             "y":  -1369.5274658203125,
                                             "z":  5881.38330078125
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  125,
@@ -2090,7 +2090,7 @@
                                             "y":  -1510.5455322265625,
                                             "z":  5813.54443359375
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  126,
@@ -2107,7 +2107,7 @@
                                             "y":  -1783.8033447265625,
                                             "z":  5529.154296875
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  127,
@@ -2124,7 +2124,7 @@
                                             "y":  -1973.888916015625,
                                             "z":  5336.263671875
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  128,
@@ -2362,7 +2362,7 @@
                                             "y":  -1369.5274658203125,
                                             "z":  5881.38330078125
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  145,
@@ -2379,7 +2379,7 @@
                                             "y":  -1510.5455322265625,
                                             "z":  5813.54443359375
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  146,
@@ -2396,7 +2396,7 @@
                                             "y":  -1783.8033447265625,
                                             "z":  5529.154296875
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  148,
@@ -2668,7 +2668,7 @@
                                             "y":  -1369.5274658203125,
                                             "z":  5881.38330078125
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  166,
@@ -2685,7 +2685,7 @@
                                             "y":  -1510.5455322265625,
                                             "z":  5813.54443359375
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  167,
@@ -2702,7 +2702,7 @@
                                             "y":  -1783.8033447265625,
                                             "z":  5529.154296875
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  169,
@@ -3008,7 +3008,7 @@
                                             "y":  2454.85595703125,
                                             "z":  5877.146484375
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  190,
@@ -3025,7 +3025,7 @@
                                             "y":  1980.451904296875,
                                             "z":  7112.09765625
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  191,
@@ -3059,7 +3059,7 @@
                                             "y":  1776.330810546875,
                                             "z":  7882.603515625
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  193,
@@ -3586,7 +3586,7 @@
                                             "y":  -4350.85205078125,
                                             "z":  4573.24462890625
                                         },
-                         "throw_type":  "LB+Ctrl+Space"
+                         "throw_type":  "LB+Shift+Ctrl+Space"
                      },
                      {
                          "id":  224,
@@ -3807,7 +3807,7 @@
                                             "y":  -7399.57275390625,
                                             "z":  2647.79052734375
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  237,
@@ -4351,7 +4351,7 @@
                                             "y":  3279.9541015625,
                                             "z":  3928.8779296875
                                         },
-                         "throw_type":  "LB+W"
+                         "throw_type":  "RB+W"
                      },
                      {
                          "id":  271,
@@ -4402,7 +4402,7 @@
                                             "y":  -5243.31982421875,
                                             "z":  6702.3115234375
                                         },
-                         "throw_type":  "LB+Space"
+                         "throw_type":  "LB+Shift+Space"
                      },
                      {
                          "id":  274,
@@ -4691,7 +4691,7 @@
                                             "y":  -7810.9453125,
                                             "z":  2347.76025390625
                                         },
-                         "throw_type":  "LB"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  293,
@@ -5626,7 +5626,7 @@
                                             "y":  -651.322998046875,
                                             "z":  2392.042724609375
                                         },
-                         "throw_type":  "LB+W"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  350,
@@ -5643,7 +5643,7 @@
                                             "y":  -976.44281005859375,
                                             "z":  2399.08349609375
                                         },
-                         "throw_type":  "LB+W"
+                         "throw_type":  "LB+Shift"
                      },
                      {
                          "id":  351,

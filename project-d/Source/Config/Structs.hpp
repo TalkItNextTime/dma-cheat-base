@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -28,6 +28,15 @@ namespace Structs
         "LMG"
     };
 
+    inline constexpr std::array<const char*, AimWeapon_Count> AimWeaponGroupNamesZh = {
+        "手枪",
+        "冲锋枪",
+        "霰弹枪",
+        "步枪",
+        "狙击枪",
+        "轻机枪"
+    };
+
     enum AimTargetStrategy : int
     {
         AimStrategy_Crosshair = 0,
@@ -39,6 +48,12 @@ namespace Structs
         "Crosshair Closest",
         "Distance Closest",
         "Hybrid"
+    };
+
+    inline constexpr std::array<const char*, 3> AimTargetStrategyNamesZh = {
+        "准星最近",
+        "距离最近",
+        "混合"
     };
 
     enum AimHitGroupBit : std::uint32_t
@@ -58,6 +73,15 @@ namespace Structs
         "Pelvis",
         "Arms",
         "Legs"
+    };
+
+    inline constexpr std::array<const char*, 6> AimHitGroupNamesZh = {
+        "头部",
+        "上胸",
+        "躯干",
+        "骨盆",
+        "手臂",
+        "腿部"
     };
 
     inline constexpr std::array<int, 17> AimBoneIds = {
@@ -86,6 +110,26 @@ namespace Structs
         "R Thigh",
         "R Knee",
         "R Foot"
+    };
+
+    inline constexpr std::array<const char*, 17> AimBoneNamesZh = {
+        "骨盆",
+        "脊柱",
+        "胸部",
+        "颈部",
+        "头部",
+        "左肩",
+        "左肘",
+        "左手",
+        "右肩",
+        "右肘",
+        "右手",
+        "左大腿",
+        "左膝",
+        "左脚",
+        "右大腿",
+        "右膝",
+        "右脚"
     };
 
     inline constexpr int AimHeadBoneId = 6;
@@ -125,6 +169,11 @@ namespace Structs
         "Crosshair Entity"
     };
 
+    inline constexpr std::array<const char*, 2> TriggerDetectModeNamesZh = {
+        "骨骼命中盒",
+        "准星实体"
+    };
+
     enum TriggerSpecialWeapon : int
     {
         TriggerSpecial_Deagle = 0,
@@ -137,6 +186,11 @@ namespace Structs
         "R8 Revolver"
     };
 
+    inline constexpr std::array<const char*, TriggerSpecial_Count> TriggerSpecialWeaponNamesZh = {
+        "沙漠之鹰",
+        "R8 左轮"
+    };
+
     struct AimWeaponProfile
     {
         float Fov = 6.5f;
@@ -144,8 +198,6 @@ namespace Structs
         float CurveStrength = 0.22f;
         std::uint64_t BoneMask = AimDefaultAimbotBoneMask;
 
-        bool DynamicFov = true;
-        float DynamicFovDistanceScale = 1500.0f;
         int TargetStrategy = AimStrategy_Crosshair;
         int TargetSwitchDelayMs = 120;
     };
@@ -218,8 +270,6 @@ namespace Structs
 
         bool DrawFov = false;
         ImVec4 AimbotFovColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-        bool DynamicFov = true;
-        float DynamicFovMinPx = 8.0f;
 
         bool AimFriendly = false;
         bool AimVisible = false;

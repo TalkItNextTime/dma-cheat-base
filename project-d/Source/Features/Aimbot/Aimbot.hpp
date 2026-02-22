@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <Pch.hpp>
 #include <atomic>
 
@@ -63,8 +63,6 @@ private:
 	std::chrono::steady_clock::time_point m_TriggerMouseReleaseAt{};
 
 	std::chrono::steady_clock::time_point m_LastTargetScanAt{};
-	std::chrono::steady_clock::time_point m_LastFovProbeAt{};
-	float m_LastFovProbeRadiusPx = 0.0f;
 
 	std::atomic<float> m_CurrentFovRadiusPx{ 0.0f };
 	std::atomic<float> m_CurrentTriggerHitboxRadiusPx{ 0.0f };

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 
@@ -70,6 +70,8 @@ namespace Offsets
         inline std::uint32_t m_ArmorValue = 0;
         inline std::uint32_t m_bIsScoped = 0;
         inline std::uint32_t m_flFlashDuration = 0;
+        inline std::uint32_t m_flFlashMaxAlpha = 0;
+        inline std::uint32_t m_flFlashOverlayAlpha = 0;
         inline std::uint32_t m_iIDEntIndex = 0;
         inline std::uint32_t m_iObserverMode = 0;
         inline std::uint32_t m_hObserverTarget = 0;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <map>
 #include <string>
@@ -37,8 +37,6 @@ namespace Localization
             { "Enable Secondary Key", "启用副热键" },
             { "Secondary Key", "副热键" },
             { "Draw FOV", "绘制FOV" },
-            { "Dynamic FOV", "动态FOV" },
-            { "Dynamic FOV Min Px", "动态FOV最小像素" },
             { "Aim Visible", "仅可见目标" },
             { "Aim Teammates", "瞄准队友" },
             { "Block Aimbot When Flashed", "致盲时禁用自瞄" },
@@ -48,8 +46,6 @@ namespace Localization
             { "Profile FOV", "配置FOV" },
             { "Profile Smooth", "配置平滑" },
             { "Curve Strength", "曲线强度" },
-            { "Profile Dynamic FOV", "配置动态FOV" },
-            { "Dynamic Distance Scale", "动态距离系数" },
             { "Target Strategy", "目标策略" },
             { "Target Switch Delay (ms)", "切换目标延迟(ms)" },
             { "KMBOX not connected.", "KMBOX 未连接。" },
@@ -288,6 +284,11 @@ namespace Localization
 
         auto [it, inserted] = cache.emplace(key, TranslateImpl(key));
         return it->second.c_str();
+    }
+
+    inline const char* Pick(const char* english)
+    {
+        return Localize(english);
     }
 
     inline const char* Pick(const char* english, const char* chinese)

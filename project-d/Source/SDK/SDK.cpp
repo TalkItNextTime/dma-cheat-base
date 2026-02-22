@@ -1,4 +1,4 @@
-#include <Pch.hpp>
+﻿#include <Pch.hpp>
 #include <SDK.hpp>
 #include <cstring>
 
@@ -273,6 +273,12 @@ bool SDK::LoadOffsets()
             LOG_WARN("Missing schema field {}::{} in client_dll.json", className, fieldName);
     };
 
+    auto loadOptionalSchema = [&](const char* className, const char* fieldName, uint32_t& target)
+    {
+        target = 0;
+        (void)TryGetClientField(clientDllJson, className, fieldName, target);
+    };
+
     loadSchema("CBasePlayerController", "m_hPawn", Offsets::Schema::m_hPawn);
     loadSchema("CCSPlayerController", "m_hPlayerPawn", Offsets::Schema::m_hPlayerPawn);
     loadSchema("CBasePlayerController", "m_iszPlayerName", Offsets::Schema::m_iszPlayerName);
@@ -292,6 +298,8 @@ bool SDK::LoadOffsets()
     loadSchema("C_CSPlayerPawn", "m_ArmorValue", Offsets::Schema::m_ArmorValue);
     loadSchema("C_CSPlayerPawn", "m_bIsScoped", Offsets::Schema::m_bIsScoped);
     loadSchema("C_CSPlayerPawnBase", "m_flFlashDuration", Offsets::Schema::m_flFlashDuration);
+    loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashMaxAlpha", Offsets::Schema::m_flFlashMaxAlpha);
+    loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashOverlayAlpha", Offsets::Schema::m_flFlashOverlayAlpha);
     loadSchema("C_CSPlayerPawn", "m_iIDEntIndex", Offsets::Schema::m_iIDEntIndex);
     loadSchema("CPlayer_ObserverServices", "m_iObserverMode", Offsets::Schema::m_iObserverMode);
     loadSchema("CPlayer_ObserverServices", "m_hObserverTarget", Offsets::Schema::m_hObserverTarget);

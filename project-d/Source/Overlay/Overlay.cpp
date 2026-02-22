@@ -27,15 +27,55 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace
 {
-	const char* L(const char* text)
-	{
-		return Localization::Localize(text);
-	}
-
 	void SyncLanguageFromConfig()
 	{
 		config.Language = std::clamp(config.Language, 0, 1);
 		Localization::CurrentLanguage = static_cast<Localization::Language>(config.Language);
+	}
+
+	const char* LocalizedMainTabLabel(const int pageIndex)
+	{
+		switch (pageIndex)
+		{
+		case MenuPage_Aim:
+			return Localization::Pick("Aim", "自瞄");
+		case MenuPage_Visuals:
+			return Localization::Pick("Visuals", "视觉");
+		case MenuPage_Config:
+			return Localization::Pick("Config", "配置");
+		case MenuPage_Info:
+			return Localization::Pick("Info", "信息");
+		default:
+			return "";
+		}
+	}
+
+	const char* LocalizedAimWeaponGroupName(const int index)
+	{
+		const int clamped = std::clamp(index, 0, Structs::AimWeapon_Count - 1);
+		return Localization::Pick(Structs::AimWeaponGroupNames[clamped], Structs::AimWeaponGroupNamesZh[clamped]);
+	}
+
+	const char* LocalizedTriggerSpecialWeaponName(const int index)
+	{
+		const int clamped = std::clamp(index, 0, Structs::TriggerSpecial_Count - 1);
+		return Localization::Pick(Structs::TriggerSpecialWeaponNames[clamped], Structs::TriggerSpecialWeaponNamesZh[clamped]);
+	}
+
+	const char* LocalizedAimBoneName(const int slot)
+	{
+		const int clamped = std::clamp(slot, 0, static_cast<int>(Structs::AimBoneNames.size()) - 1);
+		return Localization::Pick(Structs::AimBoneNames[clamped], Structs::AimBoneNamesZh[clamped]);
+	}
+
+	const std::array<const char*, 3>& LocalizedTargetStrategyNames()
+	{
+		return Localization::IsChinese() ? Structs::AimTargetStrategyNamesZh : Structs::AimTargetStrategyNames;
+	}
+
+	const std::array<const char*, 2>& LocalizedTriggerDetectModeNames()
+	{
+		return Localization::IsChinese() ? Structs::TriggerDetectModeNamesZh : Structs::TriggerDetectModeNames;
 	}
 
 	struct ThrowKeySelection
@@ -45,6 +85,7 @@ namespace
 		bool A = false;
 		bool S = false;
 		bool D = false;
+		bool Shift = false;
 		bool Ctrl = false;
 		bool Space = false;
 	};
@@ -81,7 +122,8 @@ namespace
 
 	void ParseThrowToken(const std::string& rawToken, ThrowKeySelection& inOut)
 	{
-		const std::string tokenUpper = ToUpperAscii(TrimAscii(rawToken));
+		const std::string trimmed = TrimAscii(rawToken);
+		const std::string tokenUpper = ToUpperAscii(trimmed);
 		if (tokenUpper.empty())
 			return;
 
@@ -98,6 +140,10 @@ namespace
 			inOut.S = true;
 		else if (tokenUpper == "D")
 			inOut.D = true;
+		else if (tokenUpper == "SHIFT" || tokenUpper == "SHIFT_EN" || tokenUpper == "SHIFTEN" || tokenUpper == "SHIFT-EN" ||
+			tokenUpper == "WALK" || tokenUpper == "SLOWWALK" || tokenUpper == "SILENTWALK" ||
+			trimmed == "静步" || trimmed == "静走" || trimmed == "慢走" || trimmed == "走" || trimmed == "静")
+			inOut.Shift = true;
 		else if (tokenUpper == "CTRL" )
 			inOut.Ctrl = true;
 		else if (tokenUpper == "SPACE" )
@@ -130,6 +176,17 @@ namespace
 			keys.Space = true;
 			return keys;
 		}
+		if (lowered == "WALKTHROW" || lowered == "SHIFTTHROW" || lowered == "SILENTWALKTHROW")
+		{
+			keys.Shift = true;
+			return keys;
+		}
+		if (lowered == "WALKJUMPTHROW" || lowered == "WALKJUMP" || lowered == "SHIFTJUMPTHROW" || lowered == "SILENTWALKJUMPTHROW")
+		{
+			keys.Shift = true;
+			keys.Space = true;
+			return keys;
+		}
 
 		size_t begin = 0;
 		while (begin <= throwType.size())
@@ -158,6 +215,7 @@ namespace
 		if (keys.A) appendKey("A");
 		if (keys.S) appendKey("S");
 		if (keys.D) appendKey("D");
+		if (keys.Shift) appendKey("Shift");
 		if (keys.Ctrl) appendKey("Ctrl");
 		if (keys.Space) appendKey("Space");
 		return result;
@@ -171,6 +229,7 @@ namespace
 		if (keys.A) keyboard.push_back("A");
 		if (keys.S) keyboard.push_back("S");
 		if (keys.D) keyboard.push_back("D");
+		if (keys.Shift) keyboard.push_back("Shift");
 		if (keys.Ctrl) keyboard.push_back("Ctrl");
 		if (keys.Space) keyboard.push_back("Space");
 
@@ -205,6 +264,7 @@ namespace
 		if (tokenUpper == "PLUS" || tokenUpper == "+")
 			return "+";
 
+		const bool isShiftToken = tokenUpper == "SHIFT" || tokenUpper == "SHIFT_EN" || tokenUpper == "SHIFTEN" || tokenUpper == "SHIFT-EN";
 		if (Localization::IsChinese())
 		{
 			if (tokenUpper == "LB")
@@ -213,6 +273,8 @@ namespace
 				return "右键";
 			if (tokenUpper == "LRB")
 				return "双键";
+			if (isShiftToken)
+				return "静步";
 			if (tokenUpper == "CTRL" )
 				return "蹲";
 			if (tokenUpper == "SPACE")
@@ -225,6 +287,8 @@ namespace
 			return "RB";
 		if (tokenUpper == "LRB")
 			return "LRB";
+		if (isShiftToken)
+			return "Shift";
 		if (tokenUpper == "CTRL" )
 			return "Ctrl";
 		if (tokenUpper == "SPACE")
@@ -290,6 +354,8 @@ namespace
 			ImGui::Checkbox("S", &draft.S);
 			ImGui::SameLine();
 			ImGui::Checkbox("D", &draft.D);
+			ImGui::Checkbox(Localization::Pick("Shift", "静步"), &draft.Shift);
+			ImGui::SameLine();
 			ImGui::Checkbox(Localization::Pick("Ctrl", "蹲"), &draft.Ctrl);
 			ImGui::SameLine();
 			ImGui::Checkbox(Localization::Pick("Space", "跳"), &draft.Space);
@@ -555,7 +621,7 @@ namespace
 
 			if (!text.empty())
 				text += ", ";
-			text += Structs::AimBoneNames[i];
+			text += LocalizedAimBoneName(static_cast<int>(i));
 		}
 
 		if (text.empty())
@@ -614,21 +680,21 @@ namespace
 			panel.Index = std::clamp(panel.Index, 0, Structs::AimWeapon_Count - 1);
 			outMask = &config.Aim.WeaponProfiles[panel.Index].BoneMask;
 			outGroupLabel = Localization::Pick("Aimbot Weapon", "自瞄武器");
-			outName = L(Structs::AimWeaponGroupNames[panel.Index]);
+			outName = LocalizedAimWeaponGroupName(panel.Index);
 			return true;
 
 		case BonePickerTargetType::TriggerWeapon:
 			panel.Index = std::clamp(panel.Index, 0, Structs::AimWeapon_Count - 1);
 			outMask = &config.Aim.TriggerProfiles[panel.Index].BoneMask;
 			outGroupLabel = Localization::Pick("Trigger Weapon", "扳机武器");
-			outName = L(Structs::AimWeaponGroupNames[panel.Index]);
+			outName = LocalizedAimWeaponGroupName(panel.Index);
 			return true;
 
 		case BonePickerTargetType::TriggerSpecial:
 			panel.Index = std::clamp(panel.Index, 0, Structs::TriggerSpecial_Count - 1);
 			outMask = &config.Aim.TriggerSpecialProfiles[panel.Index].BoneMask;
 			outGroupLabel = Localization::Pick("Trigger Special", "扳机特殊武器");
-			outName = L(Structs::TriggerSpecialWeaponNames[panel.Index]);
+			outName = LocalizedTriggerSpecialWeaponName(panel.Index);
 			return true;
 
 		default:
@@ -772,7 +838,7 @@ namespace
 							if (hovered)
 							{
 								ImGui::BeginTooltip();
-								ImGui::Text("%s", Structs::AimBoneNames[point.BoneSlot]);
+								ImGui::Text("%s", LocalizedAimBoneName(point.BoneSlot));
 								ImGui::EndTooltip();
 							}
 							ImGui::PopID();
@@ -1248,6 +1314,8 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
     style.WindowBorderSize  = 1;
     style.FrameBorderSize   = 1;
     style.PopupBorderSize   = 1;
+    style.TabBorderSize     = 1;
+    style.TabBarBorderSize  = 1;
 
     style.ScrollbarSize     = 12.f;
     style.GrabMinSize       = style.FrameRounding;
@@ -1284,6 +1352,13 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
     style.Colors[ImGuiCol_Header]               = ImAdd::HexToColorVec4(0x282828, 1.0f);
     style.Colors[ImGuiCol_HeaderHovered]        = ImAdd::HexToColorVec4(0x282828, 0.7f);
     style.Colors[ImGuiCol_HeaderActive]         = ImAdd::HexToColorVec4(0x282828, 0.5f);
+
+    // Tab bars (Aimbot/Trigger and nested tabs) follow the same grayscale palette as main menu blocks.
+    style.Colors[ImGuiCol_Tab]                  = ImAdd::HexToColorVec4(0x181818, 1.0f);
+    style.Colors[ImGuiCol_TabHovered]           = ImAdd::HexToColorVec4(0x282828, 0.85f);
+    style.Colors[ImGuiCol_TabActive]            = ImAdd::HexToColorVec4(0x282828, 1.0f);
+    style.Colors[ImGuiCol_TabUnfocused]         = ImAdd::HexToColorVec4(0x141414, 1.0f);
+    style.Colors[ImGuiCol_TabUnfocusedActive]   = ImAdd::HexToColorVec4(0x202020, 1.0f);
 
 	if (m_Tabs.empty())
 	{
@@ -1362,7 +1437,7 @@ void Overlay::RenderMenu()
 
 				for (int i = 0; i < m_Tabs.size(); i++)
 				{
-					ImAdd::RadioFrame(L(m_Tabs[i]), &m_iSelectedPage, i, i % 2 == 0, ImVec2(i == m_Tabs.size() - 1 ? -0.1f : RadioWidth, ImGui::GetWindowHeight()));
+					ImAdd::RadioFrame(LocalizedMainTabLabel(i), &m_iSelectedPage, i, i % 2 == 0, ImVec2(i == m_Tabs.size() - 1 ? -0.1f : RadioWidth, ImGui::GetWindowHeight()));
 					ImGui::SameLine();
 				}
 			}
@@ -1378,21 +1453,21 @@ void Overlay::RenderMenu()
 
 			if (m_iSelectedPage == MenuPage_Aim)
 			{
-				ImGui::BeginChild("AimTabsRoot", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoBackground);
+				ImGui::BeginChild("AimTabsRoot", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
 				{
 					if (ImGui::BeginTabBar("AimSubTabs", ImGuiTabBarFlags_None))
 					{
-						if (ImGui::BeginTabItem(L("Aimbot")))
+						if (ImGui::BeginTabItem(Localization::Pick("Aimbot", "自瞄")))
 						{
 							ImAdd::CheckBox("Aimbot##Enable", &config.Aim.Aimbot);
-
+							
 							if (config.Aim.Aimbot)
 							{
 								if (ProcInfo::KmboxInitialized)
 								{
 									if (ImGui::BeginTabBar("AimbotLayoutTabs", ImGuiTabBarFlags_None))
 									{
-										if (ImGui::BeginTabItem(L("General")))
+										if (ImGui::BeginTabItem(Localization::Pick("General", "通用")))
 										{
 											ImAdd::SeparatorText("Hotkeys");
 											ImAdd::KeyBindOptions primaryMode = (ImAdd::KeyBindOptions)config.Aim.AimbotKeyMode;
@@ -1415,32 +1490,29 @@ void Overlay::RenderMenu()
 												ImAdd::ColorEdit4("##AimFovColor", (float*)&config.Aim.AimbotFovColor);
 											}
 
-											ImAdd::CheckBox("Dynamic FOV", &config.Aim.DynamicFov);
-											ImAdd::SliderFloat("Dynamic FOV Min Px", &config.Aim.DynamicFovMinPx, 2.0f, 40.0f);
 											ImAdd::CheckBox("Aim Visible", &config.Aim.AimVisible);
 											ImAdd::CheckBox("Aim Teammates", &config.Aim.AimFriendly);
 											ImAdd::CheckBox("Block Aimbot When Flashed", &config.Aim.BlockAimbotWhenFlashed);
 											ImAdd::SliderFloat("Deadzone (px)", &config.Aim.DeadzonePx, 0.0f, 6.0f);
-											ImGui::TextDisabled("%s", L("Aimbot thread interval: 2ms (~500Hz)."));
+											ImGui::TextDisabled("%s", Localization::Pick("Aimbot thread interval: 2ms (~500Hz).", "自瞄线程间隔：2ms (~500Hz)。"));
 											ImGui::EndTabItem();
 										}
 
-										if (ImGui::BeginTabItem(L("Weapon Tabs")))
+										if (ImGui::BeginTabItem(Localization::Pick("Weapon Tabs", "武器分页")))
 										{
 											if (ImGui::BeginTabBar("AimbotWeaponTabs", ImGuiTabBarFlags_None))
 											{
 												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(L(Structs::AimWeaponGroupNames[i])))
+													if (ImGui::BeginTabItem(LocalizedAimWeaponGroupName(i)))
 													{
 														config.Aim.WeaponProfileEditorIndex = i;
 														Structs::AimWeaponProfile& profile = config.Aim.WeaponProfiles[i];
 														ImAdd::SliderFloat("Profile FOV", &profile.Fov, 0.1f, 45.0f);
 														ImAdd::SliderFloat("Profile Smooth", &profile.Smooth, 1.0f, 100.0f);
 														ImAdd::SliderFloat("Curve Strength", &profile.CurveStrength, 0.0f, 0.85f);
-														ImAdd::CheckBox("Profile Dynamic FOV", &profile.DynamicFov);
-														ImAdd::SliderFloat("Dynamic Distance Scale", &profile.DynamicFovDistanceScale, 400.0f, 4500.0f);
-														ImAdd::Combo("Target Strategy", &profile.TargetStrategy, Structs::AimTargetStrategyNames.data(), (int)Structs::AimTargetStrategyNames.size());
+														const auto& targetStrategyItems = LocalizedTargetStrategyNames();
+														ImAdd::Combo(Localization::Pick("Target Strategy", "目标策略"), &profile.TargetStrategy, targetStrategyItems.data(), static_cast<int>(targetStrategyItems.size()));
 														ImAdd::SliderInt("Target Switch Delay (ms)", &profile.TargetSwitchDelayMs, 0, 600);
 														DrawAimbotBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
 														ImGui::EndTabItem();
@@ -1457,7 +1529,7 @@ void Overlay::RenderMenu()
 								}
 								else
 								{
-									const char* disconnectedText = L("KMBOX not connected.");
+									const char* disconnectedText = Localization::Pick("KMBOX not connected.", "KMBOX 未连接。");
 									ImGui::SetCursorPos(
 										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
 										ImGui::CalcTextSize(disconnectedText) / 2 + ImVec2(0, ImGui::GetFrameHeight())
@@ -1469,20 +1541,20 @@ void Overlay::RenderMenu()
 							ImGui::EndTabItem();
 						}
 
-						if (ImGui::BeginTabItem(L("Trigger")))
+						if (ImGui::BeginTabItem(Localization::Pick("Trigger", "扳机")))
 						{
 							ImAdd::CheckBox("Trigger##Enable", &config.Aim.Trigger);
-
+							
 							if (config.Aim.Trigger)
 							{
 								if (ProcInfo::KmboxInitialized)
 								{
 									if (ImGui::BeginTabBar("TriggerLayoutTabs", ImGuiTabBarFlags_None))
 									{
-										if (ImGui::BeginTabItem(L("General")))
+										if (ImGui::BeginTabItem(Localization::Pick("General", "通用")))
 										{
 											ImAdd::SeparatorText("Hotkeys");
-											ImGui::TextDisabled("%s", L("Trigger only works while holding hotkey."));
+											ImGui::TextDisabled("%s", Localization::Pick("Trigger only works while holding hotkey.", "扳机仅在按住热键时生效。"));
 											ImAdd::KeyBindOptions triggerMode = (ImAdd::KeyBindOptions)config.Aim.TriggerKeyMode;
 											ImAdd::KeyBind("Primary Trigger Key", &config.Aim.TriggerKey, 0, &triggerMode);
 											config.Aim.TriggerKeyMode = (int)ImAdd::KeyBindOptions::OnKeyDown;
@@ -1496,7 +1568,8 @@ void Overlay::RenderMenu()
 											}
 
 											ImAdd::SeparatorText("Detection");
-											ImAdd::Combo("Trigger Detect Mode", &config.Aim.TriggerDetectMode, Structs::TriggerDetectModeNames.data(), (int)Structs::TriggerDetectModeNames.size());
+											const auto& triggerDetectModeItems = LocalizedTriggerDetectModeNames();
+											ImAdd::Combo(Localization::Pick("Trigger Detect Mode", "扳机检测模式"), &config.Aim.TriggerDetectMode, triggerDetectModeItems.data(), static_cast<int>(triggerDetectModeItems.size()));
 											ImAdd::SliderFloat("Unified Hitbox Radius (px)", &config.Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
 											ImAdd::SliderFloat("Hitbox Scale", &config.Aim.TriggerHitboxScale, 0.25f, 3.0f);
 											ImAdd::SliderFloat("Hitbox Add (px)", &config.Aim.TriggerHitboxAddPx, -20.0f, 40.0f);
@@ -1504,30 +1577,30 @@ void Overlay::RenderMenu()
 
 											ImAdd::SeparatorText("Safety");
 											ImAdd::CheckBox("Block Trigger When Flashed", &config.Aim.BlockTriggerWhenFlashed);
-											ImGui::TextDisabled("%s", L("Reloading / non-gun is always blocked."));
+											ImGui::TextDisabled("%s", Localization::Pick("Reloading / non-gun is always blocked.", "换弹 / 非枪械时始终阻止触发。"));
 
 											ImAdd::SeparatorText("Hitbox Debug");
 											ImAdd::CheckBox("Enable Trigger Hitbox Debug", &config.Aim.TriggerHitboxDebug);
 											ImAdd::CheckBox("Head Sphere Debug", &config.Aim.TriggerHeadSphereDebug);
 											if (config.Aim.TriggerHitboxDebug)
 											{
-												ImGui::TextDisabled("%s", L("ESP draws 3D box per bone segment."));
+												ImGui::TextDisabled("%s", Localization::Pick("ESP draws 3D box per bone segment.", "ESP 会按骨骼段绘制 3D 盒体。"));
 												ImAdd::SliderFloat("Debug Thickness", &config.Aim.TriggerHitboxDebugThickness, 0.5f, 4.0f);
 												ImAdd::ColorEdit4("Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugColor);
 												ImAdd::ColorEdit4("Active Hitbox Color", (float*)&config.Aim.TriggerHitboxDebugActiveColor);
 											}
 
-											ImGui::TextDisabled("%s", L("Trigger thread interval: 2ms (~500Hz)."));
+											ImGui::TextDisabled("%s", Localization::Pick("Trigger thread interval: 2ms (~500Hz).", "扳机线程间隔：2ms (~500Hz)。"));
 											ImGui::EndTabItem();
 										}
 
-										if (ImGui::BeginTabItem(L("Weapon Tabs")))
+										if (ImGui::BeginTabItem(Localization::Pick("Weapon Tabs", "武器分页")))
 										{
 											if (ImGui::BeginTabBar("TriggerWeaponTabs", ImGuiTabBarFlags_None))
 											{
 												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(L(Structs::AimWeaponGroupNames[i])))
+													if (ImGui::BeginTabItem(LocalizedAimWeaponGroupName(i)))
 													{
 														config.Aim.TriggerProfileEditorIndex = i;
 														Structs::TriggerWeaponProfile& profile = config.Aim.TriggerProfiles[i];
@@ -1541,7 +1614,7 @@ void Overlay::RenderMenu()
 
 												for (int i = 0; i < Structs::TriggerSpecial_Count; ++i)
 												{
-													if (ImGui::BeginTabItem(L(Structs::TriggerSpecialWeaponNames[i])))
+													if (ImGui::BeginTabItem(LocalizedTriggerSpecialWeaponName(i)))
 													{
 														config.Aim.TriggerSpecialEditorIndex = i;
 														Structs::TriggerSpecialProfile& special = config.Aim.TriggerSpecialProfiles[i];
@@ -1564,7 +1637,7 @@ void Overlay::RenderMenu()
 								}
 								else
 								{
-									const char* disconnectedText = L("KMBOX not connected.");
+									const char* disconnectedText = Localization::Pick("KMBOX not connected.", "KMBOX 未连接。");
 									ImGui::SetCursorPos(
 										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
 										ImGui::CalcTextSize(disconnectedText) / 2 + ImVec2(0, ImGui::GetFrameHeight())
@@ -1593,8 +1666,10 @@ void Overlay::RenderMenu()
 						{
 							ImAdd::CheckBox(Localization::Pick("ESP", "透视"), &config.Visuals.Enabled);
 							ImGui::Spacing();
+							ImGui::Separator();
+							ImGui::Spacing();
 
-							ImGui::BeginChild("EspSettingsPanel", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None);
+							ImGui::BeginChild("EspSettingsPanel", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
 							{
 								if (config.Visuals.Enabled)
 								{
@@ -1726,6 +1801,8 @@ void Overlay::RenderMenu()
 						if (ImGui::BeginTabItem(Localization::Pick("GHelper", "道具辅助")))
 						{
 							ImAdd::CheckBox(Localization::Pick("GHelper", "道具辅助"), &config.Visuals.GrenadeHelper);
+							
+							ImGui::Separator();
 							ImGui::Spacing();
 
 							ImGui::BeginChild("UtilityHelperPanel", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_None);
@@ -2058,7 +2135,7 @@ void Overlay::RenderMenu()
 				ImGui::BeginChild("Configs", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
 				{
 					if (ImGui::BeginMenuBar()) {
-						ImGui::Text("%s", L("Configs"));
+						ImGui::Text("%s", Localization::Pick("Configs", "配置"));
 						ImGui::EndMenuBar();
 					}
 						
@@ -2074,11 +2151,11 @@ void Overlay::RenderMenu()
 					ImGui::Separator();
 
 					// Config List
-					if (ImGui::BeginListBox(L("Config list")))
+					if (ImGui::BeginListBox(Localization::Pick("Config list", "配置列表")))
 					{
 						if (configFiles.empty())
 						{
-							ImGui::Selectable(L("No configs found"), false, ImGuiSelectableFlags_Disabled);
+							ImGui::Selectable(Localization::Pick("No configs found", "未找到配置"), false, ImGuiSelectableFlags_Disabled);
 						}
 						else
 						{
@@ -2101,7 +2178,7 @@ void Overlay::RenderMenu()
 					}
 
 					// Config Name Input
-					ImGui::InputText(L("Config Name"), configName, IM_ARRAYSIZE(configName));
+					ImGui::InputText(Localization::Pick("Config Name", "配置名"), configName, IM_ARRAYSIZE(configName));
 
 					// Control Buttons
 					float buttonWidth = 75.0f;
@@ -2176,13 +2253,16 @@ void Overlay::RenderMenu()
 				ImGui::BeginChild("Info", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
 				{
 					if (ImGui::BeginMenuBar()) {
-						ImGui::Text("%s", L("Info"));
+						ImGui::Text("%s", Localization::Pick("Info", "信息"));
 						ImGui::EndMenuBar();
 					}
 
 					int languageIndex = std::clamp(config.Language, 0, 1);
-					const char* languageItems[] = { "English", "Chinese" };
-					if (ImAdd::Combo("Language", &languageIndex, languageItems, IM_ARRAYSIZE(languageItems)))
+					const char* languageItems[] = {
+						Localization::Pick("English", "英文"),
+						Localization::Pick("Chinese", "中文")
+					};
+					if (ImAdd::Combo(Localization::Pick("Language", "语言"), &languageIndex, languageItems, IM_ARRAYSIZE(languageItems)))
 					{
 						languageIndex = std::clamp(languageIndex, 0, 1);
 						config.Language = languageIndex;
@@ -2192,22 +2272,22 @@ void Overlay::RenderMenu()
 							LOG_ERROR("Failed to persist language setting to configs/config.json");
 					}
 
-					ImAdd::SeparatorText("Hardware");
+					ImAdd::SeparatorText(Localization::Pick("Hardware", "硬件"));
 
-					ImGui::Text("%s", L("DMA:"));
+					ImGui::Text("%s", Localization::Pick("DMA:", "DMA:"));
 					ImGui::SameLine();
 					ImGui::TextColored(
 						ProcInfo::DmaInitialized ? ImVec4(0, 1, 0, 1)/* green */ : ImVec4(1, 0, 0, 1)/* red */,
 						"%s",
-						ProcInfo::DmaInitialized ? L("Connected") : L("Disconnected")
+						ProcInfo::DmaInitialized ? Localization::Pick("Connected", "已连接") : Localization::Pick("Disconnected", "未连接")
 					);
 
-					ImGui::Text("%s", L("KMBOX:"));
+					ImGui::Text("%s", Localization::Pick("KMBOX:", "KMBOX:"));
 					ImGui::SameLine();
 					ImGui::TextColored(
 						ProcInfo::KmboxInitialized ? ImVec4(0, 1, 0, 1)/* green */: ImVec4(1, 0, 0, 1)/* red */,
 						"%s",
-						ProcInfo::KmboxInitialized ? L("Connected") : L("Disconnected")
+						ProcInfo::KmboxInitialized ? Localization::Pick("Connected", "已连接") : Localization::Pick("Disconnected", "未连接")
 					);
 
 					ImAdd::SeparatorText(Localization::Pick("KMBOX", "KMBOX"));
@@ -2268,9 +2348,9 @@ void Overlay::RenderMenu()
 						ImGui::TextWrapped("%s", kmboxActionStatus.c_str());
 
 
-					ImAdd::SeparatorText("Game");
+					ImAdd::SeparatorText(Localization::Pick("Game", "游戏"));
 
-					ImGui::Text("%s", L("Client:"));
+					ImGui::Text("%s", Localization::Pick("Client:", "客户端:"));
 					ImGui::SameLine();
 					ImGui::Text("0x%llx", Globals::ClientBase);
 
@@ -2291,27 +2371,42 @@ void Overlay::RenderMenu()
 					PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger);
 					PerfDebug::SyncDebugThread();
 
-					ImAdd::SeparatorText("Cheat");
+					ImAdd::SeparatorText(Localization::Pick("Cheat", "功能"));
 
-					ImGui::Text(L("Overlay FPS: %.2f"), OverlayFps);
-					ImGui::Text(L("Host INSERT: %s"), IsHostKeyDown(VK_INSERT) ? L("Down") : L("Up"));
-					ImGui::Text(L("Host LMB: %s"), IsHostKeyDown(VK_LBUTTON) ? L("Down") : L("Up"));
-					ImGui::Text(L("Host RMB: %s"), IsHostKeyDown(VK_RBUTTON) ? L("Down") : L("Up"));
-					ImGui::Text(L("Host X1: %s"), IsHostKeyDown(VK_XBUTTON1) ? L("Down") : L("Up"));
-					ImGui::Text(L("Host X2: %s"), IsHostKeyDown(VK_XBUTTON2) ? L("Down") : L("Up"));
+					ImGui::Text(Localization::Pick("Overlay FPS: %.2f", "叠加层 FPS: %.2f"), OverlayFps);
+					ImGui::Text(
+						Localization::Pick("Host INSERT: %s", "主机 INSERT: %s"),
+						IsHostKeyDown(VK_INSERT) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")
+					);
+					ImGui::Text(
+						Localization::Pick("Host LMB: %s", "主机 LMB: %s"),
+						IsHostKeyDown(VK_LBUTTON) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")
+					);
+					ImGui::Text(
+						Localization::Pick("Host RMB: %s", "主机 RMB: %s"),
+						IsHostKeyDown(VK_RBUTTON) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")
+					);
+					ImGui::Text(
+						Localization::Pick("Host X1: %s", "主机 X1: %s"),
+						IsHostKeyDown(VK_XBUTTON1) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")
+					);
+					ImGui::Text(
+						Localization::Pick("Host X2: %s", "主机 X2: %s"),
+						IsHostKeyDown(VK_XBUTTON2) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")
+					);
 
 					float buttonWidth = 100.0f;
 					float buttonSpacing = 20.0f;
 					ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 2 * buttonWidth - buttonSpacing) / 2);
 
-					if (ImAdd::Button("Open folder", ImVec2(buttonWidth, 0)))
+					if (ImAdd::Button(Localization::Pick("Open folder", "打开目录"), ImVec2(buttonWidth, 0)))
 					{
 						ShellExecuteA(nullptr, "open", "explorer.exe", ".\\", nullptr, SW_SHOW);
 					}
 
 					ImGui::SameLine();
 
-					if (ImAdd::Button("Unload", ImVec2(buttonWidth, 0)))
+					if (ImAdd::Button(Localization::Pick("Unload", "卸载"), ImVec2(buttonWidth, 0)))
 					{
 						Globals::Running = false;
 						shouldRun = false;
@@ -2326,8 +2421,8 @@ void Overlay::RenderMenu()
 		{
 			ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetWindowPos(), ImGui::GetWindowPos() + ImGui::GetWindowSize(), ImGui::GetColorU32(ImGuiCol_ChildBg), style.WindowRounding, ImDrawFlags_RoundCornersBottom);
 			ImGui::GetWindowDrawList()->AddLine(ImGui::GetWindowPos() + ImVec2(style.WindowBorderSize, 0), ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - style.WindowBorderSize, 0), ImGui::GetColorU32(ImGuiCol_Border), style.WindowBorderSize);
-			const char* buildText = L("Build: Developer");
-			const char* expiryText = L("Expires: Never");
+			const char* buildText = Localization::Pick("Build: Developer", "版本: 开发版");
+			const char* expiryText = Localization::Pick("Expires: Never", "到期: 永不");
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + style.FramePadding, ImGui::GetColorU32(ImGuiCol_Text), buildText);
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - ImGui::CalcTextSize(expiryText).x - style.FramePadding.x, style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), expiryText);
 		}

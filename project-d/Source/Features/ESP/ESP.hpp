@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -39,6 +39,8 @@ struct PlayerEspSnapshot
     bool IsScoped = false;
     bool HasDefuser = false;
     float FlashDuration = 0.0f;
+    float FlashOverlayAlpha = 0.0f;
+    float FlashMaxAlpha = 255.0f;
 
     Vector3 Origin{};
     Vector3 EyePosition{};
@@ -179,6 +181,8 @@ private:
         bool IsScoped = false;
         bool HasDefuser = false;
         float FlashDuration = 0.0f;
+        float FlashOverlayAlpha = 0.0f;
+        float FlashMaxAlpha = 255.0f;
         std::chrono::steady_clock::time_point LastStatusRead{};
     };
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Structs.hpp"
 
 namespace Config
@@ -83,8 +83,6 @@ namespace Config
 
             j["Aim"]["DrawFov"] = Aim.DrawFov;
             j["Aim"]["AimbotFovColor"] = { Aim.AimbotFovColor.x, Aim.AimbotFovColor.y, Aim.AimbotFovColor.z, Aim.AimbotFovColor.w };
-            j["Aim"]["DynamicFov"] = Aim.DynamicFov;
-            j["Aim"]["DynamicFovMinPx"] = Aim.DynamicFovMinPx;
 
             j["Aim"]["AimFriendly"] = Aim.AimFriendly;
             j["Aim"]["AimVisible"] = Aim.AimVisible;
@@ -111,8 +109,6 @@ namespace Config
                 out["Smooth"] = profile.Smooth;
                 out["CurveStrength"] = profile.CurveStrength;
                 out["BoneMask"] = profile.BoneMask;
-                out["DynamicFov"] = profile.DynamicFov;
-                out["DynamicFovDistanceScale"] = profile.DynamicFovDistanceScale;
                 out["TargetStrategy"] = profile.TargetStrategy;
                 out["TargetSwitchDelayMs"] = profile.TargetSwitchDelayMs;
             };
@@ -452,8 +448,6 @@ namespace Config
 
                 j["Aim"]["DrawFov"] = false;
                 j["Aim"]["AimbotFovColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
-                j["Aim"]["DynamicFov"] = true;
-                j["Aim"]["DynamicFovMinPx"] = 8.0f;
 
                 j["Aim"]["AimFriendly"] = false;
                 j["Aim"]["AimVisible"] = false;
@@ -475,25 +469,23 @@ namespace Config
                 j["Aim"]["TriggerProfileEditorIndex"] = 0;
                 j["Aim"]["TriggerSpecialEditorIndex"] = 0;
 
-                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, std::uint64_t boneMask, bool dynamicFov, float dynamicScale, int strategy, int switchDelay)
+                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, std::uint64_t boneMask, int strategy, int switchDelay)
                 {
                     nlohmann::json& p = j["Aim"]["WeaponProfiles"][name];
                     p["Fov"] = fov;
                     p["Smooth"] = smooth;
                     p["CurveStrength"] = curve;
                     p["BoneMask"] = boneMask;
-                    p["DynamicFov"] = dynamicFov;
-                    p["DynamicFovDistanceScale"] = dynamicScale;
                     p["TargetStrategy"] = strategy;
                     p["TargetSwitchDelayMs"] = switchDelay;
                 };
 
-                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, Structs::AimDefaultAimbotBoneMask, true, 1350.0f, Structs::AimStrategy_Crosshair, 100);
-                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, Structs::AimDefaultAimbotBoneMask, true, 1450.0f, Structs::AimStrategy_Crosshair, 90);
-                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, Structs::AimDefaultAimbotBoneMask, true, 900.0f, Structs::AimStrategy_Distance, 75);
-                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, true, 1650.0f, Structs::AimStrategy_Crosshair, 120);
-                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, Structs::AimDefaultAimbotBoneMask, true, 2200.0f, Structs::AimStrategy_Crosshair, 160);
-                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, true, 1700.0f, Structs::AimStrategy_Hybrid, 130);
+                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 100);
+                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 90);
+                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Distance, 75);
+                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 120);
+                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 160);
+                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Hybrid, 130);
 
                 auto writeDefaultTriggerProfile = [&](const char* name, float hitboxPx, int preDelay, int postDelay, int timeoutMs, std::uint64_t boneMask)
                 {
@@ -618,8 +610,6 @@ namespace Config
                     if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
                     if (node.contains("CurveStrength")) profile.CurveStrength = node["CurveStrength"].get<float>();
                     if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
-                    if (node.contains("DynamicFov")) profile.DynamicFov = node["DynamicFov"].get<bool>();
-                    if (node.contains("DynamicFovDistanceScale")) profile.DynamicFovDistanceScale = node["DynamicFovDistanceScale"].get<float>();
                     if (node.contains("TargetStrategy")) profile.TargetStrategy = node["TargetStrategy"].get<int>();
                     if (node.contains("TargetSwitchDelayMs")) profile.TargetSwitchDelayMs = node["TargetSwitchDelayMs"].get<int>();
                     return true;
@@ -863,7 +853,6 @@ namespace Config
                 profile.BoneMask &= Structs::AimAllBoneMask;
                 if (profile.BoneMask == 0ull)
                     profile.BoneMask = Aim.AimbotBoneMask;
-                profile.DynamicFovDistanceScale = (std::max)(1.0f, profile.DynamicFovDistanceScale);
                 profile.TargetStrategy = std::clamp(profile.TargetStrategy, 0, (int)Structs::AimTargetStrategyNames.size() - 1);
                 profile.TargetSwitchDelayMs = (std::max)(0, profile.TargetSwitchDelayMs);
             }
@@ -935,8 +924,6 @@ namespace Config
 
                             else if (key == "DrawFov") configSection.DrawFov = value.get<bool>();
                             else if (key == "AimbotFovColor") configSection.AimbotFovColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
-                            else if (key == "DynamicFov") configSection.DynamicFov = value.get<bool>();
-                            else if (key == "DynamicFovMinPx") configSection.DynamicFovMinPx = value.get<float>();
 
                             else if (key == "AimFriendly") configSection.AimFriendly = value.get<bool>();
                             else if (key == "AimVisible") configSection.AimVisible = value.get<bool>();
