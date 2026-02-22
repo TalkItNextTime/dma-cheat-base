@@ -80,19 +80,11 @@ int main()
 
     LOG_INFO("Initialization complete! Press INSERT to open the menu");
 
-    thread([]()
-    {
-        while (Globals::Running)
-        {
-            this_thread::sleep_for(chrono::seconds(1));
-            PerfDebug::LogInterval(1.0);
-        }
-
-        PerfDebug::LogInterval(1.0);
-    }).detach();
-
     while (overlay.shouldRun)
     {
+        PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger);
+        PerfDebug::SyncDebugThread();
+
         TIMER("Global render");
 
         overlay.StartRender();
@@ -110,6 +102,7 @@ int main()
     }
 
 	Globals::Running = false;
+    PerfDebug::ShutdownDebugThread();
 	overlay.Destroy();
 
     system("pause");

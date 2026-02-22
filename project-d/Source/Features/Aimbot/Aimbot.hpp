@@ -62,8 +62,6 @@ private:
 	bool m_TriggerMouseHeld = false;
 	std::chrono::steady_clock::time_point m_TriggerMouseReleaseAt{};
 
-	Vector3 m_LastGlobalPunch{};
-	bool m_LastGlobalPunchValid = false;
 	std::chrono::steady_clock::time_point m_LastTargetScanAt{};
 	std::chrono::steady_clock::time_point m_LastFovProbeAt{};
 	float m_LastFovProbeRadiusPx = 0.0f;

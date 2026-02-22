@@ -2,10 +2,15 @@
 #include <SDK.hpp>
 #include <ESP/ESP.hpp>
 #include <array>
+#include <wincrypt.h>
+#include <wincodec.h>
 
 #include "Overlay.hpp"
+#include "BonesShowcaseEmbedded.hpp"
 #include "Fonts/IBMPlexMono_Medium.h"
 #include "Localization.hpp"
+
+#pragma comment(lib, "Crypt32.lib")
 
 ID3D11Device* Overlay::device = nullptr;
 
@@ -317,6 +322,540 @@ namespace
 
 		return changed;
 	}
+
+	template <typename T>
+	void ReleaseComPtr(T*& ptr)
+	{
+		if (ptr)
+		{
+			ptr->Release();
+			ptr = nullptr;
+		}
+	}
+
+	struct EmbeddedImageTexture
+	{
+		ID3D11ShaderResourceView* Srv = nullptr;
+		int Width = 0;
+		int Height = 0;
+		bool TriedLoad = false;
+	};
+
+	EmbeddedImageTexture& GetBonesShowcaseTextureCache()
+	{
+		static EmbeddedImageTexture cache{};
+		return cache;
+	}
+
+	void ResetBonesShowcaseTextureCache()
+	{
+		EmbeddedImageTexture& cache = GetBonesShowcaseTextureCache();
+		ReleaseComPtr(cache.Srv);
+		cache.Width = 0;
+		cache.Height = 0;
+		cache.TriedLoad = false;
+	}
+
+	bool DecodeBase64ViaWinApi(const std::string& base64Text, std::vector<std::uint8_t>& outBytes)
+	{
+		if (base64Text.empty())
+			return false;
+		if (base64Text.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+			return false;
+
+		DWORD outSize = 0;
+		if (!CryptStringToBinaryA(base64Text.c_str(), static_cast<DWORD>(base64Text.size()), CRYPT_STRING_BASE64_ANY, nullptr, &outSize, nullptr, nullptr))
+			return false;
+
+		outBytes.assign(outSize, 0u);
+		if (!CryptStringToBinaryA(base64Text.c_str(), static_cast<DWORD>(base64Text.size()), CRYPT_STRING_BASE64_ANY, outBytes.data(), &outSize, nullptr, nullptr))
+		{
+			outBytes.clear();
+			return false;
+		}
+
+		outBytes.resize(outSize);
+		return true;
+	}
+
+	bool DecodePngViaWic(const std::vector<std::uint8_t>& pngBytes, std::vector<std::uint8_t>& outPixels, UINT& outWidth, UINT& outHeight)
+	{
+		outPixels.clear();
+		outWidth = 0;
+		outHeight = 0;
+		if (pngBytes.empty())
+			return false;
+
+		const HRESULT initHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		const bool needUninit = SUCCEEDED(initHr);
+
+		IWICImagingFactory* factory = nullptr;
+		IWICStream* stream = nullptr;
+		IWICBitmapDecoder* decoder = nullptr;
+		IWICBitmapFrameDecode* frame = nullptr;
+		IWICFormatConverter* converter = nullptr;
+
+		bool success = false;
+		do
+		{
+			if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
+				break;
+			if (FAILED(factory->CreateStream(&stream)))
+				break;
+			if (pngBytes.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+				break;
+			if (FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(pngBytes.data()), static_cast<DWORD>(pngBytes.size()))))
+				break;
+			if (FAILED(factory->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnLoad, &decoder)))
+				break;
+			if (FAILED(decoder->GetFrame(0, &frame)))
+				break;
+			if (FAILED(factory->CreateFormatConverter(&converter)))
+				break;
+			if (FAILED(converter->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom)))
+				break;
+			if (FAILED(converter->GetSize(&outWidth, &outHeight)))
+				break;
+			if (outWidth == 0 || outHeight == 0)
+				break;
+
+			const UINT stride = outWidth * 4u;
+			const UINT totalSize = stride * outHeight;
+			outPixels.assign(totalSize, 0u);
+			if (FAILED(converter->CopyPixels(nullptr, stride, totalSize, outPixels.data())))
+			{
+				outPixels.clear();
+				break;
+			}
+
+			success = true;
+		}
+		while (false);
+
+		ReleaseComPtr(converter);
+		ReleaseComPtr(frame);
+		ReleaseComPtr(decoder);
+		ReleaseComPtr(stream);
+		ReleaseComPtr(factory);
+		if (needUninit)
+			CoUninitialize();
+
+		return success;
+	}
+
+	bool CreateTextureFromRgba(ID3D11Device* device, const std::vector<std::uint8_t>& rgbaPixels, const UINT width, const UINT height, EmbeddedImageTexture& outTexture)
+	{
+		if (!device || rgbaPixels.empty() || width == 0 || height == 0)
+			return false;
+
+		D3D11_TEXTURE2D_DESC textureDesc{};
+		textureDesc.Width = width;
+		textureDesc.Height = height;
+		textureDesc.MipLevels = 1;
+		textureDesc.ArraySize = 1;
+		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.Usage = D3D11_USAGE_IMMUTABLE;
+		textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+		D3D11_SUBRESOURCE_DATA initData{};
+		initData.pSysMem = rgbaPixels.data();
+		initData.SysMemPitch = static_cast<UINT>(width * 4u);
+
+		ID3D11Texture2D* texture = nullptr;
+		if (FAILED(device->CreateTexture2D(&textureDesc, &initData, &texture)))
+			return false;
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+		srvDesc.Format = textureDesc.Format;
+		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = 1;
+
+		ID3D11ShaderResourceView* srv = nullptr;
+		const HRESULT srvHr = device->CreateShaderResourceView(texture, &srvDesc, &srv);
+		texture->Release();
+		if (FAILED(srvHr) || !srv)
+			return false;
+
+		outTexture.Srv = srv;
+		outTexture.Width = static_cast<int>(width);
+		outTexture.Height = static_cast<int>(height);
+		return true;
+	}
+
+	const EmbeddedImageTexture* EnsureBonesShowcaseTexture(ID3D11Device* device)
+	{
+		EmbeddedImageTexture& cache = GetBonesShowcaseTextureCache();
+		if (cache.Srv)
+			return &cache;
+		if (cache.TriedLoad || !device)
+			return nullptr;
+
+		cache.TriedLoad = true;
+		const std::string& base64 = EmbeddedBonesShowcase::GetBonesShowcasePngBase64();
+
+		std::vector<std::uint8_t> pngBytes{};
+		if (!DecodeBase64ViaWinApi(base64, pngBytes))
+			return nullptr;
+
+		std::vector<std::uint8_t> rgbaPixels{};
+		UINT width = 0;
+		UINT height = 0;
+		if (!DecodePngViaWic(pngBytes, rgbaPixels, width, height))
+			return nullptr;
+
+		if (!CreateTextureFromRgba(device, rgbaPixels, width, height, cache))
+			return nullptr;
+
+		return cache.Srv ? &cache : nullptr;
+	}
+
+	struct ShowcaseBonePoint
+	{
+		int BoneSlot = 0;
+		float X = 0.0f;
+		float Y = 0.0f;
+	};
+
+	inline constexpr float kShowcaseImageWidth = 1380.0f;
+	inline constexpr float kShowcaseImageHeight = 978.0f;
+	inline constexpr float kShowcaseCropMinX = 360.0f;
+	inline constexpr float kShowcaseCropMinY = 40.0f;
+	inline constexpr float kShowcaseCropMaxX = 1020.0f;
+	inline constexpr float kShowcaseCropMaxY = 940.0f;
+	inline constexpr std::array<ShowcaseBonePoint, Structs::AimBoneNames.size()> kShowcaseBonePoints = {
+		ShowcaseBonePoint{ 0, 691.0f, 470.0f },  // Pelvis
+		ShowcaseBonePoint{ 1, 690.0f, 382.0f },  // Spine
+		ShowcaseBonePoint{ 2, 690.0f, 306.0f },  // Chest
+		ShowcaseBonePoint{ 3, 690.0f, 210.0f },  // Neck
+		ShowcaseBonePoint{ 4, 690.0f, 128.0f },  // Head
+		ShowcaseBonePoint{ 5, 600.0f, 262.0f },  // L Shoulder
+		ShowcaseBonePoint{ 6, 505.0f, 362.0f },  // L Elbow
+		ShowcaseBonePoint{ 7, 437.0f, 458.0f },  // L Hand
+		ShowcaseBonePoint{ 8, 781.0f, 262.0f },  // R Shoulder
+		ShowcaseBonePoint{ 9, 874.0f, 362.0f },  // R Elbow
+		ShowcaseBonePoint{ 10, 942.0f, 458.0f }, // R Hand
+		ShowcaseBonePoint{ 11, 638.0f, 548.0f }, // L Thigh
+		ShowcaseBonePoint{ 12, 626.0f, 666.0f }, // L Knee
+		ShowcaseBonePoint{ 13, 622.0f, 884.0f }, // L Foot
+		ShowcaseBonePoint{ 14, 742.0f, 548.0f }, // R Thigh
+		ShowcaseBonePoint{ 15, 754.0f, 666.0f }, // R Knee
+		ShowcaseBonePoint{ 16, 758.0f, 884.0f }  // R Foot
+	};
+
+	std::string BuildAimbotBoneMaskDisplayText(std::uint64_t mask)
+	{
+		mask &= Structs::AimAllBoneMask;
+		std::string text{};
+		for (size_t i = 0; i < Structs::AimBoneNames.size(); ++i)
+		{
+			const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(i);
+			if ((mask & bit) == 0ull)
+				continue;
+
+			if (!text.empty())
+				text += ", ";
+			text += Structs::AimBoneNames[i];
+		}
+
+		if (text.empty())
+			return Localization::Pick("None", "未选择");
+		return text;
+	}
+
+	enum class BonePickerTargetType : int
+	{
+		AimbotWeapon = 0,
+		TriggerWeapon,
+		TriggerSpecial
+	};
+
+	struct BonePickerPanelState
+	{
+		bool Open = false;
+		BonePickerTargetType Target = BonePickerTargetType::AimbotWeapon;
+		int Index = 0;
+	};
+
+	BonePickerPanelState& GetBonePickerPanelState()
+	{
+		static BonePickerPanelState state{};
+		return state;
+	}
+
+	void OpenBonePickerPanel(const BonePickerTargetType target, const int index)
+	{
+		BonePickerPanelState& state = GetBonePickerPanelState();
+		state.Open = true;
+		state.Target = target;
+		state.Index = index;
+	}
+
+	void CloseBonePickerPanel()
+	{
+		GetBonePickerPanelState().Open = false;
+	}
+
+	bool IsBonePickerPanelOpenFor(const BonePickerTargetType target, const int index)
+	{
+		const BonePickerPanelState& state = GetBonePickerPanelState();
+		return state.Open && state.Target == target && state.Index == index;
+	}
+
+	bool ResolveBonePickerBinding(BonePickerPanelState& panel, std::uint64_t*& outMask, const char*& outGroupLabel, const char*& outName)
+	{
+		outMask = nullptr;
+		outGroupLabel = "";
+		outName = "";
+
+		switch (panel.Target)
+		{
+		case BonePickerTargetType::AimbotWeapon:
+			panel.Index = std::clamp(panel.Index, 0, Structs::AimWeapon_Count - 1);
+			outMask = &config.Aim.WeaponProfiles[panel.Index].BoneMask;
+			outGroupLabel = Localization::Pick("Aimbot Weapon", "自瞄武器");
+			outName = L(Structs::AimWeaponGroupNames[panel.Index]);
+			return true;
+
+		case BonePickerTargetType::TriggerWeapon:
+			panel.Index = std::clamp(panel.Index, 0, Structs::AimWeapon_Count - 1);
+			outMask = &config.Aim.TriggerProfiles[panel.Index].BoneMask;
+			outGroupLabel = Localization::Pick("Trigger Weapon", "扳机武器");
+			outName = L(Structs::AimWeaponGroupNames[panel.Index]);
+			return true;
+
+		case BonePickerTargetType::TriggerSpecial:
+			panel.Index = std::clamp(panel.Index, 0, Structs::TriggerSpecial_Count - 1);
+			outMask = &config.Aim.TriggerSpecialProfiles[panel.Index].BoneMask;
+			outGroupLabel = Localization::Pick("Trigger Special", "扳机特殊武器");
+			outName = L(Structs::TriggerSpecialWeaponNames[panel.Index]);
+			return true;
+
+		default:
+			break;
+		}
+
+		return false;
+	}
+
+	void DrawBonePickerPanel(const ImVec2& menuWindowPos, const ImVec2& menuWindowSize)
+	{
+		BonePickerPanelState& panel = GetBonePickerPanelState();
+		if (!panel.Open)
+			return;
+
+		std::uint64_t* maskPtr = nullptr;
+		const char* groupLabel = "";
+		const char* targetName = "";
+		if (!ResolveBonePickerBinding(panel, maskPtr, groupLabel, targetName) || !maskPtr)
+		{
+			panel.Open = false;
+			return;
+		}
+
+		std::uint64_t& mask = *maskPtr;
+		mask &= Structs::AimAllBoneMask;
+		const std::uint64_t fallbackMask = panel.Target == BonePickerTargetType::AimbotWeapon
+			? Structs::AimDefaultAimbotBoneMask
+			: Structs::AimAllBoneMask;
+		if (mask == 0ull)
+			mask = fallbackMask;
+
+		const float panelGap = 4.0f;
+		const ImVec2 panelPos{ menuWindowPos.x + menuWindowSize.x + panelGap, menuWindowPos.y };
+		const ImVec2 panelSize{ 500.0f, menuWindowSize.y };
+		ImGui::SetNextWindowPos(panelPos, ImGuiCond_Always);
+		ImGui::SetNextWindowSize(panelSize, ImGuiCond_Always);
+
+		const ImGuiWindowFlags windowFlags =
+			ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoDecoration;
+
+		ImGui::Begin("##BonePickerPanel", nullptr, windowFlags);
+		ImGuiStyle& style = ImGui::GetStyle();
+
+		const char* title = panel.Target == BonePickerTargetType::AimbotWeapon
+			? Localization::Pick("Aimbot Bone Picker", "自瞄瞄点面板")
+			: Localization::Pick("Trigger Bone Picker", "扳机瞄点面板");
+		ImGui::SetCursorPosX(ImGui::GetWindowWidth() * 0.5f - ImGui::CalcTextSize(title).x * 0.5f);
+		ImGui::Text("%s", title);
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_FrameBg]);
+		ImGui::BeginChild("BonePickerMain", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoBackground);
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
+		{
+			ImGui::BeginChild("BonePickerHeader", ImVec2(0, ImGui::GetFrameHeight()), 0, ImGuiWindowFlags_NoBackground);
+			{
+				ImGui::Text("%s: %s", groupLabel, targetName);
+				ImGui::SameLine();
+				ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 86.0f - style.WindowPadding.x);
+				if (ImAdd::Button(Localization::Pick("Close", "关闭"), ImVec2(86.0f, 0.0f)))
+					panel.Open = false;
+			}
+			ImGui::EndChild();
+
+			ImGui::SetCursorPosY(ImGui::GetFrameHeight());
+			ImGui::BeginChild("BonePickerContent", ImVec2(0, ImGui::GetWindowHeight() - ImGui::GetFrameHeight() * 2.0f), ImGuiChildFlags_Border, ImGuiWindowFlags_NoBackground);
+			{
+				ImGui::TextDisabled("%s", Localization::Pick("Click body points to toggle bones.", "点击人物圆点以切换骨骼点。"));
+
+				const EmbeddedImageTexture* texture = EnsureBonesShowcaseTexture(Overlay::device);
+				if (!texture || !texture->Srv)
+				{
+					ImGui::TextColored(ImVec4(1, 0.35f, 0.35f, 1), "%s", Localization::Pick("Failed to load showcase texture.", "骨骼示意图加载失败。"));
+				}
+				else
+				{
+					const float cropWidth = kShowcaseCropMaxX - kShowcaseCropMinX;
+					const float cropHeight = kShowcaseCropMaxY - kShowcaseCropMinY;
+					const float aspect = cropWidth / cropHeight;
+					const ImVec2 avail = ImGui::GetContentRegionAvail();
+					const float footerReserve = ImGui::GetFrameHeightWithSpacing() * 2.8f;
+					const float maxImageHeight = (std::max)(150.0f, avail.y - footerReserve);
+					const float imageWidth = (std::min)(avail.x, maxImageHeight * aspect);
+					const float imageHeight = imageWidth / aspect;
+
+					if (imageWidth > 10.0f && imageHeight > 10.0f)
+					{
+						const float startX = ImGui::GetCursorPosX() + (avail.x - imageWidth) * 0.5f;
+						ImGui::SetCursorPosX((std::max)(ImGui::GetCursorPosX(), startX));
+
+						const ImVec2 imageSize{ imageWidth, imageHeight };
+						const ImVec2 uv0{ kShowcaseCropMinX / kShowcaseImageWidth, kShowcaseCropMinY / kShowcaseImageHeight };
+						const ImVec2 uv1{ kShowcaseCropMaxX / kShowcaseImageWidth, kShowcaseCropMaxY / kShowcaseImageHeight };
+						ImGui::Image(reinterpret_cast<ImTextureID>(texture->Srv), imageSize, uv0, uv1);
+
+						const ImVec2 imageMin = ImGui::GetItemRectMin();
+						const ImVec2 imageMax = ImGui::GetItemRectMax();
+						ImDrawList* drawList = ImGui::GetWindowDrawList();
+						drawList->AddRect(imageMin, imageMax, IM_COL32(255, 255, 255, 36), 8.0f, 0, 1.5f);
+
+						const float pointRadius = 8.0f;
+						for (const ShowcaseBonePoint& point : kShowcaseBonePoints)
+						{
+							const float nx = std::clamp((point.X - kShowcaseCropMinX) / cropWidth, 0.0f, 1.0f);
+							const float ny = std::clamp((point.Y - kShowcaseCropMinY) / cropHeight, 0.0f, 1.0f);
+							const ImVec2 center{
+								imageMin.x + nx * imageSize.x,
+								imageMin.y + ny * imageSize.y
+							};
+
+							ImGui::PushID(point.BoneSlot);
+							ImGui::SetCursorScreenPos(ImVec2(center.x - pointRadius, center.y - pointRadius));
+							ImGui::InvisibleButton("##BonePoint", ImVec2(pointRadius * 2.0f, pointRadius * 2.0f));
+							const bool hovered = ImGui::IsItemHovered();
+							if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+							{
+								const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(point.BoneSlot);
+								if ((mask & bit) != 0ull)
+									mask &= ~bit;
+								else
+									mask |= bit;
+
+								if (mask == 0ull)
+									mask = fallbackMask;
+							}
+
+							const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(point.BoneSlot);
+							const bool selected = (mask & bit) != 0ull;
+							const ImU32 fillColor = selected
+								? (hovered ? IM_COL32(95, 228, 95, 255) : IM_COL32(60, 200, 60, 240))
+								: (hovered ? IM_COL32(245, 245, 245, 255) : IM_COL32(205, 205, 205, 225));
+							drawList->AddCircleFilled(center, pointRadius, fillColor, 24);
+							drawList->AddCircle(center, pointRadius, IM_COL32(18, 18, 18, 240), 24, 1.8f);
+
+							if (hovered)
+							{
+								ImGui::BeginTooltip();
+								ImGui::Text("%s", Structs::AimBoneNames[point.BoneSlot]);
+								ImGui::EndTooltip();
+							}
+							ImGui::PopID();
+						}
+					}
+				}
+
+				std::string summary = BuildAimbotBoneMaskDisplayText(mask);
+				std::array<char, 512> summaryBuffer{};
+				strncpy_s(summaryBuffer.data(), summaryBuffer.size(), summary.c_str(), _TRUNCATE);
+				const std::string readonlyId = std::string("##BoneMaskPanelReadonly_") + std::to_string(static_cast<int>(panel.Target)) + "_" + std::to_string(panel.Index);
+				ImGui::InputText(readonlyId.c_str(), summaryBuffer.data(), summaryBuffer.size(), ImGuiInputTextFlags_ReadOnly);
+			}
+			ImGui::EndChild();
+
+			ImGui::SetCursorPosY(ImGui::GetWindowHeight() - ImGui::GetFrameHeight());
+			ImGui::BeginChild("BonePickerFooter", ImVec2(0, 0), 0, ImGuiWindowFlags_NoBackground);
+			{
+				if (ImAdd::Button(Localization::Pick("Clear", "清空"), ImVec2(120.0f, 0.0f)))
+					mask = Structs::BoneMaskFromBoneId(Structs::AimHeadBoneId);
+				ImGui::SameLine();
+				if (ImAdd::Button(Localization::Pick("Select All", "全选"), ImVec2(120.0f, 0.0f)))
+					mask = Structs::AimAllBoneMask;
+			}
+			ImGui::EndChild();
+		}
+		ImGui::EndChild();
+		ImGui::End();
+	}
+
+	void DrawBoneSelectorControl(
+		const BonePickerTargetType target,
+		const int profileIndex,
+		std::uint64_t& mask,
+		const std::uint64_t fallbackMask,
+		const char* sectionTitle)
+	{
+		mask &= Structs::AimAllBoneMask;
+		if (mask == 0ull)
+			mask = fallbackMask;
+
+		ImAdd::SeparatorText(sectionTitle);
+
+		const std::string summary = BuildAimbotBoneMaskDisplayText(mask);
+		std::array<char, 512> summaryBuffer{};
+		strncpy_s(summaryBuffer.data(), summaryBuffer.size(), summary.c_str(), _TRUNCATE);
+		const std::string summaryId = std::string("##BoneMaskSummary_") + std::to_string(static_cast<int>(target)) + "_" + std::to_string(profileIndex);
+		ImGui::InputText(summaryId.c_str(), summaryBuffer.data(), summaryBuffer.size(), ImGuiInputTextFlags_ReadOnly);
+
+		const bool panelOpen = IsBonePickerPanelOpenFor(target, profileIndex);
+		if (ImAdd::Button(panelOpen ? Localization::Pick("Hide Picker", "隐藏瞄点面板") : Localization::Pick("Select Bone Points", "选择骨骼点"), ImVec2(150.0f, 0.0f)))
+		{
+			if (panelOpen)
+				CloseBonePickerPanel();
+			else
+				OpenBonePickerPanel(target, profileIndex);
+		}
+		ImGui::SameLine();
+		if (ImAdd::Button(Localization::Pick("Select All", "全选"), ImVec2(120.0f, 0.0f)))
+			mask = Structs::AimAllBoneMask;
+	}
+
+	void DrawAimbotBoneSelectorControl(const int weaponIndex, std::uint64_t& mask, const std::uint64_t fallbackMask)
+	{
+		DrawBoneSelectorControl(
+			BonePickerTargetType::AimbotWeapon,
+			weaponIndex,
+			mask,
+			fallbackMask,
+			Localization::Pick("Aim Points", "瞄点")
+		);
+	}
+
+	void DrawTriggerBoneSelectorControl(const BonePickerTargetType target, const int profileIndex, std::uint64_t& mask, const std::uint64_t fallbackMask)
+	{
+		DrawBoneSelectorControl(
+			target,
+			profileIndex,
+			mask,
+			fallbackMask,
+			Localization::Pick("Trigger Points", "触发点")
+		);
+	}
 }
 
 LRESULT CALLBACK window_procedure(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -430,6 +969,8 @@ bool Overlay::CreateDevice()
 
 void Overlay::DestroyDevice()
 {
+	ResetBonesShowcaseTextureCache();
+
 	if (device)
 	{
 		device->Release();
@@ -797,6 +1338,8 @@ void Overlay::RenderMenu()
 		ImGuiWindowFlags_AlwaysAutoResize |
 		ImGuiWindowFlags_NoDecoration
 	);
+	const ImVec2 menuWindowPos = ImGui::GetWindowPos();
+	const ImVec2 menuWindowSize = ImGui::GetWindowSize();
 
 	StyleMenu(io, style);
 
@@ -835,31 +1378,6 @@ void Overlay::RenderMenu()
 
 			if (m_iSelectedPage == MenuPage_Aim)
 			{
-				constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
-				auto drawBoneMaskEditor = [&](const char* idSuffix, std::uint64_t& mask, const std::uint64_t fallbackMask)
-				{
-					mask &= kAllBonesMask;
-					for (size_t i = 0; i < Structs::AimBoneNames.size(); ++i)
-					{
-						const std::uint64_t bit = 1ull << static_cast<std::uint64_t>(i);
-						bool enabled = (mask & bit) != 0ull;
-						std::string label = std::string(Structs::AimBoneNames[i]) + "##" + idSuffix + std::to_string(i);
-						if (ImGui::Checkbox(L(label.c_str()), &enabled))
-						{
-							if (enabled)
-								mask |= bit;
-							else
-								mask &= ~bit;
-						}
-
-						if ((i % 2) == 0 && i + 1 < Structs::AimBoneNames.size())
-							ImGui::SameLine(ImGui::GetWindowWidth() * 0.47f);
-					}
-
-					if (mask == 0)
-						mask = fallbackMask;
-				};
-
 				ImGui::BeginChild("AimTabsRoot", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_NoBackground);
 				{
 					if (ImGui::BeginTabBar("AimSubTabs", ImGuiTabBarFlags_None))
@@ -903,26 +1421,6 @@ void Overlay::RenderMenu()
 											ImAdd::CheckBox("Aim Teammates", &config.Aim.AimFriendly);
 											ImAdd::CheckBox("Block Aimbot When Flashed", &config.Aim.BlockAimbotWhenFlashed);
 											ImAdd::SliderFloat("Deadzone (px)", &config.Aim.DeadzonePx, 0.0f, 6.0f);
-
-											ImAdd::SeparatorText("Aim Parts (Bone Points)");
-											drawBoneMaskEditor("AimbotBoneParts", config.Aim.AimbotBoneMask, Structs::AimDefaultAimbotBoneMask);
-
-											ImAdd::SeparatorText("RCS");
-											ImAdd::CheckBox("Global RCS", &config.Aim.GlobalRcsEnabled);
-											if (config.Aim.GlobalRcsEnabled)
-											{
-												ImAdd::SliderFloat("Global RCS Pitch", &config.Aim.GlobalRcsPitch, 0.0f, 4.0f);
-												ImAdd::SliderFloat("Global RCS Yaw", &config.Aim.GlobalRcsYaw, 0.0f, 4.0f);
-											}
-
-											ImAdd::CheckBox("Aimbot RCS", &config.Aim.AimbotRcsEnabled);
-											if (config.Aim.AimbotRcsEnabled)
-											{
-												ImAdd::SliderFloat("Aimbot RCS Pitch", &config.Aim.AimbotRcsPitch, 0.0f, 4.0f);
-												ImAdd::SliderFloat("Aimbot RCS Yaw", &config.Aim.AimbotRcsYaw, 0.0f, 4.0f);
-											}
-
-											ImAdd::CheckBox("Fuse Global RCS During Aim", &config.Aim.FuseGlobalRcsWithAimbot);
 											ImGui::TextDisabled("%s", L("Aimbot thread interval: 2ms (~500Hz)."));
 											ImGui::EndTabItem();
 										}
@@ -944,6 +1442,7 @@ void Overlay::RenderMenu()
 														ImAdd::SliderFloat("Dynamic Distance Scale", &profile.DynamicFovDistanceScale, 400.0f, 4500.0f);
 														ImAdd::Combo("Target Strategy", &profile.TargetStrategy, Structs::AimTargetStrategyNames.data(), (int)Structs::AimTargetStrategyNames.size());
 														ImAdd::SliderInt("Target Switch Delay (ms)", &profile.TargetSwitchDelayMs, 0, 600);
+														DrawAimbotBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
 														ImGui::EndTabItem();
 													}
 												}
@@ -1035,9 +1534,7 @@ void Overlay::RenderMenu()
 														ImAdd::SliderInt("Pre Fire Delay (ms)", &profile.PreFireDelayMs, 0, 600);
 														ImAdd::SliderInt("Post Fire Interval (ms)", &profile.PostFireIntervalMs, 0, 1200);
 														ImAdd::SliderInt("Timeout Force Fire (ms)", &profile.TimeoutForceFireMs, 0, 3000);
-														ImAdd::SeparatorText("Trigger Parts (Bone Points)");
-														const std::string profileBoneMaskId = std::string("TriggerProfileBoneMask") + std::to_string(i);
-														drawBoneMaskEditor(profileBoneMaskId.c_str(), profile.BoneMask, kAllBonesMask);
+														DrawTriggerBoneSelectorControl(BonePickerTargetType::TriggerWeapon, i, profile.BoneMask, Structs::AimAllBoneMask);
 														ImGui::EndTabItem();
 													}
 												}
@@ -1052,9 +1549,7 @@ void Overlay::RenderMenu()
 														ImAdd::SliderInt("Special Post Fire Interval (ms)", &special.PostFireIntervalMs, 0, 1500);
 														ImAdd::SliderInt("Special Timeout Force Fire (ms)", &special.TimeoutForceFireMs, 0, 3000);
 														ImAdd::SliderInt("Special Hold Fire (ms)", &special.HoldFireMs, 0, 600);
-														ImAdd::SeparatorText("Trigger Parts (Bone Points)");
-														const std::string specialBoneMaskId = std::string("TriggerSpecialBoneMask") + std::to_string(i);
-														drawBoneMaskEditor(specialBoneMaskId.c_str(), special.BoneMask, kAllBonesMask);
+														DrawTriggerBoneSelectorControl(BonePickerTargetType::TriggerSpecial, i, special.BoneMask, Structs::AimAllBoneMask);
 														ImGui::EndTabItem();
 													}
 												}
@@ -1715,11 +2210,86 @@ void Overlay::RenderMenu()
 						ProcInfo::KmboxInitialized ? L("Connected") : L("Disconnected")
 					);
 
+					ImAdd::SeparatorText(Localization::Pick("KMBOX", "KMBOX"));
+					static bool kmboxUiInitialized = false;
+					static char kmboxIpBuffer[64]{};
+					static char kmboxUuidBuffer[64]{};
+					static int kmboxPortInput = 0;
+					static std::string kmboxActionStatus{};
+
+					if (!kmboxUiInitialized || m_MenuJustOpened)
+					{
+						strncpy_s(kmboxIpBuffer, config.Kmbox.Ip.c_str(), _TRUNCATE);
+						strncpy_s(kmboxUuidBuffer, config.Kmbox.Uuid.c_str(), _TRUNCATE);
+						kmboxPortInput = std::clamp(static_cast<int>(config.Kmbox.Port), 0, 65535);
+						kmboxUiInitialized = true;
+					}
+
+					ImAdd::CheckBox(Localization::Pick("Enable KMBOX", "启用KMBOX"), &config.Kmbox.Enabled);
+					if (ImGui::InputText(Localization::Pick("KMBOX IP", "KMBOX 地址"), kmboxIpBuffer, IM_ARRAYSIZE(kmboxIpBuffer)))
+						config.Kmbox.Ip = kmboxIpBuffer;
+					if (ImGui::InputInt(Localization::Pick("KMBOX Port", "KMBOX 端口"), &kmboxPortInput))
+					{
+						kmboxPortInput = std::clamp(kmboxPortInput, 0, 65535);
+						config.Kmbox.Port = static_cast<unsigned short>(kmboxPortInput);
+					}
+					if (ImGui::InputText(Localization::Pick("KMBOX UUID", "KMBOX UUID"), kmboxUuidBuffer, IM_ARRAYSIZE(kmboxUuidBuffer)))
+						config.Kmbox.Uuid = kmboxUuidBuffer;
+
+					if (ImAdd::Button(Localization::Pick("Connect KMBOX", "连接KMBOX"), ImVec2(130.0f, 0.0f)))
+					{
+						config.Kmbox.Ip = TrimAscii(kmboxIpBuffer);
+						config.Kmbox.Uuid = TrimAscii(kmboxUuidBuffer);
+						config.Kmbox.Port = static_cast<unsigned short>(std::clamp(kmboxPortInput, 0, 65535));
+						const int ret = Kmbox.InitDevice(config.Kmbox.Ip, config.Kmbox.Port, config.Kmbox.Uuid);
+						ProcInfo::KmboxInitialized = (ret == 0);
+						if (ret == 0)
+						{
+							config.Kmbox.Enabled = true;
+							kmboxActionStatus = Localization::Pick("KMBOX connected successfully.", "KMBOX连接成功。");
+						}
+						else
+						{
+							kmboxActionStatus = Localization::Pick("KMBOX connect failed, code=", "KMBOX连接失败，错误码=") + std::to_string(ret);
+						}
+					}
+
+					ImGui::BeginDisabled(!ProcInfo::KmboxInitialized);
+					if (ImAdd::Button(Localization::Pick("Move Test", "移动测试"), ImVec2(190.0f, 0.0f)))
+					{
+						const int ret = Kmbox.Mouse.Move(100, 100);
+						kmboxActionStatus = (ret == 0)
+							? Localization::Pick("Move test sent: x=100 y=100.", "移动测试已发送：x=100 y=100。")
+							: (Localization::Pick("Move test failed, code=", "移动测试失败，错误码=") + std::to_string(ret));
+					}
+					ImGui::EndDisabled();
+
+					if (!kmboxActionStatus.empty())
+						ImGui::TextWrapped("%s", kmboxActionStatus.c_str());
+
+
 					ImAdd::SeparatorText("Game");
 
 					ImGui::Text("%s", L("Client:"));
 					ImGui::SameLine();
 					ImGui::Text("0x%llx", Globals::ClientBase);
+
+
+					ImAdd::SeparatorText(Localization::Pick("Debug", "调试"));
+					if (ImAdd::CheckBox(Localization::Pick("Enable Debug Thread", "启用Debug线程"), &config.DebugEnabled) && !config.DebugEnabled)
+					{
+						config.DebugPerf = false;
+						config.DebugTrigger = false;
+					}
+
+					if (config.DebugEnabled)
+					{
+						ImAdd::CheckBox(Localization::Pick("Perf Debug Output", "性能调试输出"), &config.DebugPerf);
+						ImAdd::CheckBox(Localization::Pick("Trigger Debug Output", "扳机调试输出"), &config.DebugTrigger);
+					}
+
+					PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger);
+					PerfDebug::SyncDebugThread();
 
 					ImAdd::SeparatorText("Cheat");
 
@@ -1766,4 +2336,5 @@ void Overlay::RenderMenu()
 
 	ImGui::EndChild();
 	ImGui::End();
+	DrawBonePickerPanel(menuWindowPos, menuWindowSize);
 }

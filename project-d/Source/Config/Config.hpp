@@ -8,6 +8,9 @@ namespace Config
         Structs::KmboxConfig Kmbox;
         Structs::VisualsConfig Visuals;
         int Language = 0;
+        bool DebugEnabled = false;
+        bool DebugPerf = false;
+        bool DebugTrigger = false;
 
         static AppConfig& Get()
         {
@@ -91,19 +94,9 @@ namespace Config
             j["Aim"]["AimbotSecondKeyEnabled"] = Aim.AimbotSecondKeyEnabled;
             j["Aim"]["AimbotSecondKey"] = Aim.AimbotSecondKey;
             j["Aim"]["AimbotSecondKeyMode"] = Aim.AimbotSecondKeyMode;
-            j["Aim"]["AimbotBoneMask"] = Aim.AimbotBoneMask;
             j["Aim"]["AimbotHitGroupMask"] = Aim.AimbotHitGroupMask;
 
             j["Aim"]["DeadzonePx"] = Aim.DeadzonePx;
-
-            j["Aim"]["GlobalRcsEnabled"] = Aim.GlobalRcsEnabled;
-            j["Aim"]["GlobalRcsPitch"] = Aim.GlobalRcsPitch;
-            j["Aim"]["GlobalRcsYaw"] = Aim.GlobalRcsYaw;
-
-            j["Aim"]["AimbotRcsEnabled"] = Aim.AimbotRcsEnabled;
-            j["Aim"]["AimbotRcsPitch"] = Aim.AimbotRcsPitch;
-            j["Aim"]["AimbotRcsYaw"] = Aim.AimbotRcsYaw;
-            j["Aim"]["FuseGlobalRcsWithAimbot"] = Aim.FuseGlobalRcsWithAimbot;
 
             j["Aim"]["AimbotFov"] = Aim.AimbotFov;
             j["Aim"]["AimbotSmooth"] = Aim.AimbotSmooth;
@@ -117,6 +110,7 @@ namespace Config
                 out["Fov"] = profile.Fov;
                 out["Smooth"] = profile.Smooth;
                 out["CurveStrength"] = profile.CurveStrength;
+                out["BoneMask"] = profile.BoneMask;
                 out["DynamicFov"] = profile.DynamicFov;
                 out["DynamicFovDistanceScale"] = profile.DynamicFovDistanceScale;
                 out["TargetStrategy"] = profile.TargetStrategy;
@@ -217,6 +211,9 @@ namespace Config
             j["Visuals"]["GrenadeHelperTopHintColor"] = { Visuals.GrenadeHelperTopHintColor.x, Visuals.GrenadeHelperTopHintColor.y, Visuals.GrenadeHelperTopHintColor.z, Visuals.GrenadeHelperTopHintColor.w };
             j["Visuals"]["GrenadeHelperTopHintFontSize"] = Visuals.GrenadeHelperTopHintFontSize;
             j["Info"]["Language"] = std::clamp(Language, 0, 1);
+            j["Info"]["DebugEnabled"] = DebugEnabled;
+            j["Info"]["DebugPerf"] = DebugPerf;
+            j["Info"]["DebugTrigger"] = DebugTrigger;
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -292,6 +289,24 @@ namespace Config
                         else if (info["Language"].is_number())
                             Language = static_cast<int>(info["Language"].get<double>());
                     }
+
+                    auto readInfoBool = [&](const char* key, bool& outValue)
+                    {
+                        if (!info.contains(key))
+                            return;
+
+                        const auto& node = info[key];
+                        if (node.is_boolean())
+                            outValue = node.get<bool>();
+                        else if (node.is_number_integer())
+                            outValue = node.get<int>() != 0;
+                        else if (node.is_number())
+                            outValue = node.get<double>() != 0.0;
+                    };
+
+                    readInfoBool("DebugEnabled", DebugEnabled);
+                    readInfoBool("DebugPerf", DebugPerf);
+                    readInfoBool("DebugTrigger", DebugTrigger);
                 }
                 Language = std::clamp(Language, 0, 1);
 
@@ -332,6 +347,24 @@ namespace Config
                                     else if (info["Language"].is_number())
                                         Language = static_cast<int>(info["Language"].get<double>());
                                 }
+
+                                auto readInfoBool = [&](const char* key, bool& outValue)
+                                {
+                                    if (!info.contains(key))
+                                        return;
+
+                                    const auto& node = info[key];
+                                    if (node.is_boolean())
+                                        outValue = node.get<bool>();
+                                    else if (node.is_number_integer())
+                                        outValue = node.get<int>() != 0;
+                                    else if (node.is_number())
+                                        outValue = node.get<double>() != 0.0;
+                                };
+
+                                readInfoBool("DebugEnabled", DebugEnabled);
+                                readInfoBool("DebugPerf", DebugPerf);
+                                readInfoBool("DebugTrigger", DebugTrigger);
                             }
                             Language = std::clamp(Language, 0, 1);
                             LOG_INFO("Loaded config from clipboard");
@@ -430,21 +463,11 @@ namespace Config
                 j["Aim"]["AimbotSecondKeyEnabled"] = false;
                 j["Aim"]["AimbotSecondKey"] = 0;
                 j["Aim"]["AimbotSecondKeyMode"] = 1;
-                j["Aim"]["AimbotBoneMask"] = Structs::AimDefaultAimbotBoneMask;
                 j["Aim"]["AimbotHitGroupMask"] =
                     Structs::AimHit_Head |
                     Structs::AimHit_UpperChest |
                     Structs::AimHit_Torso;
                 j["Aim"]["DeadzonePx"] = 1.2f;
-
-                j["Aim"]["GlobalRcsEnabled"] = false;
-                j["Aim"]["GlobalRcsPitch"] = 1.6f;
-                j["Aim"]["GlobalRcsYaw"] = 1.6f;
-
-                j["Aim"]["AimbotRcsEnabled"] = true;
-                j["Aim"]["AimbotRcsPitch"] = 1.75f;
-                j["Aim"]["AimbotRcsYaw"] = 1.75f;
-                j["Aim"]["FuseGlobalRcsWithAimbot"] = true;
 
                 j["Aim"]["AimbotFov"] = 6.5f;
                 j["Aim"]["AimbotSmooth"] = 16.0f;
@@ -452,24 +475,25 @@ namespace Config
                 j["Aim"]["TriggerProfileEditorIndex"] = 0;
                 j["Aim"]["TriggerSpecialEditorIndex"] = 0;
 
-                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, bool dynamicFov, float dynamicScale, int strategy, int switchDelay)
+                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, std::uint64_t boneMask, bool dynamicFov, float dynamicScale, int strategy, int switchDelay)
                 {
                     nlohmann::json& p = j["Aim"]["WeaponProfiles"][name];
                     p["Fov"] = fov;
                     p["Smooth"] = smooth;
                     p["CurveStrength"] = curve;
+                    p["BoneMask"] = boneMask;
                     p["DynamicFov"] = dynamicFov;
                     p["DynamicFovDistanceScale"] = dynamicScale;
                     p["TargetStrategy"] = strategy;
                     p["TargetSwitchDelayMs"] = switchDelay;
                 };
 
-                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, true, 1350.0f, Structs::AimStrategy_Crosshair, 100);
-                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, true, 1450.0f, Structs::AimStrategy_Crosshair, 90);
-                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, true, 900.0f, Structs::AimStrategy_Distance, 75);
-                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, true, 1650.0f, Structs::AimStrategy_Crosshair, 120);
-                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, true, 2200.0f, Structs::AimStrategy_Crosshair, 160);
-                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, true, 1700.0f, Structs::AimStrategy_Hybrid, 130);
+                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, Structs::AimDefaultAimbotBoneMask, true, 1350.0f, Structs::AimStrategy_Crosshair, 100);
+                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, Structs::AimDefaultAimbotBoneMask, true, 1450.0f, Structs::AimStrategy_Crosshair, 90);
+                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, Structs::AimDefaultAimbotBoneMask, true, 900.0f, Structs::AimStrategy_Distance, 75);
+                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, true, 1650.0f, Structs::AimStrategy_Crosshair, 120);
+                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, Structs::AimDefaultAimbotBoneMask, true, 2200.0f, Structs::AimStrategy_Crosshair, 160);
+                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, true, 1700.0f, Structs::AimStrategy_Hybrid, 130);
 
                 auto writeDefaultTriggerProfile = [&](const char* name, float hitboxPx, int preDelay, int postDelay, int timeoutMs, std::uint64_t boneMask)
                 {
@@ -553,6 +577,9 @@ namespace Config
                 j["Visuals"]["GrenadeHelperTopHintColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["GrenadeHelperTopHintFontSize"] = 30.0f;
                 j["Info"]["Language"] = 0;
+                j["Info"]["DebugEnabled"] = false;
+                j["Info"]["DebugPerf"] = false;
+                j["Info"]["DebugTrigger"] = false;
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();
@@ -571,6 +598,9 @@ namespace Config
             const bool hasTriggerBoneMask = aimSection.contains("TriggerBoneMask");
             const bool hasUnifiedTriggerRadius = aimSection.contains("TriggerUnifiedHitboxRadiusPx");
             const bool hasHeadTriggerRadius = aimSection.contains("TriggerHeadRadiusPx");
+            const std::uint64_t legacyRootAimbotBoneMask = hasAimbotBoneMask
+                ? aimSection["AimbotBoneMask"].get<std::uint64_t>()
+                : 0ull;
             const std::uint64_t legacyRootTriggerBoneMask = hasTriggerBoneMask
                 ? aimSection["TriggerBoneMask"].get<std::uint64_t>()
                 : 0ull;
@@ -587,6 +617,7 @@ namespace Config
                     if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
                     if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
                     if (node.contains("CurveStrength")) profile.CurveStrength = node["CurveStrength"].get<float>();
+                    if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
                     if (node.contains("DynamicFov")) profile.DynamicFov = node["DynamicFov"].get<bool>();
                     if (node.contains("DynamicFovDistanceScale")) profile.DynamicFovDistanceScale = node["DynamicFovDistanceScale"].get<float>();
                     if (node.contains("TargetStrategy")) profile.TargetStrategy = node["TargetStrategy"].get<int>();
@@ -609,6 +640,23 @@ namespace Config
                 readAimProfileWithFallback("Rifle", Aim.WeaponProfiles[Structs::AimWeapon_Rifle]);
                 readAimProfileWithFallback("Sniper", Aim.WeaponProfiles[Structs::AimWeapon_Sniper]);
                 readAimProfileWithFallback("Lmg", Aim.WeaponProfiles[Structs::AimWeapon_Lmg]);
+
+                auto profileHasBoneMask = [&](const char* name) -> bool
+                {
+                    if (!profileRoot.contains(name) || !profileRoot[name].is_object())
+                        return false;
+                    return profileRoot[name].contains("BoneMask");
+                };
+
+                if (legacyRootAimbotBoneMask != 0ull)
+                {
+                    if (!profileHasBoneMask("Pistol")) Aim.WeaponProfiles[Structs::AimWeapon_Pistol].BoneMask = legacyRootAimbotBoneMask;
+                    if (!profileHasBoneMask("Smg")) Aim.WeaponProfiles[Structs::AimWeapon_Smg].BoneMask = legacyRootAimbotBoneMask;
+                    if (!profileHasBoneMask("Shotgun")) Aim.WeaponProfiles[Structs::AimWeapon_Shotgun].BoneMask = legacyRootAimbotBoneMask;
+                    if (!profileHasBoneMask("Rifle")) Aim.WeaponProfiles[Structs::AimWeapon_Rifle].BoneMask = legacyRootAimbotBoneMask;
+                    if (!profileHasBoneMask("Sniper")) Aim.WeaponProfiles[Structs::AimWeapon_Sniper].BoneMask = legacyRootAimbotBoneMask;
+                    if (!profileHasBoneMask("Lmg")) Aim.WeaponProfiles[Structs::AimWeapon_Lmg].BoneMask = legacyRootAimbotBoneMask;
+                }
             }
             else
             {
@@ -617,6 +665,9 @@ namespace Config
                 {
                     profile.Fov = Aim.AimbotFov;
                     profile.Smooth = Aim.AimbotSmooth;
+                    profile.BoneMask = legacyRootAimbotBoneMask != 0ull
+                        ? legacyRootAimbotBoneMask
+                        : Structs::AimDefaultAimbotBoneMask;
                 }
             }
 
@@ -809,6 +860,9 @@ namespace Config
                 profile.Fov = (std::max)(0.1f, profile.Fov);
                 profile.Smooth = (std::max)(1.0f, profile.Smooth);
                 profile.CurveStrength = std::clamp(profile.CurveStrength, 0.0f, 1.0f);
+                profile.BoneMask &= Structs::AimAllBoneMask;
+                if (profile.BoneMask == 0ull)
+                    profile.BoneMask = Aim.AimbotBoneMask;
                 profile.DynamicFovDistanceScale = (std::max)(1.0f, profile.DynamicFovDistanceScale);
                 profile.TargetStrategy = std::clamp(profile.TargetStrategy, 0, (int)Structs::AimTargetStrategyNames.size() - 1);
                 profile.TargetSwitchDelayMs = (std::max)(0, profile.TargetSwitchDelayMs);
@@ -895,15 +949,6 @@ namespace Config
                             else if (key == "AimbotBoneMask") configSection.AimbotBoneMask = value.get<std::uint64_t>();
                             else if (key == "AimbotHitGroupMask") configSection.AimbotHitGroupMask = value.get<std::uint32_t>();
                             else if (key == "DeadzonePx") configSection.DeadzonePx = value.get<float>();
-
-                            else if (key == "GlobalRcsEnabled") configSection.GlobalRcsEnabled = value.get<bool>();
-                            else if (key == "GlobalRcsPitch") configSection.GlobalRcsPitch = value.get<float>();
-                            else if (key == "GlobalRcsYaw") configSection.GlobalRcsYaw = value.get<float>();
-
-                            else if (key == "AimbotRcsEnabled") configSection.AimbotRcsEnabled = value.get<bool>();
-                            else if (key == "AimbotRcsPitch") configSection.AimbotRcsPitch = value.get<float>();
-                            else if (key == "AimbotRcsYaw") configSection.AimbotRcsYaw = value.get<float>();
-                            else if (key == "FuseGlobalRcsWithAimbot") configSection.FuseGlobalRcsWithAimbot = value.get<bool>();
 
                             else if (key == "AimbotFov") configSection.AimbotFov = value.get<float>();
                             else if (key == "AimbotSmooth") configSection.AimbotSmooth = value.get<float>();

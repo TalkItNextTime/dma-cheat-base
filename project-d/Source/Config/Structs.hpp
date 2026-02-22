@@ -142,6 +142,7 @@ namespace Structs
         float Fov = 6.5f;
         float Smooth = 16.0f;
         float CurveStrength = 0.22f;
+        std::uint64_t BoneMask = AimDefaultAimbotBoneMask;
 
         bool DynamicFov = true;
         float DynamicFovDistanceScale = 1500.0f;
@@ -232,16 +233,6 @@ namespace Structs
         std::uint32_t AimbotHitGroupMask = AimHit_Head | AimHit_UpperChest | AimHit_Torso;
 
         float DeadzonePx = 1.2f;
-
-        bool GlobalRcsEnabled = false;
-        float GlobalRcsPitch = 1.6f;
-        float GlobalRcsYaw = 1.6f;
-
-        bool AimbotRcsEnabled = true;
-        float AimbotRcsPitch = 1.75f;
-        float AimbotRcsYaw = 1.75f;
-
-        bool FuseGlobalRcsWithAimbot = true;
 
         // Legacy values remain for backward compatibility with old configs.
         float AimbotFov = 6.5f;

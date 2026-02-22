@@ -1,7 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 namespace PerfDebug
 {
@@ -69,9 +72,28 @@ namespace PerfDebug
     };
 
     inline IntervalCounters Counters{};
+    inline std::atomic<bool> DebugEnabled{ false };
+    inline std::atomic<bool> DebugPerf{ false };
+    inline std::atomic<bool> DebugTrigger{ false };
+    inline std::atomic<bool> DebugThreadStopRequested{ false };
+    inline std::mutex DebugThreadMutex{};
+    inline std::thread DebugThread{};
+
+    inline bool IsPerfCollectionEnabled()
+    {
+        return DebugEnabled.load(std::memory_order_relaxed) && DebugPerf.load(std::memory_order_relaxed);
+    }
+
+    inline bool IsTriggerCollectionEnabled()
+    {
+        return DebugEnabled.load(std::memory_order_relaxed) && DebugTrigger.load(std::memory_order_relaxed);
+    }
 
     inline void RecordOverlayFrame(const std::uint64_t frameUs)
     {
+        if (!IsPerfCollectionEnabled())
+            return;
+
         Counters.OverlayFrames.fetch_add(1, std::memory_order_relaxed);
         Counters.OverlayFrameUsSum.fetch_add(frameUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.OverlayFrameUsMax, frameUs);
@@ -79,6 +101,9 @@ namespace PerfDebug
 
     inline void RecordEspFrame(const std::uint64_t frameUs, const std::uint32_t controllerCount, const std::uint32_t playersDrawn)
     {
+        if (!IsPerfCollectionEnabled())
+            return;
+
         Counters.EspFrames.fetch_add(1, std::memory_order_relaxed);
         Counters.EspFrameUsSum.fetch_add(frameUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.EspFrameUsMax, frameUs);
@@ -88,6 +113,9 @@ namespace PerfDebug
 
     inline void RecordEspSampleFrame(const std::uint64_t frameUs)
     {
+        if (!IsPerfCollectionEnabled())
+            return;
+
         Counters.EspSampleFrames.fetch_add(1, std::memory_order_relaxed);
         Counters.EspSampleUsSum.fetch_add(frameUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.EspSampleUsMax, frameUs);
@@ -95,6 +123,9 @@ namespace PerfDebug
 
     inline void RecordVisCheck(const std::uint64_t durationUs, const bool isVisible)
     {
+        if (!IsPerfCollectionEnabled())
+            return;
+
         Counters.VisChecks.fetch_add(1, std::memory_order_relaxed);
         Counters.VisCheckUsSum.fetch_add(durationUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.VisCheckUsMax, durationUs);
@@ -105,6 +136,9 @@ namespace PerfDebug
 
     inline void RecordMapPoll(const bool hasMap)
     {
+        if (!IsPerfCollectionEnabled())
+            return;
+
         Counters.MapPolls.fetch_add(1, std::memory_order_relaxed);
         if (hasMap)
             Counters.MapHits.fetch_add(1, std::memory_order_relaxed);
@@ -112,11 +146,17 @@ namespace PerfDebug
 
     inline void RecordTriggerHotkeyDown()
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerHotkeyDowns.fetch_add(1, std::memory_order_relaxed);
     }
 
     inline void RecordTriggerTimeoutCheck(const std::uint64_t hotkeyAgeUs, const bool timeoutHit)
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerTimeoutChecks.fetch_add(1, std::memory_order_relaxed);
         Counters.TriggerTimeoutAgeUsSum.fetch_add(hotkeyAgeUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.TriggerTimeoutAgeUsMax, hotkeyAgeUs);
@@ -126,6 +166,9 @@ namespace PerfDebug
 
     inline void RecordTriggerScan(const std::uint64_t scanUs, const bool hasCandidate)
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerScans.fetch_add(1, std::memory_order_relaxed);
         Counters.TriggerScanUsSum.fetch_add(scanUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.TriggerScanUsMax, scanUs);
@@ -135,6 +178,9 @@ namespace PerfDebug
 
     inline void RecordTriggerSnapshotFrame(const bool isEmpty)
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerSnapshotFrames.fetch_add(1, std::memory_order_relaxed);
         if (isEmpty)
             Counters.TriggerSnapshotEmptyFrames.fetch_add(1, std::memory_order_relaxed);
@@ -142,11 +188,17 @@ namespace PerfDebug
 
     inline void RecordTriggerFallbackScan()
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerFallbackScans.fetch_add(1, std::memory_order_relaxed);
     }
 
     inline void RecordTriggerCycle(const std::uint64_t cycleUs)
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerCycles.fetch_add(1, std::memory_order_relaxed);
         Counters.TriggerCycleUsSum.fetch_add(cycleUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.TriggerCycleUsMax, cycleUs);
@@ -154,6 +206,9 @@ namespace PerfDebug
 
     inline void RecordTriggerPreFireGate()
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerPreFireGateHits.fetch_add(1, std::memory_order_relaxed);
     }
 
@@ -163,6 +218,9 @@ namespace PerfDebug
         const std::uint64_t sendUs,
         const bool byTimeout)
     {
+        if (!IsTriggerCollectionEnabled())
+            return;
+
         Counters.TriggerFires.fetch_add(1, std::memory_order_relaxed);
         Counters.TriggerFireHotkeyAgeUsSum.fetch_add(hotkeyAgeUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.TriggerFireHotkeyAgeUsMax, hotkeyAgeUs);
@@ -175,6 +233,66 @@ namespace PerfDebug
             Counters.TriggerTimeoutFires.fetch_add(1, std::memory_order_relaxed);
         else
             Counters.TriggerDetectFires.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void LogInterval(double intervalSeconds);
+
+    inline void SetDebugOptions(const bool enabled, const bool perfEnabled, const bool triggerEnabled)
+    {
+        DebugEnabled.store(enabled, std::memory_order_relaxed);
+        DebugPerf.store(enabled && perfEnabled, std::memory_order_relaxed);
+        DebugTrigger.store(enabled && triggerEnabled, std::memory_order_relaxed);
+    }
+
+    inline void StartDebugThreadIfNeeded()
+    {
+        std::lock_guard lock(DebugThreadMutex);
+        if (DebugThread.joinable())
+            return;
+
+        DebugThreadStopRequested.store(false, std::memory_order_relaxed);
+        DebugThread = std::thread([]()
+        {
+            while (!DebugThreadStopRequested.load(std::memory_order_relaxed))
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (DebugThreadStopRequested.load(std::memory_order_relaxed))
+                    break;
+
+                LogInterval(1.0);
+            }
+
+            LogInterval(1.0);
+        });
+    }
+
+    inline void StopDebugThreadIfNeeded()
+    {
+        std::thread worker{};
+        {
+            std::lock_guard lock(DebugThreadMutex);
+            if (!DebugThread.joinable())
+                return;
+
+            DebugThreadStopRequested.store(true, std::memory_order_relaxed);
+            worker = std::move(DebugThread);
+        }
+
+        if (worker.joinable())
+            worker.join();
+    }
+
+    inline void SyncDebugThread()
+    {
+        if (DebugEnabled.load(std::memory_order_relaxed))
+            StartDebugThreadIfNeeded();
+        else
+            StopDebugThreadIfNeeded();
+    }
+
+    inline void ShutdownDebugThread()
+    {
+        StopDebugThreadIfNeeded();
     }
 
     inline void LogInterval(const double intervalSeconds = 1.0)
@@ -247,21 +365,10 @@ namespace PerfDebug
         const double visAvgMs = visChecks ? (static_cast<double>(visCheckUsSum) / static_cast<double>(visChecks)) / 1000.0 : 0.0;
         const double visMaxMs = static_cast<double>(visCheckUsMax) / 1000.0;
 
-        (void)overlayFps;
-        (void)overlayAvgMs;
-        (void)overlayMaxMs;
-        (void)espAvgMs;
-        (void)espMaxMs;
-        (void)controllersPerFrame;
-        (void)playersPerFrame;
-        (void)sampleAvgMs;
-        (void)sampleMaxMs;
-        (void)visHits;
-        (void)visChecks;
-        (void)visAvgMs;
-        (void)visMaxMs;
-        (void)mapHits;
-        (void)mapPolls;
+        const bool logPerf = DebugPerf.load(std::memory_order_relaxed);
+        const bool logTrigger = DebugTrigger.load(std::memory_order_relaxed);
+        if (!logPerf && !logTrigger)
+            return;
 
         const double triggerTimeoutAgeAvgMs = triggerTimeoutChecks ? (static_cast<double>(triggerTimeoutAgeUsSum) / static_cast<double>(triggerTimeoutChecks)) / 1000.0 : 0.0;
         const double triggerTimeoutAgeMaxMs = static_cast<double>(triggerTimeoutAgeUsMax) / 1000.0;
@@ -276,51 +383,57 @@ namespace PerfDebug
         const double triggerSendAvgMs = triggerFires ? (static_cast<double>(triggerSendUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
         const double triggerSendMaxMs = static_cast<double>(triggerSendUsMax) / 1000.0;
 
-        // LOG_INFO(
-        //     "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
-        //     overlayFps,
-        //     overlayAvgMs,
-        //     overlayMaxMs,
-        //     espAvgMs,
-        //     espMaxMs,
-        //     controllersPerFrame,
-        //     playersPerFrame,
-        //     sampleAvgMs,
-        //     sampleMaxMs,
-        //     visHits,
-        //     visChecks,
-        //     visAvgMs,
-        //     visMaxMs,
-        //     mapHits,
-        //     mapPolls
-        // );
+        if (logPerf)
+        {
+            LOG_INFO(
+                "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
+                overlayFps,
+                overlayAvgMs,
+                overlayMaxMs,
+                espAvgMs,
+                espMaxMs,
+                controllersPerFrame,
+                playersPerFrame,
+                sampleAvgMs,
+                sampleMaxMs,
+                visHits,
+                visChecks,
+                visAvgMs,
+                visMaxMs,
+                mapHits,
+                mapPolls
+            );
+        }
 
-        LOG_INFO(
-            "[trigger dbg] hk_down={} | timeout hit/check={}/{} age={:.2f}/{:.2f}ms | scan cand/scan={}/{} time={:.2f}/{:.2f}ms | snapshot empty/all={}/{} fallback={} prefire_gate={} | cycle={:.2f}/{:.2f}ms | fire={} timeout={} detect={} | fire_age={:.2f}/{:.2f}ms decision={:.2f}/{:.2f}ms send={:.2f}/{:.2f}ms",
-            triggerHotkeyDowns,
-            triggerTimeoutHits,
-            triggerTimeoutChecks,
-            triggerTimeoutAgeAvgMs,
-            triggerTimeoutAgeMaxMs,
-            triggerScanCandidates,
-            triggerScans,
-            triggerScanAvgMs,
-            triggerScanMaxMs,
-            triggerSnapshotEmptyFrames,
-            triggerSnapshotFrames,
-            triggerFallbackScans,
-            triggerPreFireGateHits,
-            triggerCycleAvgMs,
-            triggerCycleMaxMs,
-            triggerFires,
-            triggerTimeoutFires,
-            triggerDetectFires,
-            triggerFireAgeAvgMs,
-            triggerFireAgeMaxMs,
-            triggerDecisionAvgMs,
-            triggerDecisionMaxMs,
-            triggerSendAvgMs,
-            triggerSendMaxMs
-        );
+        if (logTrigger)
+        {
+            LOG_INFO(
+                "[trigger dbg] hk_down={} | timeout hit/check={}/{} age={:.2f}/{:.2f}ms | scan cand/scan={}/{} time={:.2f}/{:.2f}ms | snapshot empty/all={}/{} fallback={} prefire_gate={} | cycle={:.2f}/{:.2f}ms | fire={} timeout={} detect={} | fire_age={:.2f}/{:.2f}ms decision={:.2f}/{:.2f}ms send={:.2f}/{:.2f}ms",
+                triggerHotkeyDowns,
+                triggerTimeoutHits,
+                triggerTimeoutChecks,
+                triggerTimeoutAgeAvgMs,
+                triggerTimeoutAgeMaxMs,
+                triggerScanCandidates,
+                triggerScans,
+                triggerScanAvgMs,
+                triggerScanMaxMs,
+                triggerSnapshotEmptyFrames,
+                triggerSnapshotFrames,
+                triggerFallbackScans,
+                triggerPreFireGateHits,
+                triggerCycleAvgMs,
+                triggerCycleMaxMs,
+                triggerFires,
+                triggerTimeoutFires,
+                triggerDetectFires,
+                triggerFireAgeAvgMs,
+                triggerFireAgeMaxMs,
+                triggerDecisionAvgMs,
+                triggerDecisionMaxMs,
+                triggerSendAvgMs,
+                triggerSendMaxMs
+            );
+        }
     }
 }

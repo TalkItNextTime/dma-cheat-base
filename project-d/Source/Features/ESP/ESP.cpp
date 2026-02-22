@@ -2280,7 +2280,7 @@ void ESP::UpdateVisCheckState()
         now - m_LastMapPoll >= std::chrono::milliseconds(1000))
     {
         m_LastPolledMapName = sdk.GetCurrentMapName();
-        //PerfDebug::RecordMapPoll(!m_LastPolledMapName.empty());
+        PerfDebug::RecordMapPoll(!m_LastPolledMapName.empty());
         m_LastMapPoll = now;
     }
 
@@ -3069,7 +3069,7 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
     ).count();
 
     if (durationUs >= 0)
-        //PerfDebug::RecordVisCheck(static_cast<std::uint64_t>(durationUs), isVisible);
+        PerfDebug::RecordVisCheck(static_cast<std::uint64_t>(durationUs), isVisible);
 
     return isVisible;
 }
@@ -4083,11 +4083,11 @@ void ESP::Render(ImDrawList* drawList)
 
         if (renderUs >= 0)
         {
-           /* PerfDebug::RecordEspFrame(
+            PerfDebug::RecordEspFrame(
                 static_cast<std::uint64_t>(renderUs),
                 resolvedControllers,
                 drawnPlayers
-            );*/
+            );
         }
     };
 

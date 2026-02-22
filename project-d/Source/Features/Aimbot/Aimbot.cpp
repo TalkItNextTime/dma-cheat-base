@@ -842,7 +842,6 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_AimbotHotkeyWasActive = false;
-        m_LastGlobalPunchValid = false;
         m_LastFovProbeAt = {};
         m_LastFovProbeRadiusPx = 0.0f;
         m_LastTargetScanAt = {};
@@ -882,7 +881,6 @@ void Aimbot::UpdateAimbot()
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
-        m_LastGlobalPunchValid = false;
         m_LastTargetScanAt = {};
         m_LastFovProbeAt = {};
         m_LastFovProbeRadiusPx = 0.0f;
@@ -945,7 +943,7 @@ void Aimbot::UpdateAimbot()
         profile.Smooth = (std::max)(config.Aim.AimbotSmooth, 1.0f);
     profile.TargetStrategy = std::clamp(profile.TargetStrategy, 0, static_cast<int>(Structs::AimTargetStrategyNames.size()) - 1);
     profile.TargetSwitchDelayMs = (std::max)(0, profile.TargetSwitchDelayMs);
-    const std::uint64_t aimbotBoneMask = NormalizeBoneMask(config.Aim.AimbotBoneMask, Structs::AimDefaultAimbotBoneMask);
+    const std::uint64_t aimbotBoneMask = NormalizeBoneMask(profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
 
     const Vector3 localEye = localOrigin + localViewOffset;
     const Vector2 screenCenter{ ScreenCenter.x, ScreenCenter.y };
@@ -958,36 +956,6 @@ void Aimbot::UpdateAimbot()
         setAimbotVisual(false, false);
         return;
     }
-
-    int shotsFired = 0;
-    if (Offsets::Schema::m_iShotsFired)
-        shotsFired = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iShotsFired);
-
-    Vector3 currentPunch{};
-    if (Offsets::Schema::m_aimPunchAngle)
-        currentPunch = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_aimPunchAngle);
-
-    const bool hasPunchData = Offsets::Schema::m_aimPunchAngle != 0 &&
-        (shotsFired > 0 || std::fabs(currentPunch.x) > 0.0005f || std::fabs(currentPunch.y) > 0.0005f);
-
-    const float pixelsPerDegreeX = Screen.x / 180.0f;
-    const float pixelsPerDegreeY = Screen.y / 180.0f;
-
-    Vector2 globalRcsMove{};
-    if (config.Aim.GlobalRcsEnabled && hasPunchData)
-    {
-        const Vector3 punchDelta = currentPunch - (m_LastGlobalPunchValid ? m_LastGlobalPunch : Vector3{});
-        m_LastGlobalPunch = currentPunch;
-        m_LastGlobalPunchValid = true;
-        globalRcsMove.x = punchDelta.y * config.Aim.GlobalRcsYaw * pixelsPerDegreeX;
-        globalRcsMove.y = -punchDelta.x * config.Aim.GlobalRcsPitch * pixelsPerDegreeY;
-    }
-    else
-    {
-        m_LastGlobalPunchValid = false;
-        m_LastGlobalPunch = {};
-    }
-
     const bool aimbotEnabled = config.Aim.Aimbot;
     const bool hotkeyActive = aimbotEnabled ? IsAnyAimbotHotkeyActive() : false;
     const bool justReleased = m_AimbotHotkeyWasActive && !hotkeyActive;
@@ -1223,18 +1191,6 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(displayFovPx, std::memory_order_relaxed);
         m_LastTargetScanAt = {};
         setAimbotVisual(aimbotEnabled && hotkeyActive, false);
-
-        if (config.Aim.GlobalRcsEnabled)
-        {
-            const int rcsX = QuantizeMouseStep(globalRcsMove.x);
-            const int rcsY = QuantizeMouseStep(globalRcsMove.y);
-            if (rcsX != 0 || rcsY != 0)
-            {
-                std::lock_guard lock(m_KmboxMutex);
-                Kmbox.Mouse.Move(rcsX, rcsY);
-            }
-        }
-
         return;
     }
 
@@ -1264,17 +1220,6 @@ void Aimbot::UpdateAimbot()
     if (!hasActiveTarget)
     {
         setAimbotVisual(true, false);
-        if (config.Aim.GlobalRcsEnabled)
-        {
-            const int rcsX = QuantizeMouseStep(globalRcsMove.x);
-            const int rcsY = QuantizeMouseStep(globalRcsMove.y);
-            if (rcsX != 0 || rcsY != 0)
-            {
-                std::lock_guard lock(m_KmboxMutex);
-                Kmbox.Mouse.Move(rcsX, rcsY);
-            }
-        }
-
         return;
     }
 
@@ -1283,14 +1228,6 @@ void Aimbot::UpdateAimbot()
         activeTarget.Screen.x - screenCenter.x,
         activeTarget.Screen.y - screenCenter.y
     };
-
-    if (config.Aim.AimbotRcsEnabled && hasPunchData)
-    {
-        const float rcsCompX = currentPunch.y * config.Aim.AimbotRcsYaw * pixelsPerDegreeX;
-        const float rcsCompY = -currentPunch.x * config.Aim.AimbotRcsPitch * pixelsPerDegreeY;
-        delta.x -= rcsCompX;
-        delta.y -= rcsCompY;
-    }
 
     const float rawDistance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
     const float smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
@@ -1323,13 +1260,6 @@ void Aimbot::UpdateAimbot()
         move.y = 0.0f;
     }
 
-    if (config.Aim.GlobalRcsEnabled && config.Aim.FuseGlobalRcsWithAimbot)
-    {
-        move.x += globalRcsMove.x;
-        move.y += globalRcsMove.y;
-        globalRcsMove = {};
-    }
-
     int moveX = QuantizeMouseStep(move.x);
     int moveY = QuantizeMouseStep(move.y);
     if (moveX == 0 && moveY == 0 && rawDistance > deadzone)
@@ -1343,17 +1273,6 @@ void Aimbot::UpdateAimbot()
     if (moveX == 0 && moveY == 0)
     {
         setAimbotVisual(true, true);
-        if (config.Aim.GlobalRcsEnabled)
-        {
-            const int rcsX = QuantizeMouseStep(globalRcsMove.x);
-            const int rcsY = QuantizeMouseStep(globalRcsMove.y);
-            if (rcsX != 0 || rcsY != 0)
-            {
-                std::lock_guard lock(m_KmboxMutex);
-                Kmbox.Mouse.Move(rcsX, rcsY);
-            }
-        }
-
         return;
     }
 
