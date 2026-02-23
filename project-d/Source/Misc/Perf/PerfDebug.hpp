@@ -3,6 +3,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
+#include <functional>
 #include <mutex>
 #include <thread>
 
@@ -75,9 +77,12 @@ namespace PerfDebug
     inline std::atomic<bool> DebugEnabled{ false };
     inline std::atomic<bool> DebugPerf{ false };
     inline std::atomic<bool> DebugTrigger{ false };
+    inline std::atomic<bool> DebugVisCheck{ false };
     inline std::atomic<bool> DebugThreadStopRequested{ false };
     inline std::mutex DebugThreadMutex{};
     inline std::thread DebugThread{};
+    inline std::mutex VisDebugTickMutex{};
+    inline std::function<void()> VisDebugTick{};
 
     inline bool IsPerfCollectionEnabled()
     {
@@ -87,6 +92,11 @@ namespace PerfDebug
     inline bool IsTriggerCollectionEnabled()
     {
         return DebugEnabled.load(std::memory_order_relaxed) && DebugTrigger.load(std::memory_order_relaxed);
+    }
+
+    inline bool IsVisDebugEnabled()
+    {
+        return DebugEnabled.load(std::memory_order_relaxed) && DebugVisCheck.load(std::memory_order_relaxed);
     }
 
     inline void RecordOverlayFrame(const std::uint64_t frameUs)
@@ -237,11 +247,46 @@ namespace PerfDebug
 
     inline void LogInterval(double intervalSeconds);
 
-    inline void SetDebugOptions(const bool enabled, const bool perfEnabled, const bool triggerEnabled)
+    inline void SetDebugOptions(const bool enabled, const bool perfEnabled, const bool triggerEnabled, const bool visCheckEnabled = false)
     {
         DebugEnabled.store(enabled, std::memory_order_relaxed);
         DebugPerf.store(enabled && perfEnabled, std::memory_order_relaxed);
         DebugTrigger.store(enabled && triggerEnabled, std::memory_order_relaxed);
+        DebugVisCheck.store(enabled && visCheckEnabled, std::memory_order_relaxed);
+    }
+
+    inline void SetVisDebugTick(std::function<void()> tick)
+    {
+        std::lock_guard lock(VisDebugTickMutex);
+        VisDebugTick = std::move(tick);
+    }
+
+    inline void InvokeVisDebugTick()
+    {
+        if (!IsVisDebugEnabled())
+            return;
+
+        std::function<void()> callback{};
+        {
+            std::lock_guard lock(VisDebugTickMutex);
+            callback = VisDebugTick;
+        }
+
+        if (!callback)
+            return;
+
+        try
+        {
+            callback();
+        }
+        catch (const std::exception& e)
+        {
+            LOG_ERROR("Vis debug tick failed: {}", e.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("Vis debug tick failed: unknown exception");
+        }
     }
 
     inline void StartDebugThreadIfNeeded()
@@ -253,16 +298,37 @@ namespace PerfDebug
         DebugThreadStopRequested.store(false, std::memory_order_relaxed);
         DebugThread = std::thread([]()
         {
+            constexpr auto logInterval = std::chrono::seconds(1);
+            constexpr auto visTickInterval = std::chrono::milliseconds(33);
+            auto lastLogAt = std::chrono::steady_clock::now();
+            auto lastVisTickAt = lastLogAt;
+
             while (!DebugThreadStopRequested.load(std::memory_order_relaxed))
             {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                const auto now = std::chrono::steady_clock::now();
+
+                if (now - lastVisTickAt >= visTickInterval)
+                {
+                    InvokeVisDebugTick();
+                    lastVisTickAt = now;
+                }
+
+                if (now - lastLogAt >= logInterval)
+                {
+                    const double elapsedSeconds = std::chrono::duration<double>(now - lastLogAt).count();
+                    LogInterval(elapsedSeconds);
+                    lastLogAt = now;
+                }
+
                 if (DebugThreadStopRequested.load(std::memory_order_relaxed))
                     break;
 
-                LogInterval(1.0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
 
-            LogInterval(1.0);
+            const auto now = std::chrono::steady_clock::now();
+            const double elapsedSeconds = std::chrono::duration<double>(now - lastLogAt).count();
+            LogInterval(elapsedSeconds);
         });
     }
 

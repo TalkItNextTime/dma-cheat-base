@@ -11,6 +11,7 @@ namespace Config
         bool DebugEnabled = false;
         bool DebugPerf = false;
         bool DebugTrigger = false;
+        bool DebugVisCheck = false;
 
         static AppConfig& Get()
         {
@@ -220,6 +221,7 @@ namespace Config
             j["Info"]["DebugEnabled"] = DebugEnabled;
             j["Info"]["DebugPerf"] = DebugPerf;
             j["Info"]["DebugTrigger"] = DebugTrigger;
+            j["Info"]["DebugVisCheck"] = DebugVisCheck;
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -285,9 +287,11 @@ namespace Config
                 LoadConfigSection(j, "Kmbox", Kmbox);
                 LoadConfigSection(j, "Visuals", Visuals);
                 LoadWeaponProfiles(j);
+                DebugVisCheck = Visuals.VisCheckDebug;
                 if (j.contains("Info") && j["Info"].is_object())
                 {
                     const auto& info = j["Info"];
+                    const bool hasDebugVisCheck = info.contains("DebugVisCheck");
                     if (info.contains("Language"))
                     {
                         if (info["Language"].is_number_integer())
@@ -313,6 +317,9 @@ namespace Config
                     readInfoBool("DebugEnabled", DebugEnabled);
                     readInfoBool("DebugPerf", DebugPerf);
                     readInfoBool("DebugTrigger", DebugTrigger);
+                    readInfoBool("DebugVisCheck", DebugVisCheck);
+                    if (!hasDebugVisCheck)
+                        DebugVisCheck = Visuals.VisCheckDebug;
                 }
                 Language = std::clamp(Language, 0, 1);
 
@@ -343,9 +350,11 @@ namespace Config
                             LoadConfigSection(j, "Kmbox", Kmbox);
                             LoadConfigSection(j, "Visuals", Visuals);
                             LoadWeaponProfiles(j);
+                            DebugVisCheck = Visuals.VisCheckDebug;
                             if (j.contains("Info") && j["Info"].is_object())
                             {
                                 const auto& info = j["Info"];
+                                const bool hasDebugVisCheck = info.contains("DebugVisCheck");
                                 if (info.contains("Language"))
                                 {
                                     if (info["Language"].is_number_integer())
@@ -371,6 +380,9 @@ namespace Config
                                 readInfoBool("DebugEnabled", DebugEnabled);
                                 readInfoBool("DebugPerf", DebugPerf);
                                 readInfoBool("DebugTrigger", DebugTrigger);
+                                readInfoBool("DebugVisCheck", DebugVisCheck);
+                                if (!hasDebugVisCheck)
+                                    DebugVisCheck = Visuals.VisCheckDebug;
                             }
                             Language = std::clamp(Language, 0, 1);
                             LOG_INFO("Loaded config from clipboard");
@@ -587,6 +599,7 @@ namespace Config
                 j["Info"]["DebugEnabled"] = false;
                 j["Info"]["DebugPerf"] = false;
                 j["Info"]["DebugTrigger"] = false;
+                j["Info"]["DebugVisCheck"] = false;
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();

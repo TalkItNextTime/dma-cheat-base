@@ -71,6 +71,11 @@ int main()
 		return 1;
 	}
 
+    PerfDebug::SetVisDebugTick([]()
+    {
+        esp.UpdateVisCheckDebugOverlayFromDebugThread();
+    });
+
     if (!overlay.Create())
     {
 		LOG_ERROR("Failed to create Overlay");
@@ -82,7 +87,7 @@ int main()
 
     while (overlay.shouldRun)
     {
-        PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger);
+        PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger, config.DebugVisCheck);
         PerfDebug::SyncDebugThread();
 
         TIMER("Global render");
@@ -102,6 +107,7 @@ int main()
     }
 
 	Globals::Running = false;
+    PerfDebug::SetVisDebugTick({});
     PerfDebug::ShutdownDebugThread();
 	overlay.Destroy();
 

@@ -200,6 +200,14 @@ private:
         std::chrono::steady_clock::time_point LastStatusRead{};
     };
 
+    struct VisDebugScreenLine
+    {
+        Vector2 Start{};
+        Vector2 End{};
+        ImU32 Color = 0;
+        float Thickness = 1.0f;
+    };
+
     void Render(ImDrawList* drawList);
     void RenderWatermark(ImDrawList* drawList) const;
     void RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
@@ -208,6 +216,8 @@ private:
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
     void RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const;
     void RenderVisCheckDebug(ImDrawList* drawList) const;
+    void BuildVisCheckDebugOverlaySnapshot();
+    void ClearVisCheckDebugOverlaySnapshot();
 
     void EnsureSamplerStarted();
     void SamplerLoop();
@@ -273,6 +283,8 @@ private:
     mutable std::mutex m_MapDebugMutex{};
     std::vector<MapDebugTriangle> m_MapDebugTriangles{};
     std::vector<MapDebugBox> m_MapDebugBoxes{};
+    mutable std::mutex m_VisDebugOverlayMutex{};
+    std::vector<VisDebugScreenLine> m_VisDebugOverlayLines{};
     std::string m_GrenadeStatus{};
     std::atomic<bool> m_GrenadeHelperOnlyMode{ false };
     std::atomic<bool> m_GrenadeHelperHoldingUtility{ false };
@@ -295,6 +307,7 @@ public:
     std::string GetSuggestedGrenadeMapName() const;
     std::string GetGrenadeStatus() const;
     std::vector<GrenadeSpotEditorRow> GetGrenadeSpotEditorRows() const;
+    void UpdateVisCheckDebugOverlayFromDebugThread();
     bool ReloadGrenadeSpots(const std::string& mapName, std::string& outStatus);
     bool SaveGrenadeSpotEditorRows(const std::string& mapName, const std::vector<GrenadeSpotEditorRow>& rows, std::string& outStatus);
     bool RecordCurrentGrenadeSpot(
