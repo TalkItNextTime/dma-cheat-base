@@ -73,6 +73,8 @@ namespace Offsets
         inline std::uint32_t m_flFlashMaxAlpha = 0;
         inline std::uint32_t m_flFlashOverlayAlpha = 0;
         inline std::uint32_t m_iIDEntIndex = 0;
+        inline std::uint32_t m_iShotsFired = 0;
+        inline std::uint32_t m_aimPunchAngle = 0;
         inline std::uint32_t m_iObserverMode = 0;
         inline std::uint32_t m_hObserverTarget = 0;
         inline std::uint32_t m_hActiveWeapon = 0;

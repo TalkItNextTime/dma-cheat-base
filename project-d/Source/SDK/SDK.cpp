@@ -301,6 +301,8 @@ bool SDK::LoadOffsets()
     loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashMaxAlpha", Offsets::Schema::m_flFlashMaxAlpha);
     loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashOverlayAlpha", Offsets::Schema::m_flFlashOverlayAlpha);
     loadSchema("C_CSPlayerPawn", "m_iIDEntIndex", Offsets::Schema::m_iIDEntIndex);
+    loadSchema("C_CSPlayerPawn", "m_iShotsFired", Offsets::Schema::m_iShotsFired);
+    loadSchema("C_CSPlayerPawn", "m_aimPunchAngle", Offsets::Schema::m_aimPunchAngle);
     loadSchema("CPlayer_ObserverServices", "m_iObserverMode", Offsets::Schema::m_iObserverMode);
     loadSchema("CPlayer_ObserverServices", "m_hObserverTarget", Offsets::Schema::m_hObserverTarget);
     loadSchema("CPlayer_WeaponServices", "m_hActiveWeapon", Offsets::Schema::m_hActiveWeapon);

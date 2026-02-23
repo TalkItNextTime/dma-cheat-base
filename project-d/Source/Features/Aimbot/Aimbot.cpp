@@ -906,6 +906,11 @@ void Aimbot::UpdateAimbot()
         m_AimbotHotkeyActiveVisual.store(hotkeyActive, std::memory_order_relaxed);
         m_AimbotHasTargetVisual.store(hasTarget, std::memory_order_relaxed);
     };
+    auto resetRecoilState = [&]()
+    {
+        m_RecoilPos = {};
+        m_HasRecoil = false;
+    };
 
     if (!ProcInfo::KmboxInitialized)
     {
@@ -913,6 +918,7 @@ void Aimbot::UpdateAimbot()
         m_LockedTargetPawn = 0;
         m_AimbotHotkeyWasActive = false;
         m_LastTargetScanAt = {};
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -929,6 +935,7 @@ void Aimbot::UpdateAimbot()
     if (!Offsets::Schema::m_iHealth || !Offsets::Schema::m_iTeamNum || !Offsets::Schema::m_lifeState)
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -937,6 +944,7 @@ void Aimbot::UpdateAimbot()
     if (!core.IsValid || !IsLikelyUserAddress(core.LocalPawn) || !IsLikelyUserAddress(core.EntityList))
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -948,6 +956,7 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_LastTargetScanAt = {};
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -956,6 +965,7 @@ void Aimbot::UpdateAimbot()
     if (!TryReadLocalWeaponState(core, weapon))
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -965,6 +975,7 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_LastTargetScanAt = {};
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -974,6 +985,7 @@ void Aimbot::UpdateAimbot()
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
         m_LockedTargetPawn = 0;
         m_LastTargetScanAt = {};
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -1014,6 +1026,7 @@ void Aimbot::UpdateAimbot()
     if (baseFovPx <= 0.01f)
     {
         m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        resetRecoilState();
         setAimbotVisual(false, false);
         return;
     }
@@ -1224,6 +1237,7 @@ void Aimbot::UpdateAimbot()
     {
         m_CurrentFovRadiusPx.store(displayFovPx, std::memory_order_relaxed);
         m_LastTargetScanAt = {};
+        resetRecoilState();
         setAimbotVisual(aimbotEnabled && hotkeyActive, false);
         return;
     }
@@ -1258,9 +1272,54 @@ void Aimbot::UpdateAimbot()
     }
 
     m_LastTargetScanAt = now;
+    Vector2 recoilOffset{};
+    const bool recoilSupportedWeapon = weaponCategory != Structs::AimWeapon_Pistol &&
+                                       weaponCategory != Structs::AimWeapon_Shotgun;
+    if (recoilSupportedWeapon && Offsets::Schema::m_aimPunchAngle)
+    {
+        const int shotsFired = Offsets::Schema::m_iShotsFired
+            ? mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iShotsFired)
+            : 0;
+        const Vector3 aimPunch = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_aimPunchAngle);
+        const float punchSignal = std::fabs(aimPunch.x) + std::fabs(aimPunch.y);
+        constexpr float kRecoilPunchEnterThreshold = 0.0020f;
+        constexpr float kRecoilPunchExitThreshold = 0.0008f;
+        const float punchThreshold = m_HasRecoil ? kRecoilPunchExitThreshold : kRecoilPunchEnterThreshold;
+        const bool punchActive = punchSignal > punchThreshold;
+        const bool shotsCounterAvailable = Offsets::Schema::m_iShotsFired != 0;
+        const bool hasRecoilBurst = shotsCounterAvailable
+            ? (shotsFired > 1 && punchActive)
+            : punchActive;
+
+        if (hasRecoilBurst)
+        {
+            constexpr float kRecoilAlpha = 0.8f;
+            const float recoilScalePx = (std::max)(1.0f, ScreenCenter.x / 90.0f);
+            const Vector2 cross{ screenCenter.x, screenCenter.y };
+
+            if (!m_HasRecoil)
+            {
+                m_RecoilPos = cross;
+                m_HasRecoil = true;
+            }
+
+            m_RecoilPos.x = m_RecoilPos.x * (1.0f - kRecoilAlpha) + (cross.x - aimPunch.y * recoilScalePx) * kRecoilAlpha;
+            m_RecoilPos.y = m_RecoilPos.y * (1.0f - kRecoilAlpha) + (cross.y - aimPunch.x * recoilScalePx) * kRecoilAlpha;
+            recoilOffset = m_RecoilPos - cross;
+        }
+        else
+        {
+            resetRecoilState();
+        }
+    }
+    else
+    {
+        resetRecoilState();
+    }
+
     Vector2 delta{
-        activeTarget.Screen.x - screenCenter.x,
-        activeTarget.Screen.y - screenCenter.y
+        activeTarget.Screen.x + recoilOffset.x - screenCenter.x,
+        activeTarget.Screen.y + recoilOffset.y - screenCenter.y
     };
 
     const float rawDistance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
