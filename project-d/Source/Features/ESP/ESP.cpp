@@ -1770,7 +1770,7 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         siteName + " | " +
         (c4.BeingDefused ? Localization::Pick("Defusing", "正在拆包") : Localization::Pick("Not Defusing", "未在拆包"));
 
-    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "鎷嗗脊: ");
+    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆包: ");
     if (c4.BeingDefused)
         line2 += formatSeconds1(c4.DefuseCountDown) + "s";
     else
@@ -1778,7 +1778,7 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
 
     std::string line3 = Localization::Pick("Defuse Result: --", "拆包结果: --");
     if (c4.BeingDefused)
-        line3 = std::string(Localization::Pick("Defuse Result: ", "拆包结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "鎴愬姛") : Localization::Pick("FAIL", "澶辫触"));
+        line3 = std::string(Localization::Pick("Defuse Result: ", "拆包结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
 
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     constexpr float panelW = 250.0f;

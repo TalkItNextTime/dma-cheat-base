@@ -108,6 +108,12 @@ namespace Config
                 nlohmann::json& out = j["Aim"]["WeaponProfiles"][name];
                 out["Fov"] = profile.Fov;
                 out["Smooth"] = profile.Smooth;
+                out["SprayAxisStrengthX"] = profile.SprayAxisStrengthX;
+                out["SprayAxisStrengthY"] = profile.SprayAxisStrengthY;
+                out["SprayAxisMaxStepX"] = profile.SprayAxisMaxStepX;
+                out["SprayAxisMaxStepY"] = profile.SprayAxisMaxStepY;
+                out["SprayAxisDeadzoneX"] = profile.SprayAxisDeadzoneX;
+                out["SprayAxisDeadzoneY"] = profile.SprayAxisDeadzoneY;
                 out["CurveStrength"] = profile.CurveStrength;
                 out["BoneMask"] = profile.BoneMask;
                 out["TargetStrategy"] = profile.TargetStrategy;
@@ -491,23 +497,42 @@ namespace Config
                 j["Aim"]["TriggerProfileEditorIndex"] = 0;
                 j["Aim"]["TriggerSpecialEditorIndex"] = 0;
 
-                auto writeDefaultWeaponProfile = [&](const char* name, float fov, float smooth, float curve, std::uint64_t boneMask, int strategy, int switchDelay)
+                auto writeDefaultWeaponProfile = [&](
+                    const char* name,
+                    float fov,
+                    float smooth,
+                    float axisStrengthX,
+                    float axisStrengthY,
+                    float axisMaxStepX,
+                    float axisMaxStepY,
+                    float axisDeadzoneX,
+                    float axisDeadzoneY,
+                    float curve,
+                    std::uint64_t boneMask,
+                    int strategy,
+                    int switchDelay)
                 {
                     nlohmann::json& p = j["Aim"]["WeaponProfiles"][name];
                     p["Fov"] = fov;
                     p["Smooth"] = smooth;
+                    p["SprayAxisStrengthX"] = axisStrengthX;
+                    p["SprayAxisStrengthY"] = axisStrengthY;
+                    p["SprayAxisMaxStepX"] = axisMaxStepX;
+                    p["SprayAxisMaxStepY"] = axisMaxStepY;
+                    p["SprayAxisDeadzoneX"] = axisDeadzoneX;
+                    p["SprayAxisDeadzoneY"] = axisDeadzoneY;
                     p["CurveStrength"] = curve;
                     p["BoneMask"] = boneMask;
                     p["TargetStrategy"] = strategy;
                     p["TargetSwitchDelayMs"] = switchDelay;
                 };
 
-                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 0.18f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 100);
-                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 0.20f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 90);
-                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 0.16f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Distance, 75);
-                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 120);
-                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 0.27f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 160);
-                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Hybrid, 130);
+                writeDefaultWeaponProfile("Pistol", 5.5f, 14.0f, 1.30f, 1.55f, 6.0f, 8.0f, 0.08f, 0.06f, 0.18f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 100);
+                writeDefaultWeaponProfile("Smg", 7.5f, 17.0f, 1.22f, 1.42f, 5.5f, 7.0f, 0.08f, 0.06f, 0.20f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 90);
+                writeDefaultWeaponProfile("Shotgun", 9.0f, 12.0f, 1.30f, 1.55f, 6.0f, 8.0f, 0.08f, 0.06f, 0.16f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Distance, 75);
+                writeDefaultWeaponProfile("Rifle", 6.0f, 18.0f, 1.30f, 1.55f, 6.0f, 8.0f, 0.08f, 0.06f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 120);
+                writeDefaultWeaponProfile("Sniper", 3.8f, 23.0f, 1.05f, 1.10f, 4.0f, 5.0f, 0.05f, 0.04f, 0.27f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Crosshair, 160);
+                writeDefaultWeaponProfile("Lmg", 6.8f, 20.0f, 1.28f, 1.60f, 6.5f, 9.0f, 0.09f, 0.07f, 0.22f, Structs::AimDefaultAimbotBoneMask, Structs::AimStrategy_Hybrid, 130);
 
                 auto writeDefaultTriggerProfile = [&](const char* name, float hitboxPx, int preDelay, int postDelay, int timeoutMs, std::uint64_t boneMask)
                 {
@@ -636,6 +661,12 @@ namespace Config
                     const auto& node = profileRoot[name];
                     if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
                     if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("SprayAxisStrengthX")) profile.SprayAxisStrengthX = node["SprayAxisStrengthX"].get<float>();
+                    if (node.contains("SprayAxisStrengthY")) profile.SprayAxisStrengthY = node["SprayAxisStrengthY"].get<float>();
+                    if (node.contains("SprayAxisMaxStepX")) profile.SprayAxisMaxStepX = node["SprayAxisMaxStepX"].get<float>();
+                    if (node.contains("SprayAxisMaxStepY")) profile.SprayAxisMaxStepY = node["SprayAxisMaxStepY"].get<float>();
+                    if (node.contains("SprayAxisDeadzoneX")) profile.SprayAxisDeadzoneX = node["SprayAxisDeadzoneX"].get<float>();
+                    if (node.contains("SprayAxisDeadzoneY")) profile.SprayAxisDeadzoneY = node["SprayAxisDeadzoneY"].get<float>();
                     if (node.contains("CurveStrength")) profile.CurveStrength = node["CurveStrength"].get<float>();
                     if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
                     if (node.contains("TargetStrategy")) profile.TargetStrategy = node["TargetStrategy"].get<int>();
@@ -877,6 +908,12 @@ namespace Config
             {
                 profile.Fov = (std::max)(0.1f, profile.Fov);
                 profile.Smooth = (std::max)(1.0f, profile.Smooth);
+                profile.SprayAxisStrengthX = std::clamp(profile.SprayAxisStrengthX, 0.50f, 2.50f);
+                profile.SprayAxisStrengthY = std::clamp(profile.SprayAxisStrengthY, 0.50f, 2.50f);
+                profile.SprayAxisMaxStepX = std::clamp(profile.SprayAxisMaxStepX, 1.0f, 20.0f);
+                profile.SprayAxisMaxStepY = std::clamp(profile.SprayAxisMaxStepY, 1.0f, 20.0f);
+                profile.SprayAxisDeadzoneX = std::clamp(profile.SprayAxisDeadzoneX, 0.0f, 1.0f);
+                profile.SprayAxisDeadzoneY = std::clamp(profile.SprayAxisDeadzoneY, 0.0f, 1.0f);
                 profile.CurveStrength = std::clamp(profile.CurveStrength, 0.0f, 1.0f);
                 profile.BoneMask &= Structs::AimAllBoneMask;
                 if (profile.BoneMask == 0ull)

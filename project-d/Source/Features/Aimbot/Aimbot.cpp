@@ -1273,25 +1273,21 @@ void Aimbot::UpdateAimbot()
 
     m_LastTargetScanAt = now;
     Vector2 recoilOffset{};
+    bool sprayConstraintActive = false;
     const bool recoilSupportedWeapon = weaponCategory != Structs::AimWeapon_Pistol &&
                                        weaponCategory != Structs::AimWeapon_Shotgun;
-    if (recoilSupportedWeapon && Offsets::Schema::m_aimPunchAngle)
+    if (recoilSupportedWeapon && Offsets::Schema::m_aimPunchAngle && Offsets::Schema::m_iShotsFired)
     {
-        const int shotsFired = Offsets::Schema::m_iShotsFired
-            ? mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iShotsFired)
-            : 0;
+        const int shotsFired = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iShotsFired);
         const Vector3 aimPunch = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_aimPunchAngle);
         const float punchSignal = std::fabs(aimPunch.x) + std::fabs(aimPunch.y);
         constexpr float kRecoilPunchEnterThreshold = 0.0020f;
         constexpr float kRecoilPunchExitThreshold = 0.0008f;
         const float punchThreshold = m_HasRecoil ? kRecoilPunchExitThreshold : kRecoilPunchEnterThreshold;
         const bool punchActive = punchSignal > punchThreshold;
-        const bool shotsCounterAvailable = Offsets::Schema::m_iShotsFired != 0;
-        const bool hasRecoilBurst = shotsCounterAvailable
-            ? (shotsFired > 1 && punchActive)
-            : punchActive;
+        sprayConstraintActive = shotsFired > 1 && punchActive;
 
-        if (hasRecoilBurst)
+        if (sprayConstraintActive)
         {
             constexpr float kRecoilAlpha = 0.8f;
             const float recoilScalePx = (std::max)(1.0f, ScreenCenter.x / 90.0f);
@@ -1321,6 +1317,11 @@ void Aimbot::UpdateAimbot()
         activeTarget.Screen.x + recoilOffset.x - screenCenter.x,
         activeTarget.Screen.y + recoilOffset.y - screenCenter.y
     };
+    if (sprayConstraintActive)
+    {
+        delta.x *= profile.SprayAxisStrengthX;
+        delta.y *= profile.SprayAxisStrengthY;
+    }
 
     const float rawDistance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
     const float smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
@@ -1346,6 +1347,20 @@ void Aimbot::UpdateAimbot()
         move.y += perpendicular.y * curveAmount * curveSign;
     }
 
+    bool axisXSuppressed = false;
+    bool axisYSuppressed = false;
+    if (sprayConstraintActive)
+    {
+        axisXSuppressed = std::fabs(delta.x) <= profile.SprayAxisDeadzoneX;
+        axisYSuppressed = std::fabs(delta.y) <= profile.SprayAxisDeadzoneY;
+
+        if (axisXSuppressed)
+            move.x = 0.0f;
+
+        if (axisYSuppressed)
+            move.y = 0.0f;
+    }
+
     const float deadzone = (std::max)(0.0f, config.Aim.DeadzonePx);
     if (rawDistance <= deadzone)
     {
@@ -1357,9 +1372,9 @@ void Aimbot::UpdateAimbot()
     int moveY = QuantizeMouseStep(move.y);
     if (moveX == 0 && moveY == 0 && rawDistance > deadzone)
     {
-        if (std::fabs(delta.x) > 0.15f)
+        if (!axisXSuppressed && std::fabs(delta.x) > 0.15f)
             moveX = delta.x > 0.0f ? 1 : -1;
-        if (std::fabs(delta.y) > 0.15f)
+        if (!axisYSuppressed && std::fabs(delta.y) > 0.15f)
             moveY = delta.y > 0.0f ? 1 : -1;
     }
 

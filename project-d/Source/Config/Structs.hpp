@@ -195,6 +195,12 @@ namespace Structs
     {
         float Fov = 6.5f;
         float Smooth = 16.0f;
+        float SprayAxisStrengthX = 1.30f;
+        float SprayAxisStrengthY = 1.55f;
+        float SprayAxisMaxStepX = 6.0f;
+        float SprayAxisMaxStepY = 8.0f;
+        float SprayAxisDeadzoneX = 0.08f;
+        float SprayAxisDeadzoneY = 0.06f;
         float CurveStrength = 0.22f;
         std::uint64_t BoneMask = AimDefaultAimbotBoneMask;
 

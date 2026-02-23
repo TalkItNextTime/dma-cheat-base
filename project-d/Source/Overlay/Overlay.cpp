@@ -1502,22 +1502,87 @@ void Overlay::RenderMenu()
 										{
 											if (ImGui::BeginTabBar("AimbotWeaponTabs", ImGuiTabBarFlags_None))
 											{
-												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
-												{
-													if (ImGui::BeginTabItem(LocalizedAimWeaponGroupName(i)))
+													for (int i = 0; i < Structs::AimWeapon_Count; ++i)
 													{
-														config.Aim.WeaponProfileEditorIndex = i;
-														Structs::AimWeaponProfile& profile = config.Aim.WeaponProfiles[i];
-														ImAdd::SliderFloat("Profile FOV", &profile.Fov, 0.1f, 45.0f);
-														ImAdd::SliderFloat("Profile Smooth", &profile.Smooth, 1.0f, 100.0f);
-														ImAdd::SliderFloat("Curve Strength", &profile.CurveStrength, 0.0f, 0.85f);
-														const auto& targetStrategyItems = LocalizedTargetStrategyNames();
-														ImAdd::Combo(Localization::Pick("Target Strategy", "目标策略"), &profile.TargetStrategy, targetStrategyItems.data(), static_cast<int>(targetStrategyItems.size()));
-														ImAdd::SliderInt("Target Switch Delay (ms)", &profile.TargetSwitchDelayMs, 0, 600);
-														DrawAimbotBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
-														ImGui::EndTabItem();
+														if (ImGui::BeginTabItem(LocalizedAimWeaponGroupName(i)))
+														{
+															config.Aim.WeaponProfileEditorIndex = i;
+															Structs::AimWeaponProfile& profile = config.Aim.WeaponProfiles[i];
+															const bool supportsRecoilAxis = i != Structs::AimWeapon_Pistol && i != Structs::AimWeapon_Shotgun;
+															auto showHoverTip = [&](const char* en, const char* zh)
+															{
+																if (!ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+																	return;
+																ImGui::SetNextWindowSizeConstraints(ImVec2(280.0f, 0.0f), ImVec2(560.0f, FLT_MAX));
+																ImGui::BeginTooltip();
+																ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+																ImGui::TextUnformatted(Localization::Pick(en, zh));
+																ImGui::PopTextWrapPos();
+																ImGui::EndTooltip();
+															};
+
+															ImAdd::SliderFloat(Localization::Pick("Profile FOV", "武器FOV"), &profile.Fov, 0.1f, 45.0f);
+															showHoverTip(
+																"Maximum lock radius for this weapon profile. Larger value allows targets farther from crosshair.",
+																"该武器配置的最大锁定半径。数值越大，越容易锁到离准心更远的目标。"
+															);
+															ImAdd::SliderFloat(Localization::Pick("Profile Smooth", "武器平滑"), &profile.Smooth, 1.0f, 100.0f);
+															showHoverTip(
+																"Main speed controller. Higher value = slower and smoother; lower value = faster response.",
+																"主速度控制项。值越高越慢越平滑；值越低响应越快。"
+															);
+															if (supportsRecoilAxis)
+															{
+																ImAdd::SliderFloat(Localization::Pick("Spray Axis Strength X", "连发轴向强度 X"), &profile.SprayAxisStrengthX, 0.50f, 2.50f);
+																showHoverTip(
+																	"Only active during sustained fire recoil control. Scales horizontal correction before smoothing.",
+																	"仅在连发压枪时生效。用于放大/缩小横向修正，再进入平滑。"
+																);
+																ImAdd::SliderFloat(Localization::Pick("Spray Axis Strength Y", "连发轴向强度 Y"), &profile.SprayAxisStrengthY, 0.50f, 2.50f);
+																showHoverTip(
+																	"Only active during sustained fire recoil control. Scales vertical correction before smoothing.",
+																	"仅在连发压枪时生效。用于放大/缩小纵向修正，再进入平滑。"
+																);
+																ImAdd::SliderFloat(Localization::Pick("Spray Axis Deadzone X", "连发轴向死区 X"), &profile.SprayAxisDeadzoneX, 0.0f, 1.0f);
+																showHoverTip(
+																	"If horizontal error is below this threshold, X movement is suppressed to reduce jitter.",
+																	"当横向误差小于该阈值时，X 轴移动会被抑制，用于减少左右抖动。"
+																);
+																ImAdd::SliderFloat(Localization::Pick("Spray Axis Deadzone Y", "连发轴向死区 Y"), &profile.SprayAxisDeadzoneY, 0.0f, 1.0f);
+																showHoverTip(
+																	"If vertical error is below this threshold, Y movement is suppressed to reduce micro shake.",
+																	"当纵向误差小于该阈值时，Y 轴移动会被抑制，用于减少上下微抖。"
+																);
+															}
+															else
+															{
+																ImGui::TextDisabled("%s", Localization::Pick("Pistols and shotguns skip recoil-axis control.", "手枪和霰弹枪不启用后座轴向控制。"));
+																showHoverTip(
+																	"These weapon types do not use recoil-axis controls, so related settings are hidden.",
+																	"这两类武器不启用后座轴向控制，因此相关设置会被隐藏。"
+																);
+															}
+
+															ImAdd::SliderFloat(Localization::Pick("Curve Strength", "曲线强度"), &profile.CurveStrength, 0.0f, 0.85f);
+															showHoverTip(
+																"Adds a slight curved tracking path. Set 0 to disable.",
+																"增加轻微弧线跟枪轨迹。设为 0 可关闭。"
+															);
+															const auto& targetStrategyItems = LocalizedTargetStrategyNames();
+															ImAdd::Combo(Localization::Pick("Target Strategy", "目标策略"), &profile.TargetStrategy, targetStrategyItems.data(), static_cast<int>(targetStrategyItems.size()));
+															showHoverTip(
+																"Crosshair: nearest on screen. Distance: nearest in world. Hybrid: weighted combination.",
+																"准星优先：屏幕距离最近。距离优先：世界距离最近。混合：两者加权。"
+															);
+															ImAdd::SliderInt(Localization::Pick("Target Switch Delay (ms)", "目标切换延时 (ms)"), &profile.TargetSwitchDelayMs, 0, 600);
+															showHoverTip(
+																"Delay before switching to a new target after current lock is lost.",
+																"当前目标丢失后，切换到新目标前的等待时间。"
+															);
+															DrawAimbotBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
+															ImGui::EndTabItem();
+														}
 													}
-												}
 												ImGui::EndTabBar();
 											}
 
