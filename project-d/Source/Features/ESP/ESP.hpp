@@ -1,7 +1,6 @@
 ﻿#pragma once
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -191,6 +190,38 @@ private:
         std::uint32_t ResolvedControllers = 0;
     };
 
+    struct RadarPlayerFrameItem
+    {
+        std::string PlayerId{};
+        uint64_t Controller = 0;
+        uint64_t Pawn = 0;
+        int Team = 0;
+        int Health = 0;
+        int Armor = 0;
+        int Flashed = 0;
+        int AmmoClip = -1;
+        int CompTeammateColor = -1;
+        Vector3 Position{};
+        Vector3 EyeAngles{};
+        std::string Name{};
+        std::string WeaponName{};
+        bool IsLocal = false;
+        bool IsAlive = false;
+        bool Shooting = false;
+    };
+
+    struct RadarPublishFrame
+    {
+        std::vector<RadarPlayerFrameItem> Players{};
+        C4Snapshot C4{};
+        Vector3 LocalViewAngles{};
+        std::string MapName{};
+        std::uint64_t BombOwnerPawn = 0;
+        bool FreezePeriod = false;
+        int GamePhaseRaw = -1;
+        float PhaseEndsIn = 0.0f;
+    };
+
     struct ControllerIdentityCache
     {
         std::string Name{};
@@ -240,7 +271,8 @@ private:
     void EnsureRadarPublisherStarted();
     void SamplerLoop();
     void RadarPublisherLoop();
-    void QueueRadarPayload(std::string payload);
+    bool BuildRadarPublishFrameFromMemory(RadarPublishFrame& outFrame);
+    std::string BuildRadarPayload(const RadarPublishFrame& frame);
     bool SampleFrame(RenderFrame& outFrame);
     void UpdateRoundEpoch(uint64_t localPawn, bool localAlive);
 
@@ -291,10 +323,6 @@ private:
     std::atomic<bool> m_RadarPublisherStarted{ false };
     mutable std::mutex m_RenderFrameMutex{};
     RenderFrame m_RenderFrame{};
-    mutable std::mutex m_RadarPublishMutex{};
-    std::condition_variable m_RadarPublishCv{};
-    std::string m_RadarPendingPayload{};
-    bool m_RadarPendingDirty = false;
     mutable std::mutex m_GrenadeMutex{};
     GrenadeMapData m_GrenadeMap{};
     std::string m_LoadedGrenadeMap{};
@@ -318,7 +346,8 @@ private:
     std::unordered_map<uint64_t, ControllerIdentityCache> m_ControllerIdentityCache{};
     std::unordered_map<uint64_t, PawnRuntimeCache> m_PawnRuntimeCache{};
     std::unordered_map<uint64_t, int> m_RadarObserverSlots{};
-    std::chrono::steady_clock::time_point m_LastRadarCompose{};
+    std::unordered_map<uint64_t, int> m_RadarLastAmmoClip{};
+    std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_RadarLastShotTick{};
     C4Snapshot m_C4Cache{};
     std::chrono::steady_clock::time_point m_LastC4Sample{};
     std::uint64_t m_RoundEpoch = 1;

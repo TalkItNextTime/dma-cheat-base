@@ -54,6 +54,8 @@ namespace Offsets
         inline std::uint32_t m_hPawn = 0;
         inline std::uint32_t m_hPlayerPawn = 0;
         inline std::uint32_t m_iCompTeammateColor = 0;
+        inline std::uint32_t m_bPawnHasDefuser = 0;
+        inline std::uint32_t m_bPawnHasHelmet = 0;
         inline std::uint32_t m_iszPlayerName = 0;
         inline std::uint32_t m_pInGameMoneyServices = 0;
         inline std::uint32_t m_iAccount = 0;

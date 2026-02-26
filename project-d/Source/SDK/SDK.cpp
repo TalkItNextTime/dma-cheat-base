@@ -292,6 +292,8 @@ bool SDK::LoadOffsets()
     loadSchema("CBasePlayerController", "m_hPawn", Offsets::Schema::m_hPawn);
     loadSchema("CCSPlayerController", "m_hPlayerPawn", Offsets::Schema::m_hPlayerPawn);
     loadOptionalSchema("CCSPlayerController", "m_iCompTeammateColor", Offsets::Schema::m_iCompTeammateColor);
+    loadOptionalSchema("CCSPlayerController", "m_bPawnHasDefuser", Offsets::Schema::m_bPawnHasDefuser);
+    loadOptionalSchema("CCSPlayerController", "m_bPawnHasHelmet", Offsets::Schema::m_bPawnHasHelmet);
     loadSchema("CBasePlayerController", "m_iszPlayerName", Offsets::Schema::m_iszPlayerName);
     loadSchema("CCSPlayerController", "m_pInGameMoneyServices", Offsets::Schema::m_pInGameMoneyServices);
     loadSchema("CCSPlayerController_InGameMoneyServices", "m_iAccount", Offsets::Schema::m_iAccount);
@@ -324,7 +326,7 @@ bool SDK::LoadOffsets()
     loadOptionalSchemaFromClasses({ "C_BasePlayerWeapon", "C_CSWeaponBase", "CWeaponBaseItem" }, "m_iClip1", Offsets::Schema::m_iClip1);
     loadSchema("C_CSWeaponBase", "m_bInReload", Offsets::Schema::m_bInReload);
     loadOptionalSchemaFromClasses({ "C_BaseEntity", "CBasePlayerWeapon", "C_CSWeaponBase" }, "m_hOwnerEntity", Offsets::Schema::m_hOwnerEntity);
-    loadSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
+    loadOptionalSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
     loadOptionalSchema("C_CSPlayerPawn", "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
     loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
     loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);

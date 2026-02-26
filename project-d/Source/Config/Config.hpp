@@ -659,7 +659,7 @@ namespace Config
                 j["Radar"]["IngestPort"] = 36365;
                 j["Radar"]["AdminKey"] = "";
                 j["Radar"]["RoomNamePrefix"] = "dma-match";
-                j["Radar"]["PublishIntervalMs"] = 40;
+                j["Radar"]["PublishIntervalMs"] = 66;
                 j["Radar"]["HttpTimeoutMs"] = 3000;
                 j["Radar"]["ReconnectBaseMs"] = 500;
                 j["Radar"]["ReconnectMaxMs"] = 5000;

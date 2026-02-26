@@ -384,7 +384,7 @@ namespace Structs
         int IngestPort = 36365;
         std::string AdminKey{};
         std::string RoomNamePrefix = "dma-match";
-        int PublishIntervalMs = 40;
+        int PublishIntervalMs = 66;
         int HttpTimeoutMs = 3000;
         int ReconnectBaseMs = 500;
         int ReconnectMaxMs = 5000;

@@ -2251,6 +2251,10 @@ void Overlay::RenderMenu()
 					if (ImGui::InputText(Localization::Pick("Room Name Prefix", "房间名前缀"), roomPrefixBuffer, IM_ARRAYSIZE(roomPrefixBuffer)))
 						config.Radar.RoomNamePrefix = roomPrefixBuffer;
 
+					int publishIntervalMs = config.Radar.PublishIntervalMs;
+					if (ImGui::InputInt(Localization::Pick("Publish Interval (ms)", "推送间隔(毫秒)"), &publishIntervalMs))
+						config.Radar.PublishIntervalMs = std::clamp(publishIntervalMs, 40, 2000);
+
 					if (ImAdd::Button(Localization::Pick("Create Room Now", "立即建房"), ImVec2(130.0f, 0.0f)))
 						radarBridge.ForceCreateRoom();
 					ImGui::SameLine();
