@@ -53,6 +53,7 @@ namespace Offsets
         // Base fields loaded from client_dll.json.
         inline std::uint32_t m_hPawn = 0;
         inline std::uint32_t m_hPlayerPawn = 0;
+        inline std::uint32_t m_iCompTeammateColor = 0;
         inline std::uint32_t m_iszPlayerName = 0;
         inline std::uint32_t m_pInGameMoneyServices = 0;
         inline std::uint32_t m_iAccount = 0;
@@ -66,6 +67,7 @@ namespace Offsets
         inline std::uint32_t m_vecAbsOrigin = 0;
         inline std::uint32_t m_vOldOrigin = 0;
         inline std::uint32_t m_vecViewOffset = 0;
+        inline std::uint32_t m_angEyeAngles = 0;
         inline std::uint32_t m_modelState = 0;
         inline std::uint32_t m_ArmorValue = 0;
         inline std::uint32_t m_bIsScoped = 0;
@@ -81,8 +83,11 @@ namespace Offsets
         inline std::uint32_t m_AttributeManager = 0;
         inline std::uint32_t m_Item = 0;
         inline std::uint32_t m_iItemDefinitionIndex = 0;
+        inline std::uint32_t m_iClip1 = 0;
         inline std::uint32_t m_bInReload = 0;
+        inline std::uint32_t m_hOwnerEntity = 0;
         inline std::uint32_t m_bHasDefuser = 0;
+        inline std::uint32_t m_bHasHelmet = 0;
         inline std::uint32_t m_bBombTicking = 0;
         inline std::uint32_t m_bBombDefused = 0;
         inline std::uint32_t m_nBombSite = 0;
@@ -91,8 +96,11 @@ namespace Offsets
         inline std::uint32_t m_flDefuseLength = 0;
         inline std::uint32_t m_bBeingDefused = 0;
         inline std::uint32_t m_flDefuseCountDown = 0;
+        inline std::uint32_t m_hBombDefuser = 0;
         inline std::uint32_t m_vecC4ExplodeSpectatePos = 0;
         inline std::uint32_t m_bFreezePeriod = 0;
+        inline std::uint32_t m_gamePhase = 0;
+        inline std::uint32_t m_timeUntilNextPhaseStarts = 0;
     }
 
     namespace Layout

@@ -2,6 +2,7 @@
 
 #include <Features.hpp>
 #include <Overlay.hpp>
+#include <Radar/Radar.hpp>
 
 int main()
 {
@@ -71,6 +72,8 @@ int main()
 		return 1;
 	}
 
+    radarBridge.Start();
+
     PerfDebug::SetVisDebugTick([]()
     {
         esp.UpdateVisCheckDebugOverlayFromDebugThread();
@@ -79,6 +82,7 @@ int main()
     if (!overlay.Create())
     {
 		LOG_ERROR("Failed to create Overlay");
+        radarBridge.Stop();
 		this_thread::sleep_for(chrono::seconds(5));
 		return 1;
 	}
@@ -107,6 +111,7 @@ int main()
     }
 
 	Globals::Running = false;
+    radarBridge.Stop();
     PerfDebug::SetVisDebugTick({});
     PerfDebug::ShutdownDebugThread();
 	overlay.Destroy();

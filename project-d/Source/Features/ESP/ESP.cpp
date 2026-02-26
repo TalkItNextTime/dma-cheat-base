@@ -2,10 +2,13 @@
 #include <SDK.hpp>
 #include "ESP.hpp"
 #include "KeyIconsEmbedded.hpp"
+#include "WeaponIconsEmbedded.hpp"
 #include <Aimbot/Aimbot.hpp>
 #include <Overlay/Localization.hpp>
 #include <Overlay/Overlay.hpp>
+#include <Radar/Radar.hpp>
 #include <array>
+#include <cmath>
 #include <cfloat>
 #include <cstdio>
 #include <iterator>
@@ -103,6 +106,7 @@ namespace
     constexpr float kTriggerLegsScaleFixed = 5.0f;
     constexpr float kFlashedStatusStrongThreshold = 0.60f; // 强致盲强度阈值；值越高，致盲状态越早消失。
     constexpr float kFlashedStatusSoftThreshold = 0.30f; // 软致盲强度阈值（需配合 duration）；值越高，恢复越早判定为未致盲。
+    constexpr auto kRadarPublishInterval = std::chrono::milliseconds(40); // 25Hz upper bound.
 
     constexpr std::array<int, 17> kTrackedBones = {
         0, 2, 4, 5, 6,
@@ -844,6 +848,82 @@ namespace
         return rawToken;
     }
 
+    std::string NormalizeWeaponIconTokenName(const std::string& rawToken)
+    {
+        std::string normalized = ToLowerAscii(TrimAscii(rawToken));
+        if (normalized.empty())
+            return {};
+
+        constexpr const char* kPngSuffix = ".png";
+        if (normalized.size() > 4 && normalized.compare(normalized.size() - 4, 4, kPngSuffix) == 0)
+            normalized = normalized.substr(0, normalized.size() - 4);
+
+        for (char& ch : normalized)
+        {
+            if (ch == ' ' || ch == '-' || ch == '.')
+                ch = '_';
+        }
+
+        return normalized;
+    }
+
+    std::string WeaponNameToIconToken(const std::string& weaponName)
+    {
+        if (weaponName.empty())
+            return {};
+
+        if (weaponName == "Deagle") return "deagle";
+        if (weaponName == "Dual Berettas") return "elite";
+        if (weaponName == "Five-Seven") return "fiveseven";
+        if (weaponName == "Glock-18") return "glock";
+        if (weaponName == "AK-47") return "ak47";
+        if (weaponName == "AUG") return "aug";
+        if (weaponName == "AWP") return "awp";
+        if (weaponName == "FAMAS") return "famas";
+        if (weaponName == "G3SG1") return "g3sg1";
+        if (weaponName == "Galil AR") return "galilar";
+        if (weaponName == "M249") return "m249";
+        if (weaponName == "M4A4") return "m4a1";
+        if (weaponName == "MAC-10") return "mac10";
+        if (weaponName == "P90") return "p90";
+        if (weaponName == "MP5-SD") return "mp5sd";
+        if (weaponName == "UMP-45") return "ump45";
+        if (weaponName == "XM1014") return "xm1014";
+        if (weaponName == "PP-Bizon") return "bizon";
+        if (weaponName == "MAG-7") return "mag7";
+        if (weaponName == "Negev") return "negev";
+        if (weaponName == "Sawed-Off") return "sawedoff";
+        if (weaponName == "Tec-9") return "tec9";
+        if (weaponName == "Zeus x27") return "taser";
+        if (weaponName == "P2000") return "p2000";
+        if (weaponName == "MP7") return "mp7";
+        if (weaponName == "MP9") return "mp9";
+        if (weaponName == "Nova") return "nova";
+        if (weaponName == "P250") return "p250";
+        if (weaponName == "SCAR-20") return "scar20";
+        if (weaponName == "SG 553") return "sg556";
+        if (weaponName == "SSG 08") return "ssg08";
+        if (weaponName == "Knife") return "knife";
+        if (weaponName == "Knife (T)") return "knife_t";
+        if (weaponName == "Flashbang") return "flashbang";
+        if (weaponName == "HE Grenade") return "hegrenade";
+        if (weaponName == "Smoke") return "smokegrenade";
+        if (weaponName == "Molotov") return "molotov";
+        if (weaponName == "Decoy") return "decoy";
+        if (weaponName == "Incendiary") return "incgrenade";
+        if (weaponName == "C4") return "c4";
+        if (weaponName == "Healthshot") return "healthshot";
+        if (weaponName == "M4A1-S") return "m4a1_silencer";
+        if (weaponName == "USP-S") return "usp_silencer";
+        if (weaponName == "CZ75 Auto") return "cz75a";
+        if (weaponName == "R8 Revolver") return "revolver";
+
+        std::string fallback = NormalizeWeaponIconTokenName(weaponName);
+        if (fallback.rfind("weapon_", 0) == 0)
+            fallback = fallback.substr(7);
+        return fallback;
+    }
+
     std::string RepairMalformedGrenadeJsonText(const std::string& sourceText)
     {
         if (sourceText.empty())
@@ -1174,6 +1254,116 @@ namespace
 
         return nullptr;
     }
+
+    struct WeaponIconCache
+    {
+        std::mutex Mutex{};
+        bool Base64Loaded = false;
+        std::unordered_map<std::string, std::string> Base64ByToken{};
+        std::unordered_map<std::string, KeyIconTexture> Textures{};
+
+        ~WeaponIconCache()
+        {
+            for (auto& pair : Textures)
+                ReleaseCom(pair.second.Srv);
+        }
+    };
+
+    WeaponIconCache& GetWeaponIconCache()
+    {
+        static WeaponIconCache cache{};
+        return cache;
+    }
+
+    bool EnsureWeaponIconBase64Loaded(WeaponIconCache& cache)
+    {
+        if (cache.Base64Loaded)
+            return true;
+
+        std::unordered_map<std::string, std::string> parsed = EmbeddedWeaponIcons::BuildWeaponIconsBase64Map();
+        if (parsed.empty())
+            return false;
+
+        std::unordered_map<std::string, std::string> normalized{};
+        normalized.reserve(parsed.size());
+        for (auto& [rawToken, base64Text] : parsed)
+        {
+            const std::string token = NormalizeWeaponIconTokenName(rawToken);
+            if (token.empty() || base64Text.empty())
+                continue;
+
+            normalized[token] = std::move(base64Text);
+        }
+
+        if (normalized.empty())
+            return false;
+
+        cache.Base64ByToken = std::move(normalized);
+        cache.Base64Loaded = true;
+        return true;
+    }
+
+    const KeyIconTexture* GetWeaponEspIconTexture(const std::string& rawToken, ID3D11Device* device)
+    {
+        const std::string token = NormalizeWeaponIconTokenName(rawToken);
+        if (token.empty() || !device)
+            return nullptr;
+
+        WeaponIconCache& cache = GetWeaponIconCache();
+        std::lock_guard lock(cache.Mutex);
+
+        auto findLoadedTexture = [&](const std::string& key) -> const KeyIconTexture*
+        {
+            auto loaded = cache.Textures.find(key);
+            if (loaded == cache.Textures.end())
+                return nullptr;
+            return loaded->second.Srv ? &loaded->second : nullptr;
+        };
+
+        if (const KeyIconTexture* loaded = findLoadedTexture(token))
+            return loaded;
+
+        if (!EnsureWeaponIconBase64Loaded(cache))
+            return nullptr;
+
+        const auto encodedIt = cache.Base64ByToken.find(token);
+        if (encodedIt == cache.Base64ByToken.end())
+            return nullptr;
+
+        std::string base64Text = encodedIt->second;
+
+        std::vector<std::uint8_t> pngBytes{};
+        if (!DecodeBase64ViaWinApi(base64Text, pngBytes))
+            return nullptr;
+        base64Text.clear();
+        base64Text.shrink_to_fit();
+
+        std::vector<std::uint8_t> rgbaPixels{};
+        UINT width = 0;
+        UINT height = 0;
+        if (!DecodePngViaWic(pngBytes, rgbaPixels, width, height))
+            return nullptr;
+
+        KeyIconTexture texture{};
+        if (!CreateTextureFromRgba(device, rgbaPixels, width, height, texture))
+            return nullptr;
+
+        pngBytes.clear();
+        pngBytes.shrink_to_fit();
+        rgbaPixels.clear();
+        rgbaPixels.shrink_to_fit();
+
+        cache.Base64ByToken.erase(encodedIt);
+        if (cache.Base64ByToken.empty())
+        {
+            std::unordered_map<std::string, std::string> empty{};
+            cache.Base64ByToken.swap(empty);
+        }
+
+        cache.Textures[token] = texture;
+        return cache.Textures[token].Srv ? &cache.Textures[token] : nullptr;
+    }
+
     float DistanceSquared3D(const Vector3& a, const Vector3& b)
     {
         const float dx = a.x - b.x;
@@ -1426,6 +1616,91 @@ namespace
         return currentTime;
     }
 
+    std::uint64_t EpochMsNow()
+    {
+        return static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count()
+        );
+    }
+
+    std::string FormatVec3String(const Vector3& value)
+    {
+        char buffer[96]{};
+        std::snprintf(buffer, sizeof(buffer), "%.3f, %.3f, %.3f", value.x, value.y, value.z);
+        return buffer;
+    }
+
+    std::string TeamToGsi(const int teamNum)
+    {
+        if (teamNum == 2)
+            return "T";
+        if (teamNum == 3)
+            return "CT";
+        return "SPECTATOR";
+    }
+
+    std::string GsiPlayerIdFromController(const std::uint64_t controller)
+    {
+        return std::to_string(static_cast<unsigned long long>(controller));
+    }
+
+    Vector3 ForwardFromAngles(const Vector3& angles)
+    {
+        constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+        const float pitch = angles.x * kDegToRad;
+        const float yaw = angles.y * kDegToRad;
+
+        Vector3 forward{};
+        forward.x = std::cos(pitch) * std::cos(yaw);
+        forward.y = std::cos(pitch) * std::sin(yaw);
+        forward.z = -std::sin(pitch);
+        return forward;
+    }
+
+    int NormalizeObserverSlot(const int team, int teammateColorRaw)
+    {
+        if (team != 2 && team != 3)
+            return -1;
+
+        if (teammateColorRaw >= 1 && teammateColorRaw <= 5)
+            teammateColorRaw -= 1;
+        if (teammateColorRaw < 0 || teammateColorRaw > 4)
+            return -1;
+
+        const int offset = team == 3 ? 5 : 0;
+        return offset + teammateColorRaw;
+    }
+
+    std::string ResolveRoundPhaseName(
+        const bool freezePeriod,
+        const bool bombPlanted,
+        const bool beingDefused,
+        const int gamePhaseRaw)
+    {
+        if (beingDefused)
+            return "defuse";
+        if (bombPlanted)
+            return "bomb";
+        if (freezePeriod)
+            return "freezetime";
+
+        switch (gamePhaseRaw)
+        {
+        case 0:
+            return "freezetime";
+        case 1:
+            return "live";
+        case 2:
+            return "over";
+        default:
+            break;
+        }
+
+        return "live";
+    }
+
     struct SampledEntityData
     {
         int HandleIndex = 0;
@@ -1442,17 +1717,20 @@ namespace
         int Team = 0;
         int LifeState = 0;
         int MaxHealth = 100;
+        int CompTeammateColor = -1;
 
         uint64_t SceneNode = 0;
         Vector3 OldOrigin{};
         Vector3 AbsOrigin{};
         bool HasAbsOrigin = false;
         Vector3 ViewOffset{ 0.0f, 0.0f, 64.0f };
+        Vector3 EyeAngles{};
         uint64_t BoneArray = 0;
 
         int Armor = 0;
         bool IsScoped = false;
         bool HasDefuser = false;
+        bool HasHelmet = false;
         float FlashDuration = 0.0f;
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
@@ -1515,6 +1793,12 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         drawList->AddRect(healthBgMin, healthBgMax, IM_COL32(0, 0, 0, 220));
     }
 
+    float topAnchorY = player.BoxMin.y;
+    const bool ctTopDefuserExpected = player.Team == 3 && config.Visuals.Defuser && player.HasDefuser;
+    const bool ctTopArmorExpected = player.Team == 3 && config.Visuals.Armor && player.Armor > 0;
+    bool ctTopDefuserDrawn = false;
+    bool ctTopArmorDrawn = false;
+
     if (config.Visuals.Name)
     {
         const std::string nameText = player.Name.empty() ? Localization::Pick("Unknown", "未知") : player.Name;
@@ -1526,18 +1810,118 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         );
 
         drawList->AddText(textPos, ToImColor(config.Visuals.NameColor), nameText.c_str());
+        topAnchorY = textPos.y;
+    }
+
+    if ((ctTopDefuserExpected || ctTopArmorExpected) && Overlay::device)
+    {
+        struct TopIconItem
+        {
+            const KeyIconTexture* Icon = nullptr;
+            ImVec2 Size{};
+            bool IsDefuser = false;
+            bool IsArmor = false;
+        };
+
+        const float boxHeight = player.BoxMax.y - player.BoxMin.y;
+        const float targetIconHeight = std::clamp(boxHeight * 0.16f, 14.0f, 24.0f);
+        const float iconSpacing = 3.0f;
+        std::vector<TopIconItem> topIcons{};
+        topIcons.reserve(2);
+
+        auto appendTopIcon = [&](const std::string& token, const bool isDefuser, const bool isArmor)
+        {
+            const KeyIconTexture* icon = GetWeaponEspIconTexture(token, Overlay::device);
+            if (!icon || !icon->Srv || icon->Width <= 0 || icon->Height <= 0)
+                return;
+
+            TopIconItem item{};
+            item.Icon = icon;
+            item.IsDefuser = isDefuser;
+            item.IsArmor = isArmor;
+            item.Size.y = targetIconHeight;
+            item.Size.x = targetIconHeight * static_cast<float>(icon->Width) / static_cast<float>(icon->Height);
+            topIcons.push_back(std::move(item));
+        };
+
+        if (ctTopDefuserExpected)
+            appendTopIcon("defuser", true, false);
+
+        if (ctTopArmorExpected)
+            appendTopIcon(player.HasHelmet ? "armor_helmet" : "armor", false, true);
+
+        if (!topIcons.empty())
+        {
+            float rowWidth = 0.0f;
+            float rowHeight = 0.0f;
+            for (const TopIconItem& item : topIcons)
+            {
+                if (rowWidth > 0.0f)
+                    rowWidth += iconSpacing;
+                rowWidth += item.Size.x;
+                rowHeight = (std::max)(rowHeight, item.Size.y);
+            }
+
+            const float rowX = player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - rowWidth) * 0.5f;
+            const float rowY = topAnchorY - rowHeight - 2.0f;
+
+            float cursorX = rowX;
+            for (const TopIconItem& item : topIcons)
+            {
+                const float drawY = rowY + (rowHeight - item.Size.y) * 0.5f;
+                drawList->AddImage(
+                    reinterpret_cast<ImTextureID>(item.Icon->Srv),
+                    ImVec2(cursorX, drawY),
+                    ImVec2(cursorX + item.Size.x, drawY + item.Size.y),
+                    ImVec2(0.0f, 0.0f),
+                    ImVec2(1.0f, 1.0f),
+                    IM_COL32(255, 255, 255, 255)
+                );
+
+                if (item.IsDefuser)
+                    ctTopDefuserDrawn = true;
+                if (item.IsArmor)
+                    ctTopArmorDrawn = true;
+
+                cursorX += item.Size.x + iconSpacing;
+            }
+        }
     }
 
     if (config.Visuals.Weapon && !player.WeaponName.empty())
     {
-        const std::string weaponText = LocalizeWeaponName(player.WeaponName);
-        const ImVec2 textSize = ImGui::CalcTextSize(weaponText.c_str());
-        const ImVec2 textPos(
-            player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - textSize.x) * 0.5f,
-            player.BoxMax.y + 2.0f
-        );
+        const std::string iconToken = WeaponNameToIconToken(player.WeaponName);
+        const KeyIconTexture* weaponIcon = GetWeaponEspIconTexture(iconToken, Overlay::device);
+        if (weaponIcon && weaponIcon->Srv && weaponIcon->Width > 0 && weaponIcon->Height > 0)
+        {
+            const float boxHeight = player.BoxMax.y - player.BoxMin.y;
+            const float iconHeight = std::clamp(boxHeight * 0.16f, 14.0f, 24.0f);
+            const float iconWidth = iconHeight * static_cast<float>(weaponIcon->Width) / static_cast<float>(weaponIcon->Height);
+            const ImVec2 iconMin(
+                player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - iconWidth) * 0.5f,
+                player.BoxMax.y + 2.0f
+            );
+            const ImVec2 iconMax(iconMin.x + iconWidth, iconMin.y + iconHeight);
+            drawList->AddImage(
+                reinterpret_cast<ImTextureID>(weaponIcon->Srv),
+                iconMin,
+                iconMax,
+                ImVec2(0.0f, 0.0f),
+                ImVec2(1.0f, 1.0f),
+                IM_COL32(255, 255, 255, 255)
+            );
+        }
+        else
+        {
+            const std::string weaponText = LocalizeWeaponName(player.WeaponName);
+            const ImVec2 textSize = ImGui::CalcTextSize(weaponText.c_str());
+            const ImVec2 textPos(
+                player.BoxMin.x + ((player.BoxMax.x - player.BoxMin.x) - textSize.x) * 0.5f,
+                player.BoxMax.y + 2.0f
+            );
 
-        drawList->AddText(textPos, ToImColor(config.Visuals.WeaponColor), weaponText.c_str());
+            drawList->AddText(textPos, ToImColor(config.Visuals.WeaponColor), weaponText.c_str());
+        }
     }
 
     if (config.Visuals.Bones)
@@ -1568,13 +1952,13 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     if (IsFlashedForStatus(player.FlashDuration, player.FlashOverlayAlpha, player.FlashMaxAlpha))
         statusLines.push_back({ Localization::Pick("Flashed", "致盲"), IM_COL32(255, 214, 120, 255) });
 
-    if (config.Visuals.Armor)
+    if (config.Visuals.Armor && (!ctTopArmorExpected || !ctTopArmorDrawn))
         statusLines.push_back({ std::string(Localization::Pick("AR:", "甲:")) + std::to_string(player.Armor), ToImColor(config.Visuals.ArmorColor) });
 
     if (config.Visuals.Money && player.ShowMoney)
         statusLines.push_back({ "$" + std::to_string(player.Money), ToImColor(config.Visuals.MoneyColor) });
 
-    if (config.Visuals.Defuser && player.HasDefuser)
+    if (config.Visuals.Defuser && player.HasDefuser && (!ctTopDefuserExpected || !ctTopDefuserDrawn))
         statusLines.push_back({ Localization::Pick("Kit", "拆弹钳"), ToImColor(config.Visuals.DefuserColor) });
 
     float lineOffset = 0.0f;
@@ -2603,6 +2987,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
     if (plantedFlag && IsLikelyUserAddress(plantedEntity))
     {
         snapshot.Valid = true;
+        snapshot.BombEntity = plantedEntity;
 
         if (Offsets::Schema::m_nBombSite)
         {
@@ -2626,6 +3011,12 @@ C4Snapshot ESP::ReadC4Snapshot() const
             snapshot.BlowTime = mem.Read<float>(plantedEntity + Offsets::Schema::m_flC4Blow);
         if (Offsets::Schema::m_flDefuseCountDown)
             snapshot.DefuseCountDown = mem.Read<float>(plantedEntity + Offsets::Schema::m_flDefuseCountDown);
+        if (Offsets::Schema::m_hBombDefuser)
+        {
+            const std::uint32_t defuserHandle = mem.Read<std::uint32_t>(plantedEntity + Offsets::Schema::m_hBombDefuser);
+            if (defuserHandle & Offsets::EntityList::HandleMask)
+                snapshot.BombDefuserPawn = sdk.ResolveEntityFromHandle(defuserHandle);
+        }
 
         snapshot.Planted = snapshot.BombTicking && !snapshot.BombDefused;
 
@@ -2800,6 +3191,30 @@ int ESP::ReadWeaponId(const uint64_t pawn) const
         static_cast<uint64_t>(Offsets::Schema::m_iItemDefinitionIndex);
 
     return static_cast<int>(mem.Read<std::uint16_t>(itemDefinitionIndexAddress));
+}
+
+int ESP::ReadActiveWeaponClip(const uint64_t pawn) const
+{
+    if (!pawn || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon || !Offsets::Schema::m_iClip1)
+        return -1;
+
+    const uint64_t weaponServices = mem.Read<uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
+    if (!weaponServices || !IsLikelyUserAddress(weaponServices))
+        return -1;
+
+    const uint32_t activeWeaponHandle = mem.Read<uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
+    if (!(activeWeaponHandle & Offsets::EntityList::HandleMask))
+        return -1;
+
+    const uint64_t weapon = sdk.ResolveEntityFromHandle(activeWeaponHandle);
+    if (!weapon || !IsLikelyUserAddress(weapon))
+        return -1;
+
+    const int clip = mem.Read<int>(weapon + Offsets::Schema::m_iClip1);
+    if (clip < 0 || clip > 500)
+        return -1;
+
+    return clip;
 }
 
 std::string ESP::ReadWeaponName(const uint64_t pawn) const
@@ -4033,6 +4448,8 @@ int ESP::GetCurrentGrenadeFocusedSpotId() const
 
 void ESP::EnsureSamplerStarted()
 {
+    EnsureRadarPublisherStarted();
+
     bool expected = false;
     if (!m_SamplerStarted.compare_exchange_strong(expected, true))
         return;
@@ -4041,6 +4458,68 @@ void ESP::EnsureSamplerStarted()
     {
         SamplerLoop();
     }).detach();
+}
+
+void ESP::EnsureRadarPublisherStarted()
+{
+    bool expected = false;
+    if (!m_RadarPublisherStarted.compare_exchange_strong(expected, true))
+        return;
+
+    std::thread([this]()
+    {
+        RadarPublisherLoop();
+    }).detach();
+}
+
+void ESP::QueueRadarPayload(std::string payload)
+{
+    {
+        std::lock_guard lock(m_RadarPublishMutex);
+        m_RadarPendingPayload = std::move(payload);
+        m_RadarPendingDirty = true;
+    }
+    m_RadarPublishCv.notify_one();
+}
+
+void ESP::RadarPublisherLoop()
+{
+    auto lastPublish = std::chrono::steady_clock::time_point{};
+
+    while (Globals::Running)
+    {
+        std::string payload{};
+        {
+            std::unique_lock lock(m_RadarPublishMutex);
+            m_RadarPublishCv.wait_for(lock, std::chrono::milliseconds(100), [this]()
+            {
+                return !Globals::Running || m_RadarPendingDirty;
+            });
+
+            if (!Globals::Running)
+                break;
+
+            if (!m_RadarPendingDirty)
+                continue;
+
+            payload = std::move(m_RadarPendingPayload);
+            m_RadarPendingPayload.clear();
+            m_RadarPendingDirty = false;
+        }
+
+        if (!config.Radar.Enabled || payload.empty())
+            continue;
+
+        const auto now = std::chrono::steady_clock::now();
+        if (lastPublish.time_since_epoch().count() != 0 && now - lastPublish < kRadarPublishInterval)
+            std::this_thread::sleep_for(kRadarPublishInterval - (now - lastPublish));
+
+        if (!Globals::Running || !config.Radar.Enabled)
+            continue;
+
+        radarBridge.PublishRawGsi(std::move(payload));
+        lastPublish = std::chrono::steady_clock::now();
+    }
 }
 
 void ESP::UpdateRoundEpoch(const uint64_t localPawn, const bool localAlive)
@@ -4127,7 +4606,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     const bool needTriggerBoneSampling =
         config.Aim.Trigger &&
         std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox;
-    const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
+    const bool needRadarSampling = config.Radar.Enabled;
+    const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling || needRadarSampling;
     const bool needGrenadeHelperSampling = config.Visuals.GrenadeHelper;
     m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling, std::memory_order_relaxed);
     if (!needGrenadeHelperSampling)
@@ -4159,6 +4639,10 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         int Team = 0;
         int Health = 0;
         int LifeState = 0;
+        int Armor = 0;
+        float FlashDuration = 0.0f;
+        float FlashOverlayAlpha = 0.0f;
+        float FlashMaxAlpha = 255.0f;
         Vector3 Origin{};
         Vector3 ViewOffset{};
     } local{};
@@ -4173,6 +4657,14 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_iHealth, &local.Health, sizeof(local.Health));
     if (Offsets::Schema::m_lifeState)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_lifeState, &local.LifeState, sizeof(local.LifeState));
+    if (Offsets::Schema::m_ArmorValue)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_ArmorValue, &local.Armor, sizeof(local.Armor));
+    if (Offsets::Schema::m_flFlashDuration)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashDuration, &local.FlashDuration, sizeof(local.FlashDuration));
+    if (Offsets::Schema::m_flFlashOverlayAlpha)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashOverlayAlpha, &local.FlashOverlayAlpha, sizeof(local.FlashOverlayAlpha));
+    if (Offsets::Schema::m_flFlashMaxAlpha)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashMaxAlpha, &local.FlashMaxAlpha, sizeof(local.FlashMaxAlpha));
     if (Offsets::Schema::m_vOldOrigin)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_vOldOrigin, &local.Origin, sizeof(local.Origin));
     if (Offsets::Schema::m_vecViewOffset)
@@ -4213,6 +4705,9 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     UpdateRoundEpoch(core.LocalPawn, IsAlive(local.Health, local.LifeState));
     const auto now = std::chrono::steady_clock::now();
+    const bool radarComposeDue = needRadarSampling &&
+        (m_LastRadarCompose.time_since_epoch().count() == 0 ||
+            now - m_LastRadarCompose >= kRadarPublishInterval);
 
     bool freezePeriod = false;
     bool freezeValid = false;
@@ -4301,6 +4796,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 &entities[i].PawnHandle,
                 sizeof(uint32_t)
             );
+            if (Offsets::Schema::m_iCompTeammateColor)
+            {
+                mem.AddScatterReadRequest(
+                    pawnHandleScatter,
+                    entities[i].Controller + Offsets::Schema::m_iCompTeammateColor,
+                    &entities[i].CompTeammateColor,
+                    sizeof(entities[i].CompTeammateColor)
+                );
+            }
         }
 
         mem.ExecuteReadScatter(pawnHandleScatter);
@@ -4482,6 +4986,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vOldOrigin, &entity->OldOrigin, sizeof(entity->OldOrigin));
             if (Offsets::Schema::m_vecViewOffset)
                 mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vecViewOffset, &entity->ViewOffset, sizeof(entity->ViewOffset));
+            if (Offsets::Schema::m_angEyeAngles)
+                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_angEyeAngles, &entity->EyeAngles, sizeof(entity->EyeAngles));
 
             PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
             entity->RefreshStatus = runtimeCache.LastStatusRead.time_since_epoch().count() == 0 ||
@@ -4492,6 +4998,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 entity->Armor = runtimeCache.Armor;
                 entity->IsScoped = runtimeCache.IsScoped;
                 entity->HasDefuser = runtimeCache.HasDefuser;
+                entity->HasHelmet = runtimeCache.HasHelmet;
                 entity->FlashDuration = runtimeCache.FlashDuration;
                 entity->FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
                 entity->FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
@@ -4504,6 +5011,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bIsScoped, &entity->IsScoped, sizeof(entity->IsScoped));
                 if (Offsets::Schema::m_bHasDefuser)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
+                if (Offsets::Schema::m_bHasHelmet)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasHelmet, &entity->HasHelmet, sizeof(entity->HasHelmet));
                 if (Offsets::Schema::m_flFlashDuration)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
                 if (Offsets::Schema::m_flFlashOverlayAlpha)
@@ -4532,6 +5041,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             runtimeCache.Armor = (std::max)(0, entity->Armor);
             runtimeCache.IsScoped = entity->IsScoped;
             runtimeCache.HasDefuser = entity->HasDefuser;
+            runtimeCache.HasHelmet = entity->HasHelmet;
             runtimeCache.FlashDuration = (std::max)(0.0f, entity->FlashDuration);
             runtimeCache.FlashOverlayAlpha = (std::max)(0.0f, entity->FlashOverlayAlpha);
             runtimeCache.FlashMaxAlpha = std::clamp(entity->FlashMaxAlpha, 0.0f, 255.0f);
@@ -4613,12 +5123,34 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         }
     }
 
+    struct RadarPlayerFrameItem
+    {
+        std::string PlayerId{};
+        uint64_t Controller = 0;
+        uint64_t Pawn = 0;
+        int Team = 0;
+        int Health = 0;
+        int Armor = 0;
+        int Flashed = 0;
+        int AmmoClip = -1;
+        int CompTeammateColor = -1;
+        Vector3 Position{};
+        Vector3 EyeAngles{};
+        std::string Name{};
+        std::string WeaponName{};
+        bool IsLocal = false;
+        bool IsAlive = false;
+        bool Shooting = false;
+    };
+
+    std::vector<RadarPlayerFrameItem> radarPlayers{};
+    if (radarComposeDue)
+        radarPlayers.reserve(activeEntities.size() + 1);
+
     for (SampledEntityData* entity : activeEntities)
     {
-        if (!IsAlive(entity->Health, entity->LifeState))
-            continue;
-
-        if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
+        const bool entityAlive = IsAlive(entity->Health, entity->LifeState);
+        if (!entityAlive && !radarComposeDue)
             continue;
 
         activePawns.insert(entity->Pawn);
@@ -4650,6 +5182,58 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             runtimeCache.WeaponName = ReadWeaponName(entity->Pawn);
             runtimeCache.LastWeaponRead = now;
         }
+        const int activeAmmoClip = radarComposeDue ? ReadActiveWeaponClip(entity->Pawn) : -1;
+        bool radarShooting = false;
+        if (radarComposeDue)
+        {
+            if (entityAlive && activeAmmoClip >= 0)
+            {
+                if (runtimeCache.LastAmmoClip >= 0 && activeAmmoClip < runtimeCache.LastAmmoClip)
+                    runtimeCache.LastShotTick = now;
+                runtimeCache.LastAmmoClip = activeAmmoClip;
+            }
+            else if (!entityAlive)
+            {
+                runtimeCache.LastAmmoClip = -1;
+            }
+
+            radarShooting = runtimeCache.LastShotTick.time_since_epoch().count() != 0 &&
+                now - runtimeCache.LastShotTick <= std::chrono::milliseconds(180);
+        }
+
+        const Vector3 entityOrigin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
+        const int flashedValue = std::clamp(
+            static_cast<int>((std::max)(entity->FlashOverlayAlpha, entity->FlashDuration * 64.0f)),
+            0,
+            255
+        );
+
+        if (radarComposeDue)
+        {
+            RadarPlayerFrameItem radarItem{};
+            radarItem.PlayerId = GsiPlayerIdFromController(entity->Controller);
+            radarItem.Controller = entity->Controller;
+            radarItem.Pawn = entity->Pawn;
+            radarItem.Team = entity->Team;
+            radarItem.Health = entityAlive ? std::clamp(entity->Health, 0, 100) : 0;
+            radarItem.Armor = entityAlive ? std::clamp(runtimeCache.Armor, 0, 100) : 0;
+            radarItem.Flashed = entityAlive ? flashedValue : 0;
+            radarItem.AmmoClip = activeAmmoClip;
+            radarItem.CompTeammateColor = entity->CompTeammateColor;
+            radarItem.Position = entityOrigin;
+            radarItem.EyeAngles = entity->EyeAngles;
+            radarItem.Name = identityCache.Name;
+            radarItem.WeaponName = runtimeCache.WeaponName;
+            radarItem.IsAlive = entityAlive;
+            radarItem.Shooting = radarShooting;
+            radarPlayers.push_back(std::move(radarItem));
+        }
+
+        if (!entityAlive)
+            continue;
+
+        if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
+            continue;
 
         PlayerEspSnapshot snapshot{};
         snapshot.Controller = entity->Controller;
@@ -4665,11 +5249,12 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         snapshot.Armor = runtimeCache.Armor;
         snapshot.IsScoped = runtimeCache.IsScoped;
         snapshot.HasDefuser = runtimeCache.HasDefuser;
+        snapshot.HasHelmet = runtimeCache.HasHelmet;
         snapshot.FlashDuration = runtimeCache.FlashDuration;
         snapshot.FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
         snapshot.FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
 
-        snapshot.Origin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
+        snapshot.Origin = entityOrigin;
         snapshot.EyePosition = snapshot.Origin + entity->ViewOffset;
 
         snapshot.Name = identityCache.Name;
@@ -4704,6 +5289,70 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             snapshot.IsVisible = CheckVisibility(localEyePosition, snapshot.HeadPosition);
 
         outFrame.Players.push_back(std::move(snapshot));
+    }
+
+    if (radarComposeDue && IsLikelyUserAddress(core.LocalController))
+    {
+        activePawns.insert(core.LocalPawn);
+        const bool localAlive = IsAlive(local.Health, local.LifeState);
+
+        ControllerIdentityCache& localIdentity = m_ControllerIdentityCache[core.LocalController];
+        if (localIdentity.Name.empty() || localIdentity.RoundEpoch != m_RoundEpoch)
+        {
+            localIdentity.Name = ReadPlayerName(core.LocalController);
+            localIdentity.RoundEpoch = m_RoundEpoch;
+        }
+
+        PawnRuntimeCache& localRuntime = m_PawnRuntimeCache[core.LocalPawn];
+        if (localRuntime.WeaponName.empty() ||
+            localRuntime.LastWeaponRead.time_since_epoch().count() == 0 ||
+            now - localRuntime.LastWeaponRead >= std::chrono::milliseconds(500))
+        {
+            localRuntime.WeaponName = ReadWeaponName(core.LocalPawn);
+            localRuntime.LastWeaponRead = now;
+        }
+        const int localAmmoClip = ReadActiveWeaponClip(core.LocalPawn);
+        bool localShooting = false;
+        if (localAlive && localAmmoClip >= 0)
+        {
+            if (localRuntime.LastAmmoClip >= 0 && localAmmoClip < localRuntime.LastAmmoClip)
+                localRuntime.LastShotTick = now;
+            localRuntime.LastAmmoClip = localAmmoClip;
+        }
+        else if (!localAlive)
+        {
+            localRuntime.LastAmmoClip = -1;
+        }
+
+        localShooting = localRuntime.LastShotTick.time_since_epoch().count() != 0 &&
+            now - localRuntime.LastShotTick <= std::chrono::milliseconds(180);
+
+        int localCompTeammateColor = -1;
+        if (Offsets::Schema::m_iCompTeammateColor)
+            localCompTeammateColor = mem.Read<int>(core.LocalController + Offsets::Schema::m_iCompTeammateColor);
+
+        RadarPlayerFrameItem localRadar{};
+        localRadar.PlayerId = GsiPlayerIdFromController(core.LocalController);
+        localRadar.Controller = core.LocalController;
+        localRadar.Pawn = core.LocalPawn;
+        localRadar.Team = local.Team;
+        localRadar.Health = localAlive ? std::clamp(local.Health, 0, 100) : 0;
+        localRadar.Armor = localAlive ? std::clamp(local.Armor, 0, 100) : 0;
+        localRadar.Flashed = localAlive ? std::clamp(
+            static_cast<int>((std::max)(local.FlashOverlayAlpha, local.FlashDuration * 64.0f)),
+            0,
+            255
+        ) : 0;
+        localRadar.AmmoClip = localAmmoClip;
+        localRadar.CompTeammateColor = localCompTeammateColor;
+        localRadar.Position = local.Origin;
+        localRadar.EyeAngles = localViewAngles;
+        localRadar.Name = localIdentity.Name;
+        localRadar.WeaponName = localRuntime.WeaponName;
+        localRadar.IsLocal = true;
+        localRadar.IsAlive = localAlive;
+        localRadar.Shooting = localShooting;
+        radarPlayers.push_back(std::move(localRadar));
     }
 
     for (auto it = m_ControllerIdentityCache.begin(); it != m_ControllerIdentityCache.end();)
@@ -4853,7 +5502,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             outFrame.SpectatorList = std::move(spectatorSnapshot);
     }
 
-    if (config.Visuals.C4)
+    if (config.Visuals.C4 || radarComposeDue)
     {
         constexpr auto kC4IntervalIdle = std::chrono::microseconds(16667);   // 60Hz
         constexpr auto kC4IntervalPlanted = std::chrono::microseconds(10000); // 100Hz
@@ -4874,6 +5523,269 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         m_C4Cache = C4Snapshot{};
         m_LastC4Sample = {};
         outFrame.C4 = C4Snapshot{};
+    }
+
+    if (radarComposeDue)
+    {
+            auto toGsiWeaponName = [](const std::string& rawName) -> std::string
+            {
+                if (rawName.empty())
+                    return "weapon_knife";
+
+                std::string normalized = ToLowerAscii(rawName);
+                if (normalized == "c4")
+                    return "weapon_c4";
+
+                std::string token{};
+                token.reserve(normalized.size() + 8);
+                for (const char ch : normalized)
+                {
+                    const unsigned char value = static_cast<unsigned char>(ch);
+                    if (std::isalnum(value))
+                        token.push_back(ch);
+                    else if (ch == ' ' || ch == '-' || ch == '/')
+                        token.push_back('_');
+                }
+
+                if (token.empty())
+                    token = "knife";
+                if (token.rfind("weapon_", 0) != 0)
+                    token = "weapon_" + token;
+                return token;
+            };
+
+            std::uint64_t bombOwnerPawn = 0;
+            if (!outFrame.C4.Planted && Offsets::Client::dwWeaponC4 && Offsets::Schema::m_hOwnerEntity)
+            {
+                const uint64_t bombHolder = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwWeaponC4);
+                if (IsLikelyUserAddress(bombHolder))
+                {
+                    uint64_t bombEntity = bombHolder;
+                    const uint64_t indirect = mem.Read<uint64_t>(bombHolder);
+                    if (IsLikelyUserAddress(indirect))
+                        bombEntity = indirect;
+
+                    if (IsLikelyUserAddress(bombEntity))
+                    {
+                        const uint32_t ownerHandle = mem.Read<uint32_t>(bombEntity + Offsets::Schema::m_hOwnerEntity);
+                        if (ownerHandle & Offsets::EntityList::HandleMask)
+                            bombOwnerPawn = sdk.ResolveEntityFromHandle(ownerHandle, core.EntityList);
+                    }
+                }
+            }
+
+            std::array<bool, 10> slotUsed{};
+            std::unordered_map<uint64_t, int> slotByController{};
+            std::unordered_set<uint64_t> seenRadarControllers{};
+            slotByController.reserve(radarPlayers.size());
+            seenRadarControllers.reserve(radarPlayers.size());
+
+            int localObserverSlot = 0;
+            for (const RadarPlayerFrameItem& player : radarPlayers)
+            {
+                seenRadarControllers.insert(player.Controller);
+
+                int slot = -1;
+                const int preferredSlot = NormalizeObserverSlot(player.Team, player.CompTeammateColor);
+                if (preferredSlot >= 0 && preferredSlot < 10 && !slotUsed[preferredSlot])
+                    slot = preferredSlot;
+
+                if (slot < 0)
+                {
+                    const auto assignedIt = m_RadarObserverSlots.find(player.Controller);
+                    if (assignedIt != m_RadarObserverSlots.end() &&
+                        assignedIt->second >= 0 &&
+                        assignedIt->second < 10 &&
+                        !slotUsed[assignedIt->second])
+                    {
+                        slot = assignedIt->second;
+                    }
+                }
+
+                if (slot < 0)
+                {
+                    for (int candidate = 0; candidate < 10; ++candidate)
+                    {
+                        if (!slotUsed[candidate])
+                        {
+                            slot = candidate;
+                            break;
+                        }
+                    }
+                }
+
+                if (slot < 0)
+                    slot = static_cast<int>(player.Controller % 10ull);
+
+                slot = std::clamp(slot, 0, 9);
+                slotUsed[slot] = true;
+                m_RadarObserverSlots[player.Controller] = slot;
+                slotByController[player.Controller] = slot;
+
+                if (player.IsLocal)
+                    localObserverSlot = slot;
+            }
+
+            for (auto it = m_RadarObserverSlots.begin(); it != m_RadarObserverSlots.end();)
+            {
+                if (seenRadarControllers.find(it->first) == seenRadarControllers.end())
+                    it = m_RadarObserverSlots.erase(it);
+                else
+                    ++it;
+            }
+
+            std::string bombOwnerName{};
+            std::string bombOwnerPlayerId{};
+            std::string bombOwnerWeapon{};
+            Vector3 bombOwnerPos{};
+            bool bombOwnerPosValid = false;
+            std::unordered_map<uint64_t, std::string> playerIdByPawn{};
+            playerIdByPawn.reserve(radarPlayers.size());
+
+            nlohmann::json payload{};
+            payload["provider"]["name"] = "CS2";
+            payload["provider"]["appid"] = 730;
+            payload["provider"]["timestamp"] = EpochMsNow();
+            payload["map"]["name"] = sdk.GetCurrentMapName();
+
+            nlohmann::json allplayers = nlohmann::json::object();
+            for (const RadarPlayerFrameItem& player : radarPlayers)
+            {
+                const auto slotIt = slotByController.find(player.Controller);
+                if (slotIt == slotByController.end())
+                    continue;
+
+                const std::string playerId = player.PlayerId.empty()
+                    ? GsiPlayerIdFromController(player.Controller)
+                    : player.PlayerId;
+                playerIdByPawn[player.Pawn] = playerId;
+
+                const int observerSlot = std::clamp(slotIt->second, 0, 9);
+                nlohmann::json playerNode{};
+                playerNode["observer_slot"] = observerSlot;
+                playerNode["name"] = player.Name.empty() ? ("Player " + std::to_string(observerSlot)) : player.Name;
+                playerNode["team"] = TeamToGsi(player.Team);
+                playerNode["state"]["health"] = player.IsAlive ? std::clamp(player.Health, 0, 100) : 0;
+                playerNode["state"]["armor"] = std::clamp(player.Armor, 0, 100);
+                playerNode["state"]["flashed"] = std::clamp(player.Flashed, 0, 255);
+                playerNode["state"]["shooting"] = player.Shooting;
+                playerNode["position"] = FormatVec3String(player.Position);
+
+                Vector3 forward = ForwardFromAngles(player.EyeAngles);
+                if (std::abs(forward.x) < 0.001f && std::abs(forward.y) < 0.001f && std::abs(forward.z) < 0.001f && player.IsLocal)
+                    forward = ForwardFromAngles(localViewAngles);
+                playerNode["forward"] = FormatVec3String(forward);
+
+                nlohmann::json weapons = nlohmann::json::object();
+                const std::string activeWeapon = toGsiWeaponName(player.WeaponName);
+                if (!activeWeapon.empty())
+                {
+                    weapons["active"]["name"] = activeWeapon;
+                    weapons["active"]["state"] = "active";
+                    weapons["active"]["ammo_clip"] = player.AmmoClip >= 0 ? player.AmmoClip : 0;
+                }
+
+                if (bombOwnerPawn != 0 && player.Pawn == bombOwnerPawn)
+                {
+                    bombOwnerName = playerNode["name"].get<std::string>();
+                    bombOwnerPlayerId = playerId;
+                    bombOwnerWeapon = activeWeapon;
+                    bombOwnerPos = player.Position;
+                    bombOwnerPosValid = true;
+                    weapons["bomb"]["name"] = "weapon_c4";
+                    weapons["bomb"]["state"] = activeWeapon == "weapon_c4" ? "active" : "holstered";
+                }
+
+                playerNode["weapons"] = std::move(weapons);
+                allplayers[playerId] = std::move(playerNode);
+            }
+
+            payload["allplayers"] = std::move(allplayers);
+            payload["player"]["observer_slot"] = std::clamp(localObserverSlot, 0, 9);
+
+            int gamePhaseRaw = -1;
+            float phaseEndsIn = 0.0f;
+            if (Offsets::Client::dwGameRules)
+            {
+                const uint64_t gameRules = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwGameRules);
+                if (IsLikelyUserAddress(gameRules))
+                {
+                    if (Offsets::Schema::m_gamePhase)
+                        gamePhaseRaw = mem.Read<int>(gameRules + Offsets::Schema::m_gamePhase);
+                    if (Offsets::Schema::m_timeUntilNextPhaseStarts)
+                        phaseEndsIn = mem.Read<float>(gameRules + Offsets::Schema::m_timeUntilNextPhaseStarts);
+                }
+            }
+
+            if (phaseEndsIn < 0.0f || phaseEndsIn > 3600.0f)
+                phaseEndsIn = 0.0f;
+            if (phaseEndsIn <= 0.0f && outFrame.C4.Planted)
+                phaseEndsIn = (std::max)(0.0f, outFrame.C4.TimeRemaining);
+
+            const std::string roundPhase = ResolveRoundPhaseName(
+                freezePeriod,
+                outFrame.C4.Planted,
+                outFrame.C4.BeingDefused,
+                gamePhaseRaw
+            );
+
+            payload["round"]["phase"] = roundPhase;
+            payload["phase_countdowns"]["phase"] = roundPhase;
+            payload["phase_countdowns"]["phase_ends_in"] = phaseEndsIn;
+
+            std::string bombState = "dropped";
+            std::string bombPlayerId = bombOwnerPlayerId;
+            float bombCountdown = 0.0f;
+            float bombExplodeCountdown = (std::max)(0.0f, outFrame.C4.TimeRemaining);
+            float bombDefuseCountdown = 0.0f;
+            Vector3 bombPosition = outFrame.C4.Position;
+
+            if (outFrame.C4.Planted)
+            {
+                if (outFrame.C4.BombDefused)
+                    bombState = "defused";
+                else if (outFrame.C4.BeingDefused)
+                    bombState = "defusing";
+                else if (outFrame.C4.TimeRemaining <= 0.0f)
+                    bombState = "exploded";
+                else
+                    bombState = "planted";
+
+                bombCountdown = bombExplodeCountdown;
+                if (outFrame.C4.BombDefuserPawn != 0 && bombState == "defusing")
+                {
+                    const auto defuserIt = playerIdByPawn.find(outFrame.C4.BombDefuserPawn);
+                    if (defuserIt != playerIdByPawn.end())
+                        bombPlayerId = defuserIt->second;
+                }
+
+                if (bombState == "defusing")
+                {
+                    bombDefuseCountdown = (std::max)(0.0f, outFrame.C4.DefuseCountDown);
+                    bombCountdown = bombDefuseCountdown > 0.0f ? bombDefuseCountdown : bombExplodeCountdown;
+                }
+            }
+            else if (bombOwnerPawn != 0)
+            {
+                bombState = bombOwnerWeapon == "weapon_c4" ? "planting" : "carried";
+                if (bombOwnerPosValid)
+                    bombPosition = bombOwnerPos;
+            }
+            else if (!outFrame.C4.Valid)
+            {
+                bombState = "carried";
+            }
+
+            payload["bomb"]["state"] = bombState;
+            payload["bomb"]["player"] = bombPlayerId;
+            payload["bomb"]["player_name"] = bombOwnerName;
+            payload["bomb"]["countdown"] = bombCountdown;
+            payload["bomb"]["explode_countdown"] = bombExplodeCountdown;
+            payload["bomb"]["defuse_countdown"] = bombDefuseCountdown;
+            payload["bomb"]["position"] = FormatVec3String(bombPosition);
+
+            QueueRadarPayload(payload.dump());
+            m_LastRadarCompose = now;
     }
 
     return true;

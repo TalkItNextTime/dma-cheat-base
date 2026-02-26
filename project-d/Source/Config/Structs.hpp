@@ -375,4 +375,19 @@ namespace Structs
         ImVec4 GrenadeHelperTopHintColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         float GrenadeHelperTopHintFontSize = 30.0f;
     };
+
+    struct RadarConfig
+    {
+        bool Enabled = false;
+        std::string Host = "127.0.0.1";
+        int StaticPort = 36364;
+        int IngestPort = 36365;
+        std::string AdminKey{};
+        std::string RoomNamePrefix = "dma-match";
+        int PublishIntervalMs = 40;
+        int HttpTimeoutMs = 3000;
+        int ReconnectBaseMs = 500;
+        int ReconnectMaxMs = 5000;
+        bool AutoDeleteRoomOnExit = true;
+    };
 }

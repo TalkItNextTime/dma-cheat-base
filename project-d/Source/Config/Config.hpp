@@ -7,12 +7,14 @@ namespace Config
         Structs::AimConfig Aim;
         Structs::KmboxConfig Kmbox;
         Structs::VisualsConfig Visuals;
+        Structs::RadarConfig Radar;
         int Language = 0;
         bool DebugEnabled = false;
         bool DebugPerf = false;
         bool DebugTrigger = false;
         bool DebugVisCheck = false;
         bool DebugSpectatorList = false;
+        bool DebugRadar = false;
 
         static AppConfig& Get()
         {
@@ -228,12 +230,26 @@ namespace Config
             j["Visuals"]["GrenadeHelperFontSize"] = Visuals.GrenadeHelperFontSize;
             j["Visuals"]["GrenadeHelperTopHintColor"] = { Visuals.GrenadeHelperTopHintColor.x, Visuals.GrenadeHelperTopHintColor.y, Visuals.GrenadeHelperTopHintColor.z, Visuals.GrenadeHelperTopHintColor.w };
             j["Visuals"]["GrenadeHelperTopHintFontSize"] = Visuals.GrenadeHelperTopHintFontSize;
+
+            j["Radar"]["Enabled"] = Radar.Enabled;
+            j["Radar"]["Host"] = Radar.Host;
+            j["Radar"]["StaticPort"] = Radar.StaticPort;
+            j["Radar"]["IngestPort"] = Radar.IngestPort;
+            j["Radar"]["AdminKey"] = Radar.AdminKey;
+            j["Radar"]["RoomNamePrefix"] = Radar.RoomNamePrefix;
+            j["Radar"]["PublishIntervalMs"] = Radar.PublishIntervalMs;
+            j["Radar"]["HttpTimeoutMs"] = Radar.HttpTimeoutMs;
+            j["Radar"]["ReconnectBaseMs"] = Radar.ReconnectBaseMs;
+            j["Radar"]["ReconnectMaxMs"] = Radar.ReconnectMaxMs;
+            j["Radar"]["AutoDeleteRoomOnExit"] = Radar.AutoDeleteRoomOnExit;
+
             j["Info"]["Language"] = std::clamp(Language, 0, 1);
             j["Info"]["DebugEnabled"] = DebugEnabled;
             j["Info"]["DebugPerf"] = DebugPerf;
             j["Info"]["DebugTrigger"] = DebugTrigger;
             j["Info"]["DebugVisCheck"] = DebugVisCheck;
             j["Info"]["DebugSpectatorList"] = DebugSpectatorList;
+            j["Info"]["DebugRadar"] = DebugRadar;
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -298,6 +314,7 @@ namespace Config
                 LoadConfigSection(j, "Aim", Aim);
                 LoadConfigSection(j, "Kmbox", Kmbox);
                 LoadConfigSection(j, "Visuals", Visuals);
+                LoadConfigSection(j, "Radar", Radar);
                 LoadWeaponProfiles(j);
                 DebugVisCheck = Visuals.VisCheckDebug;
                 if (j.contains("Info") && j["Info"].is_object())
@@ -331,6 +348,7 @@ namespace Config
                     readInfoBool("DebugTrigger", DebugTrigger);
                     readInfoBool("DebugVisCheck", DebugVisCheck);
                     readInfoBool("DebugSpectatorList", DebugSpectatorList);
+                    readInfoBool("DebugRadar", DebugRadar);
                     if (!hasDebugVisCheck)
                         DebugVisCheck = Visuals.VisCheckDebug;
                 }
@@ -362,6 +380,7 @@ namespace Config
                             LoadConfigSection(j, "Aim", Aim);
                             LoadConfigSection(j, "Kmbox", Kmbox);
                             LoadConfigSection(j, "Visuals", Visuals);
+                            LoadConfigSection(j, "Radar", Radar);
                             LoadWeaponProfiles(j);
                             DebugVisCheck = Visuals.VisCheckDebug;
                             if (j.contains("Info") && j["Info"].is_object())
@@ -395,6 +414,7 @@ namespace Config
                                 readInfoBool("DebugTrigger", DebugTrigger);
                                 readInfoBool("DebugVisCheck", DebugVisCheck);
                                 readInfoBool("DebugSpectatorList", DebugSpectatorList);
+                                readInfoBool("DebugRadar", DebugRadar);
                                 if (!hasDebugVisCheck)
                                     DebugVisCheck = Visuals.VisCheckDebug;
                             }
@@ -632,12 +652,26 @@ namespace Config
                 j["Visuals"]["GrenadeHelperFontSize"] = 16.0f;
                 j["Visuals"]["GrenadeHelperTopHintColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["GrenadeHelperTopHintFontSize"] = 30.0f;
+
+                j["Radar"]["Enabled"] = false;
+                j["Radar"]["Host"] = "127.0.0.1";
+                j["Radar"]["StaticPort"] = 36364;
+                j["Radar"]["IngestPort"] = 36365;
+                j["Radar"]["AdminKey"] = "";
+                j["Radar"]["RoomNamePrefix"] = "dma-match";
+                j["Radar"]["PublishIntervalMs"] = 40;
+                j["Radar"]["HttpTimeoutMs"] = 3000;
+                j["Radar"]["ReconnectBaseMs"] = 500;
+                j["Radar"]["ReconnectMaxMs"] = 5000;
+                j["Radar"]["AutoDeleteRoomOnExit"] = true;
+
                 j["Info"]["Language"] = 0;
                 j["Info"]["DebugEnabled"] = false;
                 j["Info"]["DebugPerf"] = false;
                 j["Info"]["DebugTrigger"] = false;
                 j["Info"]["DebugVisCheck"] = false;
                 j["Info"]["DebugSpectatorList"] = false;
+                j["Info"]["DebugRadar"] = false;
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();
@@ -1090,6 +1124,20 @@ namespace Config
                             else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "SpectatorListColor") configSection.SpectatorListColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "DefuserColor") configSection.DefuserColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                        }
+                        else if constexpr (std::is_same_v<T, Structs::RadarConfig>)
+                        {
+                            if (key == "Enabled") configSection.Enabled = value.get<bool>();
+                            else if (key == "Host") configSection.Host = value.get<std::string>();
+                            else if (key == "StaticPort") configSection.StaticPort = value.get<int>();
+                            else if (key == "IngestPort") configSection.IngestPort = value.get<int>();
+                            else if (key == "AdminKey") configSection.AdminKey = value.get<std::string>();
+                            else if (key == "RoomNamePrefix") configSection.RoomNamePrefix = value.get<std::string>();
+                            else if (key == "PublishIntervalMs") configSection.PublishIntervalMs = value.get<int>();
+                            else if (key == "HttpTimeoutMs") configSection.HttpTimeoutMs = value.get<int>();
+                            else if (key == "ReconnectBaseMs") configSection.ReconnectBaseMs = value.get<int>();
+                            else if (key == "ReconnectMaxMs") configSection.ReconnectMaxMs = value.get<int>();
+                            else if (key == "AutoDeleteRoomOnExit") configSection.AutoDeleteRoomOnExit = value.get<bool>();
                         }
                     }
                 }

@@ -1,6 +1,7 @@
 ﻿#include <Pch.hpp>
 #include <SDK.hpp>
 #include <ESP/ESP.hpp>
+#include <Radar/Radar.hpp>
 #include <array>
 #include <wincrypt.h>
 #include <wincodec.h>
@@ -41,6 +42,8 @@ namespace
 			return Localization::Pick("Aim", "自瞄");
 		case MenuPage_Visuals:
 			return Localization::Pick("Visuals", "视觉");
+		case MenuPage_Radar:
+			return Localization::Pick("Radar", "雷达");
 		case MenuPage_Config:
 			return Localization::Pick("Config", "配置");
 		case MenuPage_Info:
@@ -1366,6 +1369,7 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
 
 		m_Tabs.push_back("Aim");     // MenuPage_Aiming
 		m_Tabs.push_back("Visuals");    // MenuPage_Visuals
+		m_Tabs.push_back("Radar");      // MenuPage_Radar
 		m_Tabs.push_back("Config");    // MenuPage_Configs
 		m_Tabs.push_back("Info");       // MenuPage_Info
 	}
@@ -2207,6 +2211,87 @@ void Overlay::RenderMenu()
 				}
 				ImGui::EndChild();
 			}
+			else if (m_iSelectedPage == MenuPage_Radar)
+			{
+				ImGui::BeginChild("Radar", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
+				{
+					if (ImGui::BeginMenuBar())
+					{
+						ImGui::Text("%s", Localization::Pick("Radar", "雷达"));
+						ImGui::EndMenuBar();
+					}
+
+					RadarRuntimeState runtime = radarBridge.GetRuntimeState();
+					static std::chrono::steady_clock::time_point radarWatchUrlCopiedUntil{};
+
+					ImAdd::SeparatorText(Localization::Pick("Enable", "启用"));
+					ImAdd::CheckBox(Localization::Pick("Enable Radar Bridge", "启用雷达桥接"), &config.Radar.Enabled);
+
+					ImAdd::SeparatorText(Localization::Pick("Connection", "连接"));
+					char hostBuffer[128]{};
+					strncpy_s(hostBuffer, config.Radar.Host.c_str(), _TRUNCATE);
+					if (ImGui::InputText(Localization::Pick("Host", "主机"), hostBuffer, IM_ARRAYSIZE(hostBuffer)))
+						config.Radar.Host = hostBuffer;
+
+					int staticPort = config.Radar.StaticPort;
+					if (ImGui::InputInt(Localization::Pick("Static Port", "静态端口"), &staticPort))
+						config.Radar.StaticPort = std::clamp(staticPort, 1, 65535);
+
+					int ingestPort = config.Radar.IngestPort;
+					if (ImGui::InputInt(Localization::Pick("Ingest Port", "推流端口"), &ingestPort))
+						config.Radar.IngestPort = std::clamp(ingestPort, 1, 65535);
+
+					char adminKeyBuffer[192]{};
+					strncpy_s(adminKeyBuffer, config.Radar.AdminKey.c_str(), _TRUNCATE);
+					if (ImGui::InputText(Localization::Pick("Admin Key", "管理密钥"), adminKeyBuffer, IM_ARRAYSIZE(adminKeyBuffer), ImGuiInputTextFlags_Password))
+						config.Radar.AdminKey = adminKeyBuffer;
+
+					char roomPrefixBuffer[128]{};
+					strncpy_s(roomPrefixBuffer, config.Radar.RoomNamePrefix.c_str(), _TRUNCATE);
+					if (ImGui::InputText(Localization::Pick("Room Name Prefix", "房间名前缀"), roomPrefixBuffer, IM_ARRAYSIZE(roomPrefixBuffer)))
+						config.Radar.RoomNamePrefix = roomPrefixBuffer;
+
+					if (ImAdd::Button(Localization::Pick("Create Room Now", "立即建房"), ImVec2(130.0f, 0.0f)))
+						radarBridge.ForceCreateRoom();
+					ImGui::SameLine();
+					if (ImAdd::Button(Localization::Pick("Reconnect Ingest", "重连推流"), ImVec2(130.0f, 0.0f)))
+						radarBridge.ForceReconnectIngest();
+					ImGui::SameLine();
+					if (ImAdd::Button(Localization::Pick("Delete Room Now", "立即删房"), ImVec2(130.0f, 0.0f)))
+						radarBridge.ForceDeleteRoom();
+
+					ImAdd::SeparatorText(Localization::Pick("Lifecycle", "生命周期"));
+					ImAdd::CheckBox(Localization::Pick("Auto Delete Room On Exit", "退出时自动删房"), &config.Radar.AutoDeleteRoomOnExit);
+
+					ImAdd::SeparatorText(Localization::Pick("Watch URL", "观看地址"));
+					ImGui::TextWrapped("%s: %s", Localization::Pick("Watch URL", "观看地址"), runtime.watchUrl.empty() ? "-" : runtime.watchUrl.c_str());
+					ImGui::BeginDisabled(runtime.watchUrl.empty());
+					if (ImAdd::Button(Localization::Pick("Copy URL", "复制地址"), ImVec2(130.0f, 0.0f)))
+					{
+						ImGui::SetClipboardText(runtime.watchUrl.c_str());
+						radarWatchUrlCopiedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+					}
+					ImGui::EndDisabled();
+					if (std::chrono::steady_clock::now() < radarWatchUrlCopiedUntil)
+					{
+						ImGui::SameLine();
+						ImGui::TextDisabled("%s", Localization::Pick("Copied", "已复制"));
+					}
+
+					if (config.DebugRadar)
+					{
+						ImAdd::SeparatorText(Localization::Pick("Runtime Status", "运行状态"));
+						ImGui::Text("%s: %s", Localization::Pick("Enabled", "启用"), runtime.enabled ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
+						ImGui::Text("%s: %s", Localization::Pick("Room Created", "已建房"), runtime.roomCreated ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
+						ImGui::Text("%s: %s", Localization::Pick("Ingest Connected", "推流已连接"), runtime.ingestConnected ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
+						ImGui::TextWrapped("%s: %s", Localization::Pick("Room ID", "房间ID"), runtime.roomId.empty() ? "-" : runtime.roomId.c_str());
+						ImGui::TextWrapped("%s: %s", Localization::Pick("Ingest URL", "推流地址"), runtime.ingestUrl.empty() ? "-" : runtime.ingestUrl.c_str());
+						ImGui::TextWrapped("%s: %s", Localization::Pick("Last Error", "最近错误"), runtime.lastError.empty() ? "-" : runtime.lastError.c_str());
+						ImGui::Text("%s: %llu", Localization::Pick("Last Push (epoch ms)", "最后推送(毫秒时间戳)"), static_cast<unsigned long long>(runtime.lastPushEpochMs));
+					}
+				}
+				ImGui::EndChild();
+			}
 			else if (m_iSelectedPage == MenuPage_Config)
 			{
 				ImGui::BeginChild("Configs", ImVec2(0, 0), ImGuiChildFlags_Border, ImGuiWindowFlags_MenuBar);
@@ -2433,6 +2518,7 @@ void Overlay::RenderMenu()
 
 
 					ImAdd::SeparatorText(Localization::Pick("Debug", "调试"));
+					ImAdd::CheckBox(Localization::Pick("Radar Runtime Debug", "雷达运行状态调试"), &config.DebugRadar);
 					if (ImAdd::CheckBox(Localization::Pick("Enable Debug Thread", "启用Debug线程"), &config.DebugEnabled) && !config.DebugEnabled)
 					{
 						config.DebugPerf = false;

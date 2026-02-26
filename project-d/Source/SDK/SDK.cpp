@@ -279,8 +279,19 @@ bool SDK::LoadOffsets()
         (void)TryGetClientField(clientDllJson, className, fieldName, target);
     };
 
+    auto loadOptionalSchemaFromClasses = [&](std::initializer_list<const char*> classNames, const char* fieldName, uint32_t& target)
+    {
+        target = 0;
+        for (const char* className : classNames)
+        {
+            if (TryGetClientField(clientDllJson, className, fieldName, target))
+                return;
+        }
+    };
+
     loadSchema("CBasePlayerController", "m_hPawn", Offsets::Schema::m_hPawn);
     loadSchema("CCSPlayerController", "m_hPlayerPawn", Offsets::Schema::m_hPlayerPawn);
+    loadOptionalSchema("CCSPlayerController", "m_iCompTeammateColor", Offsets::Schema::m_iCompTeammateColor);
     loadSchema("CBasePlayerController", "m_iszPlayerName", Offsets::Schema::m_iszPlayerName);
     loadSchema("CCSPlayerController", "m_pInGameMoneyServices", Offsets::Schema::m_pInGameMoneyServices);
     loadSchema("CCSPlayerController_InGameMoneyServices", "m_iAccount", Offsets::Schema::m_iAccount);
@@ -294,6 +305,7 @@ bool SDK::LoadOffsets()
     loadSchema("C_BasePlayerPawn", "m_pObserverServices", Offsets::Schema::m_pObserverServices);
     loadSchema("C_BasePlayerPawn", "m_vOldOrigin", Offsets::Schema::m_vOldOrigin);
     loadSchema("C_BaseModelEntity", "m_vecViewOffset", Offsets::Schema::m_vecViewOffset);
+    loadOptionalSchemaFromClasses({ "C_CSPlayerPawnBase", "C_CSPlayerPawn" }, "m_angEyeAngles", Offsets::Schema::m_angEyeAngles);
     loadSchema("CSkeletonInstance", "m_modelState", Offsets::Schema::m_modelState);
     loadSchema("C_CSPlayerPawn", "m_ArmorValue", Offsets::Schema::m_ArmorValue);
     loadSchema("C_CSPlayerPawn", "m_bIsScoped", Offsets::Schema::m_bIsScoped);
@@ -309,8 +321,11 @@ bool SDK::LoadOffsets()
     loadSchema("C_EconEntity", "m_AttributeManager", Offsets::Schema::m_AttributeManager);
     loadSchema("C_AttributeContainer", "m_Item", Offsets::Schema::m_Item);
     loadSchema("C_EconItemView", "m_iItemDefinitionIndex", Offsets::Schema::m_iItemDefinitionIndex);
+    loadOptionalSchemaFromClasses({ "C_BasePlayerWeapon", "C_CSWeaponBase", "CWeaponBaseItem" }, "m_iClip1", Offsets::Schema::m_iClip1);
     loadSchema("C_CSWeaponBase", "m_bInReload", Offsets::Schema::m_bInReload);
+    loadOptionalSchemaFromClasses({ "C_BaseEntity", "CBasePlayerWeapon", "C_CSWeaponBase" }, "m_hOwnerEntity", Offsets::Schema::m_hOwnerEntity);
     loadSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
+    loadOptionalSchema("C_CSPlayerPawn", "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
     loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
     loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);
     loadSchema("C_PlantedC4", "m_nBombSite", Offsets::Schema::m_nBombSite);
@@ -319,8 +334,11 @@ bool SDK::LoadOffsets()
     loadSchema("C_PlantedC4", "m_flDefuseLength", Offsets::Schema::m_flDefuseLength);
     loadSchema("C_PlantedC4", "m_bBeingDefused", Offsets::Schema::m_bBeingDefused);
     loadSchema("C_PlantedC4", "m_flDefuseCountDown", Offsets::Schema::m_flDefuseCountDown);
+    loadOptionalSchema("C_PlantedC4", "m_hBombDefuser", Offsets::Schema::m_hBombDefuser);
     loadSchema("C_PlantedC4", "m_vecC4ExplodeSpectatePos", Offsets::Schema::m_vecC4ExplodeSpectatePos);
     loadSchema("C_CSGameRules", "m_bFreezePeriod", Offsets::Schema::m_bFreezePeriod);
+    loadOptionalSchema("C_CSGameRules", "m_gamePhase", Offsets::Schema::m_gamePhase);
+    loadOptionalSchema("C_CSGameRules", "m_timeUntilNextPhaseStarts", Offsets::Schema::m_timeUntilNextPhaseStarts);
 
     if (!Offsets::HasCore())
     {

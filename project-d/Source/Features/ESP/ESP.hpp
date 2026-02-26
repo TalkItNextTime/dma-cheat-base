@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -38,6 +39,7 @@ struct PlayerEspSnapshot
 
     bool IsScoped = false;
     bool HasDefuser = false;
+    bool HasHelmet = false;
     float FlashDuration = 0.0f;
     float FlashOverlayAlpha = 0.0f;
     float FlashMaxAlpha = 255.0f;
@@ -71,6 +73,8 @@ struct C4Snapshot
     float DefuseCountDown = 0.0f;
     float DefuseProgress = 0.0f;
     bool CanDefuse = false;
+    uint64_t BombEntity = 0;
+    uint64_t BombDefuserPawn = 0;
     Vector3 Position{};
     Vector2 Screen{};
     bool OnScreen = false;
@@ -203,10 +207,13 @@ private:
         int Armor = 0;
         bool IsScoped = false;
         bool HasDefuser = false;
+        bool HasHelmet = false;
         float FlashDuration = 0.0f;
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
         std::chrono::steady_clock::time_point LastStatusRead{};
+        int LastAmmoClip = -1;
+        std::chrono::steady_clock::time_point LastShotTick{};
     };
 
     struct VisDebugScreenLine
@@ -230,7 +237,10 @@ private:
     void ClearVisCheckDebugOverlaySnapshot();
 
     void EnsureSamplerStarted();
+    void EnsureRadarPublisherStarted();
     void SamplerLoop();
+    void RadarPublisherLoop();
+    void QueueRadarPayload(std::string payload);
     bool SampleFrame(RenderFrame& outFrame);
     void UpdateRoundEpoch(uint64_t localPawn, bool localAlive);
 
@@ -245,6 +255,7 @@ private:
     std::string ReadWeaponName(uint64_t pawn) const;
     int ReadMoney(uint64_t controller) const;
     int ReadWeaponId(uint64_t pawn) const;
+    int ReadActiveWeaponClip(uint64_t pawn) const;
     std::string ReadGrenadeType(uint64_t pawn) const;
 
     void BuildGrenadeHelperSnapshot(
@@ -277,8 +288,13 @@ private:
     uint64_t m_ActiveMapRequestId = 0;
 
     std::atomic<bool> m_SamplerStarted{ false };
+    std::atomic<bool> m_RadarPublisherStarted{ false };
     mutable std::mutex m_RenderFrameMutex{};
     RenderFrame m_RenderFrame{};
+    mutable std::mutex m_RadarPublishMutex{};
+    std::condition_variable m_RadarPublishCv{};
+    std::string m_RadarPendingPayload{};
+    bool m_RadarPendingDirty = false;
     mutable std::mutex m_GrenadeMutex{};
     GrenadeMapData m_GrenadeMap{};
     std::string m_LoadedGrenadeMap{};
@@ -301,6 +317,8 @@ private:
 
     std::unordered_map<uint64_t, ControllerIdentityCache> m_ControllerIdentityCache{};
     std::unordered_map<uint64_t, PawnRuntimeCache> m_PawnRuntimeCache{};
+    std::unordered_map<uint64_t, int> m_RadarObserverSlots{};
+    std::chrono::steady_clock::time_point m_LastRadarCompose{};
     C4Snapshot m_C4Cache{};
     std::chrono::steady_clock::time_point m_LastC4Sample{};
     std::uint64_t m_RoundEpoch = 1;
