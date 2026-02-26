@@ -348,6 +348,10 @@ namespace Structs
         ImVec4 C4Color = ImVec4(1.0f, 0.55f, 0.35f, 1.0f);
         float C4PanelPosX = 0.02f;
         float C4PanelPosY = 0.06f;
+        bool SpectatorList = false;
+        ImVec4 SpectatorListColor = ImVec4(0.65f, 0.85f, 1.0f, 1.0f);
+        float SpectatorListPanelPosX = 0.02f;
+        float SpectatorListPanelPosY = 0.16f;
         bool Defuser = true;
         ImVec4 DefuserColor = ImVec4(1.0f, 0.82f, 0.2f, 1.0f);
 

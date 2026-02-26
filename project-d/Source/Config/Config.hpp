@@ -12,6 +12,7 @@ namespace Config
         bool DebugPerf = false;
         bool DebugTrigger = false;
         bool DebugVisCheck = false;
+        bool DebugSpectatorList = false;
 
         static AppConfig& Get()
         {
@@ -202,6 +203,10 @@ namespace Config
             j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
             j["Visuals"]["C4PanelPosX"] = Visuals.C4PanelPosX;
             j["Visuals"]["C4PanelPosY"] = Visuals.C4PanelPosY;
+            j["Visuals"]["SpectatorList"] = Visuals.SpectatorList;
+            j["Visuals"]["SpectatorListColor"] = { Visuals.SpectatorListColor.x, Visuals.SpectatorListColor.y, Visuals.SpectatorListColor.z, Visuals.SpectatorListColor.w };
+            j["Visuals"]["SpectatorListPanelPosX"] = Visuals.SpectatorListPanelPosX;
+            j["Visuals"]["SpectatorListPanelPosY"] = Visuals.SpectatorListPanelPosY;
             j["Visuals"]["Defuser"] = Visuals.Defuser;
             j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
             j["Visuals"]["GrenadeHelper"] = Visuals.GrenadeHelper;
@@ -228,6 +233,7 @@ namespace Config
             j["Info"]["DebugPerf"] = DebugPerf;
             j["Info"]["DebugTrigger"] = DebugTrigger;
             j["Info"]["DebugVisCheck"] = DebugVisCheck;
+            j["Info"]["DebugSpectatorList"] = DebugSpectatorList;
 
             std::ofstream file(fullPath);
             if (file.is_open())
@@ -324,6 +330,7 @@ namespace Config
                     readInfoBool("DebugPerf", DebugPerf);
                     readInfoBool("DebugTrigger", DebugTrigger);
                     readInfoBool("DebugVisCheck", DebugVisCheck);
+                    readInfoBool("DebugSpectatorList", DebugSpectatorList);
                     if (!hasDebugVisCheck)
                         DebugVisCheck = Visuals.VisCheckDebug;
                 }
@@ -387,6 +394,7 @@ namespace Config
                                 readInfoBool("DebugPerf", DebugPerf);
                                 readInfoBool("DebugTrigger", DebugTrigger);
                                 readInfoBool("DebugVisCheck", DebugVisCheck);
+                                readInfoBool("DebugSpectatorList", DebugSpectatorList);
                                 if (!hasDebugVisCheck)
                                     DebugVisCheck = Visuals.VisCheckDebug;
                             }
@@ -599,6 +607,10 @@ namespace Config
                 j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
                 j["Visuals"]["C4PanelPosX"] = 0.02f;
                 j["Visuals"]["C4PanelPosY"] = 0.06f;
+                j["Visuals"]["SpectatorList"] = false;
+                j["Visuals"]["SpectatorListColor"] = { 0.65f, 0.85f, 1.0f, 1.0f };
+                j["Visuals"]["SpectatorListPanelPosX"] = 0.02f;
+                j["Visuals"]["SpectatorListPanelPosY"] = 0.16f;
                 j["Visuals"]["Defuser"] = true;
                 j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
                 j["Visuals"]["GrenadeHelper"] = false;
@@ -625,6 +637,7 @@ namespace Config
                 j["Info"]["DebugPerf"] = false;
                 j["Info"]["DebugTrigger"] = false;
                 j["Info"]["DebugVisCheck"] = false;
+                j["Info"]["DebugSpectatorList"] = false;
 
                 file << j.dump(4);  // Write JSON with pretty print
                 file.close();
@@ -1041,6 +1054,9 @@ namespace Config
                             else if (key == "C4") configSection.C4 = value.get<bool>();
                             else if (key == "C4PanelPosX") configSection.C4PanelPosX = value.get<float>();
                             else if (key == "C4PanelPosY") configSection.C4PanelPosY = value.get<float>();
+                            else if (key == "SpectatorList") configSection.SpectatorList = value.get<bool>();
+                            else if (key == "SpectatorListPanelPosX") configSection.SpectatorListPanelPosX = value.get<float>();
+                            else if (key == "SpectatorListPanelPosY") configSection.SpectatorListPanelPosY = value.get<float>();
                             else if (key == "Defuser") configSection.Defuser = value.get<bool>();
                             else if (key == "GrenadeHelper") configSection.GrenadeHelper = value.get<bool>();
                             else if (key == "GrenadeHelperFilterByWeapon") configSection.GrenadeHelperFilterByWeapon = value.get<bool>();
@@ -1072,6 +1088,7 @@ namespace Config
                             else if (key == "BonesColor") configSection.BonesColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColorVisible") configSection.BonesColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "SpectatorListColor") configSection.SpectatorListColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "DefuserColor") configSection.DefuserColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                         }
                     }

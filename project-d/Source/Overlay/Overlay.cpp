@@ -1853,6 +1853,18 @@ void Overlay::RenderMenu()
 									ImAdd::SliderFloat("C4 Card Y", &config.Visuals.C4PanelPosY, 0.0f, 1.0f);
 								}
 							}
+
+							ImGui::BeginGroup();
+							{
+								ImAdd::CheckBox("Spectator List", &config.Visuals.SpectatorList);
+								if (config.Visuals.SpectatorList)
+								{
+									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+									ImAdd::ColorEdit4("##SpectatorListColor", (float*)&config.Visuals.SpectatorListColor);
+									ImAdd::SliderFloat("Spectator Card X", &config.Visuals.SpectatorListPanelPosX, 0.0f, 1.0f);
+									ImAdd::SliderFloat("Spectator Card Y", &config.Visuals.SpectatorListPanelPosY, 0.0f, 1.0f);
+								}
+							}
 								}
 								else
 								{
@@ -2426,6 +2438,7 @@ void Overlay::RenderMenu()
 						config.DebugPerf = false;
 						config.DebugTrigger = false;
 						config.DebugVisCheck = false;
+						config.DebugSpectatorList = false;
 					}
 
 					if (config.DebugEnabled)
@@ -2433,6 +2446,7 @@ void Overlay::RenderMenu()
 						ImAdd::CheckBox(Localization::Pick("Perf Debug Output", "性能调试输出"), &config.DebugPerf);
 						ImAdd::CheckBox(Localization::Pick("Trigger Debug Output", "扳机调试输出"), &config.DebugTrigger);
 						ImAdd::CheckBox(Localization::Pick("VisCheck Debug Overlay", "VisCheck调试叠加"), &config.DebugVisCheck);
+						ImAdd::CheckBox(Localization::Pick("Spectator Debug Text", "观战名单调试文本"), &config.DebugSpectatorList);
 
 						if (config.DebugVisCheck)
 						{

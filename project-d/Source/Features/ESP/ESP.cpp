@@ -287,6 +287,58 @@ namespace
         return clamped;
     }
 
+    std::size_t NextUtf8CharStep(const std::string& text, const std::size_t index)
+    {
+        if (index >= text.size())
+            return 1;
+
+        const unsigned char lead = static_cast<unsigned char>(text[index]);
+        if ((lead & 0x80u) == 0x00u)
+            return 1;
+        if ((lead & 0xE0u) == 0xC0u)
+            return 2;
+        if ((lead & 0xF0u) == 0xE0u)
+            return 3;
+        if ((lead & 0xF8u) == 0xF0u)
+            return 4;
+        return 1;
+    }
+
+    std::string TruncateTextToWidth(const std::string& text, const float maxWidth)
+    {
+        if (text.empty() || maxWidth <= 0.0f)
+            return {};
+
+        if (ImGui::CalcTextSize(text.c_str()).x <= maxWidth)
+            return text;
+
+        constexpr const char* kEllipsis = "...";
+        const float ellipsisWidth = ImGui::CalcTextSize(kEllipsis).x;
+        if (ellipsisWidth >= maxWidth)
+            return {};
+
+        std::size_t index = 0;
+        std::size_t accepted = 0;
+        while (index < text.size())
+        {
+            const std::size_t step = NextUtf8CharStep(text, index);
+            const std::size_t next = (std::min)(text.size(), index + step);
+            const std::string candidate = text.substr(0, next);
+            if (ImGui::CalcTextSize(candidate.c_str()).x + ellipsisWidth > maxWidth)
+                break;
+
+            accepted = next;
+            index = next;
+        }
+
+        if (accepted == 0)
+            return {};
+
+        std::string output = text.substr(0, accepted);
+        output += kEllipsis;
+        return output;
+    }
+
     const char* GrenadeTypeLabelByIndex(const int index)
     {
         switch (index)
@@ -1381,6 +1433,10 @@ namespace
 
         uint32_t PawnHandle = 0;
         uint64_t Pawn = 0;
+        uint64_t ObserverServices = 0;
+        int ObserverMode = 0;
+        uint32_t ObserverTargetHandle = 0;
+        uint64_t ObserverTargetPawn = 0;
 
         int Health = 0;
         int Team = 0;
@@ -1770,15 +1826,15 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         siteName + " | " +
         (c4.BeingDefused ? Localization::Pick("Defusing", "正在拆包") : Localization::Pick("Not Defusing", "未在拆包"));
 
-    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆包: ");
+    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆除: ");
     if (c4.BeingDefused)
         line2 += formatSeconds1(c4.DefuseCountDown) + "s";
     else
         line2 += "--";
 
-    std::string line3 = Localization::Pick("Defuse Result: --", "拆包结果: --");
+    std::string line3 = Localization::Pick("Defuse Result: --", "拆除结果: --");
     if (c4.BeingDefused)
-        line3 = std::string(Localization::Pick("Defuse Result: ", "拆包结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
+        line3 = std::string(Localization::Pick("Defuse Result: ", "拆除结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
 
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     constexpr float panelW = 250.0f;
@@ -1811,6 +1867,132 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         c4.BeingDefused ? (c4.CanDefuse ? IM_COL32(120, 235, 120, 255) : IM_COL32(255, 110, 110, 255)) : IM_COL32(225, 225, 225, 255),
         line3.c_str()
     );
+}
+
+void ESP::RenderSpectatorList(ImDrawList* drawList, const SpectatorListSnapshot& spectatorList) const
+{
+    const std::size_t totalWatchers = spectatorList.WatcherNames.size();
+    if (!drawList || !config.Visuals.SpectatorList || !spectatorList.Valid || totalWatchers == 0)
+        return;
+
+    constexpr float panelW = 280.0f;
+    constexpr std::size_t kMaxVisibleWatchers = 10;
+    const std::size_t shownWatchers = (std::min)(totalWatchers, kMaxVisibleWatchers);
+    const bool hasHiddenWatchers = totalWatchers > shownWatchers;
+
+    const float lineHeight = ImGui::GetFontSize() + 3.0f;
+    const std::size_t watcherLineCount = shownWatchers > 0 ? shownWatchers : 1;
+    const std::size_t totalLineCount = 3 + watcherLineCount + (hasHiddenWatchers ? 1 : 0);
+    float panelH = 16.0f + lineHeight * static_cast<float>(totalLineCount) + 10.0f;
+    panelH = (std::max)(panelH, 86.0f);
+
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    const float panelX = std::clamp(
+        config.Visuals.SpectatorListPanelPosX * displaySize.x,
+        8.0f,
+        (std::max)(8.0f, displaySize.x - panelW - 8.0f)
+    );
+    const float panelY = std::clamp(
+        config.Visuals.SpectatorListPanelPosY * displaySize.y,
+        8.0f,
+        (std::max)(8.0f, displaySize.y - panelH - 8.0f)
+    );
+
+    const ImU32 accent = ToImColor(config.Visuals.SpectatorListColor);
+    drawList->AddRectFilled(
+        ImVec2(panelX, panelY),
+        ImVec2(panelX + panelW, panelY + panelH),
+        IM_COL32(18, 18, 18, 190),
+        5.0f
+    );
+    drawList->AddRect(
+        ImVec2(panelX, panelY),
+        ImVec2(panelX + panelW, panelY + panelH),
+        accent,
+        5.0f,
+        0,
+        1.2f
+    );
+
+    const float textMaxWidth = panelW - 20.0f;
+    const std::string targetName = spectatorList.TargetName.empty()
+        ? Localization::Pick("Unknown", "未知")
+        : spectatorList.TargetName;
+
+    std::string titleLine = Localization::Pick("Spectator Info", "观战信息");
+    std::string targetLine = std::string(Localization::Pick("Watching: ", "观战目标: "))
+        + (spectatorList.LocalIsSpectating ? targetName : Localization::Pick("You", "你"));
+    char listTitleBuffer[96]{};
+    std::snprintf(
+        listTitleBuffer,
+        sizeof(listTitleBuffer),
+        Localization::Pick("Spectator List (%zu)", "观战名单 (%zu)"),
+        totalWatchers
+    );
+    std::string listTitleLine = listTitleBuffer;
+
+    if (const std::string clipped = TruncateTextToWidth(titleLine, textMaxWidth); !clipped.empty())
+        titleLine = clipped;
+    if (const std::string clipped = TruncateTextToWidth(targetLine, textMaxWidth); !clipped.empty())
+        targetLine = clipped;
+    if (const std::string clipped = TruncateTextToWidth(listTitleLine, textMaxWidth); !clipped.empty())
+        listTitleLine = clipped;
+
+    float lineY = panelY + 8.0f;
+    drawList->AddText(ImVec2(panelX + 10.0f, lineY), accent, titleLine.c_str());
+    lineY += lineHeight;
+
+    drawList->AddText(ImVec2(panelX + 10.0f, lineY), IM_COL32(225, 225, 225, 255), targetLine.c_str());
+    lineY += lineHeight + 1.0f;
+
+    drawList->AddLine(
+        ImVec2(panelX + 10.0f, lineY),
+        ImVec2(panelX + panelW - 10.0f, lineY),
+        IM_COL32(85, 85, 85, 210),
+        1.0f
+    );
+    lineY += 4.0f;
+
+    drawList->AddText(ImVec2(panelX + 10.0f, lineY), IM_COL32(185, 185, 185, 255), listTitleLine.c_str());
+    lineY += lineHeight;
+
+    for (std::size_t i = 0; i < shownWatchers; ++i)
+    {
+        std::string watcherName = spectatorList.WatcherNames[i];
+        if (watcherName.empty())
+            watcherName = Localization::Pick("Unknown", "未知");
+
+        char rowBuffer[320]{};
+        std::snprintf(rowBuffer, sizeof(rowBuffer), "%02zu. %s", i + 1, watcherName.c_str());
+        std::string line = rowBuffer;
+
+        if (const std::string clipped = TruncateTextToWidth(line, textMaxWidth); !clipped.empty())
+            line = clipped;
+
+        drawList->AddText(
+            ImVec2(panelX + 10.0f, lineY),
+            IM_COL32(225, 225, 225, 255),
+            line.c_str()
+        );
+        lineY += lineHeight;
+    }
+
+    if (hasHiddenWatchers)
+    {
+        char moreLine[64]{};
+        std::snprintf(
+            moreLine,
+            sizeof(moreLine),
+            Localization::Pick("+%zu more...", "+另外%zu人..."),
+            totalWatchers - shownWatchers
+        );
+        drawList->AddText(
+            ImVec2(panelX + 10.0f, lineY),
+            IM_COL32(180, 180, 180, 255),
+            moreLine
+        );
+        lineY += lineHeight;
+    }
 }
 
 void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const
@@ -4106,35 +4288,19 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     if (entities.empty())
         return true;
 
-    const uint32_t pawnHandlePrimaryOffset = Offsets::Schema::m_hPlayerPawn ? Offsets::Schema::m_hPlayerPawn : Offsets::Schema::m_hPawn;
-    const uint32_t pawnHandleFallbackOffset = (Offsets::Schema::m_hPlayerPawn && Offsets::Schema::m_hPawn)
-        ? Offsets::Schema::m_hPawn
-        : 0;
-
-    if (!pawnHandlePrimaryOffset)
+    if (!Offsets::Schema::m_hPawn)
         return true;
 
-    std::vector<uint32_t> fallbackPawnHandles(entities.size(), 0);
     if (const auto pawnHandleScatter = mem.CreateScatterHandle())
     {
         for (size_t i = 0; i < entities.size(); ++i)
         {
             mem.AddScatterReadRequest(
                 pawnHandleScatter,
-                entities[i].Controller + pawnHandlePrimaryOffset,
+                entities[i].Controller + Offsets::Schema::m_hPawn,
                 &entities[i].PawnHandle,
                 sizeof(uint32_t)
             );
-
-            if (pawnHandleFallbackOffset)
-            {
-                mem.AddScatterReadRequest(
-                    pawnHandleScatter,
-                    entities[i].Controller + pawnHandleFallbackOffset,
-                    &fallbackPawnHandles[i],
-                    sizeof(uint32_t)
-                );
-            }
         }
 
         mem.ExecuteReadScatter(pawnHandleScatter);
@@ -4151,9 +4317,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     for (size_t i = 0; i < entities.size(); ++i)
     {
-        if (!entities[i].PawnHandle && pawnHandleFallbackOffset)
-            entities[i].PawnHandle = fallbackPawnHandles[i];
-
         const uint32_t handleIndex = entities[i].PawnHandle & Offsets::EntityList::HandleMask;
         if (!handleIndex)
             continue;
@@ -4214,6 +4377,77 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     else
     {
         return false;
+    }
+
+    int debugObserverPawns = 0;
+    int debugObserverServicesValid = 0;
+    int debugObserverHandleNonZero = 0;
+    int debugObserverTargetResolved = 0;
+
+    if (Offsets::Schema::m_pObserverServices && Offsets::Schema::m_hObserverTarget)
+    {
+        if (const auto observerServiceScatter = mem.CreateScatterHandle())
+        {
+            for (SampledEntityData& entity : entities)
+            {
+                if (!IsLikelyUserAddress(entity.Pawn))
+                    continue;
+                ++debugObserverPawns;
+
+                mem.AddScatterReadRequest(
+                    observerServiceScatter,
+                    entity.Pawn + Offsets::Schema::m_pObserverServices,
+                    &entity.ObserverServices,
+                    sizeof(entity.ObserverServices)
+                );
+            }
+
+            mem.ExecuteReadScatter(observerServiceScatter);
+            mem.CloseScatterHandle(observerServiceScatter);
+        }
+        else
+        {
+            return false;
+        }
+
+        if (const auto observerStateScatter = mem.CreateScatterHandle())
+        {
+            for (SampledEntityData& entity : entities)
+            {
+                if (!IsLikelyUserAddress(entity.ObserverServices))
+                    continue;
+
+                mem.AddScatterReadRequest(
+                    observerStateScatter,
+                    entity.ObserverServices + Offsets::Schema::m_hObserverTarget,
+                    &entity.ObserverTargetHandle,
+                    sizeof(entity.ObserverTargetHandle)
+                );
+                ++debugObserverServicesValid;
+            }
+
+            mem.ExecuteReadScatter(observerStateScatter);
+            mem.CloseScatterHandle(observerStateScatter);
+        }
+        else
+        {
+            return false;
+        }
+
+        for (SampledEntityData& entity : entities)
+        {
+            const std::uint32_t observerHandleIndex = entity.ObserverTargetHandle & Offsets::EntityList::HandleMask;
+            if (!observerHandleIndex)
+                continue;
+            ++debugObserverHandleNonZero;
+
+            const uint64_t observerTarget = sdk.ResolveEntityFromHandle(entity.ObserverTargetHandle, core.EntityList);
+            if (IsLikelyUserAddress(observerTarget))
+            {
+                entity.ObserverTargetPawn = observerTarget;
+                ++debugObserverTargetResolved;
+            }
+        }
     }
 
     std::vector<SampledEntityData*> activeEntities{};
@@ -4348,10 +4582,17 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     outFrame.Players.clear();
     outFrame.Players.reserve(activeEntities.size());
 
-    std::unordered_set<uint64_t> activeControllers{};
+    std::unordered_set<uint64_t> seenControllers{};
     std::unordered_set<uint64_t> activePawns{};
-    activeControllers.reserve(activeEntities.size());
+    seenControllers.reserve(entities.size() + 1);
     activePawns.reserve(activeEntities.size());
+    if (IsLikelyUserAddress(core.LocalController))
+        seenControllers.insert(core.LocalController);
+    for (const SampledEntityData& entity : entities)
+    {
+        if (IsLikelyUserAddress(entity.Controller))
+            seenControllers.insert(entity.Controller);
+    }
 
     constexpr auto kMoneyPollInterval = std::chrono::seconds(1);
     constexpr auto kPostFreezeDuration = std::chrono::seconds(20);
@@ -4380,7 +4621,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
             continue;
 
-        activeControllers.insert(entity->Controller);
         activePawns.insert(entity->Pawn);
 
         ControllerIdentityCache& identityCache = m_ControllerIdentityCache[entity->Controller];
@@ -4468,7 +4708,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     for (auto it = m_ControllerIdentityCache.begin(); it != m_ControllerIdentityCache.end();)
     {
-        if (activeControllers.find(it->first) == activeControllers.end())
+        if (seenControllers.find(it->first) == seenControllers.end())
             it = m_ControllerIdentityCache.erase(it);
         else
             ++it;
@@ -4480,6 +4720,137 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             it = m_PawnRuntimeCache.erase(it);
         else
             ++it;
+    }
+
+    outFrame.SpectatorList = {};
+    if (config.Visuals.SpectatorList &&
+        IsLikelyUserAddress(core.LocalController) &&
+        Offsets::Schema::m_hPawn &&
+        Offsets::Schema::m_pObserverServices &&
+        Offsets::Schema::m_hObserverTarget)
+    {
+        SpectatorListSnapshot spectatorSnapshot{};
+        spectatorSnapshot.Valid = true;
+
+        auto ensureControllerName = [&](const uint64_t controller) -> std::string
+        {
+            if (!IsLikelyUserAddress(controller))
+                return {};
+
+            ControllerIdentityCache& identityCache = m_ControllerIdentityCache[controller];
+            if (identityCache.Name.empty() || identityCache.RoundEpoch != m_RoundEpoch)
+            {
+                identityCache.Name = ReadPlayerName(controller);
+                identityCache.RoundEpoch = m_RoundEpoch;
+            }
+
+            return identityCache.Name;
+        };
+
+        auto resolveObserverTargetFromPawn = [&](const uint64_t observerPawn) -> uint64_t
+        {
+            if (!IsLikelyUserAddress(observerPawn))
+                return 0;
+
+            const uint64_t observerServices = mem.Read<uint64_t>(observerPawn + Offsets::Schema::m_pObserverServices);
+            if (!IsLikelyUserAddress(observerServices))
+                return 0;
+
+            const uint32_t targetHandle = mem.Read<uint32_t>(observerServices + Offsets::Schema::m_hObserverTarget);
+            if (!(targetHandle & Offsets::EntityList::HandleMask))
+                return 0;
+
+            const uint64_t targetPawn = sdk.ResolveEntityFromHandle(targetHandle, core.EntityList);
+            return IsLikelyUserAddress(targetPawn) ? targetPawn : 0;
+        };
+
+        const uint32_t localPawnHandle = mem.Read<uint32_t>(core.LocalController + Offsets::Schema::m_hPawn);
+        const uint64_t localPawnFromController = sdk.ResolveEntityFromHandle(localPawnHandle, core.EntityList);
+        const uint64_t localSpectateTargetPawn = resolveObserverTargetFromPawn(localPawnFromController);
+
+        const bool localAlive = IsAlive(local.Health, local.LifeState);
+        spectatorSnapshot.LocalIsSpectating = IsLikelyUserAddress(localSpectateTargetPawn);
+        const uint64_t watchTargetPawn = spectatorSnapshot.LocalIsSpectating ? localSpectateTargetPawn : localPawnFromController;
+
+        std::unordered_map<uint64_t, uint64_t> controllerByPawn{};
+        controllerByPawn.reserve(entities.size() + 1);
+        for (const SampledEntityData& entity : entities)
+        {
+            if (!IsLikelyUserAddress(entity.Pawn) || !IsLikelyUserAddress(entity.Controller))
+                continue;
+            controllerByPawn[entity.Pawn] = entity.Controller;
+        }
+        if (IsLikelyUserAddress(localPawnFromController))
+            controllerByPawn[localPawnFromController] = core.LocalController;
+
+        if (const auto targetIt = controllerByPawn.find(watchTargetPawn); targetIt != controllerByPawn.end())
+            spectatorSnapshot.TargetName = ensureControllerName(targetIt->second);
+
+        if (spectatorSnapshot.TargetName.empty())
+        {
+            spectatorSnapshot.TargetName = spectatorSnapshot.LocalIsSpectating
+                ? Localization::Pick("Unknown", "未知")
+                : Localization::Pick("You", "你");
+        }
+
+        std::unordered_set<uint64_t> uniqueWatcherControllers{};
+        uniqueWatcherControllers.reserve(entities.size());
+        int debugWatcherCandidates = 0;
+        for (const SampledEntityData& entity : entities)
+        {
+            if (!IsLikelyUserAddress(entity.Pawn) || !IsLikelyUserAddress(entity.Controller))
+                continue;
+            if (entity.Controller == core.LocalController)
+                continue;
+            if (!IsLikelyUserAddress(entity.ObserverTargetPawn))
+                continue;
+            ++debugWatcherCandidates;
+            if (!IsLikelyUserAddress(watchTargetPawn) || entity.ObserverTargetPawn != watchTargetPawn)
+                continue;
+            if (!uniqueWatcherControllers.insert(entity.Controller).second)
+                continue;
+
+            std::string watcherName = ensureControllerName(entity.Controller);
+            if (watcherName.empty())
+                watcherName = Localization::Pick("Unknown", "未知");
+
+            spectatorSnapshot.WatcherNames.push_back(std::move(watcherName));
+        }
+
+        std::sort(spectatorSnapshot.WatcherNames.begin(), spectatorSnapshot.WatcherNames.end());
+
+        if (config.DebugEnabled && config.DebugSpectatorList)
+        {
+            constexpr auto kLogInterval = std::chrono::milliseconds(700);
+            if (m_LastSpectatorDebugLog.time_since_epoch().count() == 0 ||
+                now - m_LastSpectatorDebugLog >= kLogInterval)
+            {
+                m_LastSpectatorDebugLog = now;
+                LOG_INFO("[spec dbg] path: ctl->hPawn->obsSvc->hObsTarget");
+                LOG_INFO(
+                    "[spec dbg] obs: pawns={} svc={} handles={} resolved={}",
+                    debugObserverPawns,
+                    debugObserverServicesValid,
+                    debugObserverHandleNonZero,
+                    debugObserverTargetResolved
+                );
+                LOG_INFO(
+                    "[spec dbg] local: alive={} spec={} lp=0x{:X} tgt=0x{:X}",
+                    localAlive ? 1 : 0,
+                    spectatorSnapshot.LocalIsSpectating ? 1 : 0,
+                    static_cast<unsigned long long>(localPawnFromController),
+                    static_cast<unsigned long long>(watchTargetPawn)
+                );
+                LOG_INFO(
+                    "[spec dbg] list: cand={} match={}",
+                    debugWatcherCandidates,
+                    spectatorSnapshot.WatcherNames.size()
+                );
+            }
+        }
+
+        if (!spectatorSnapshot.WatcherNames.empty())
+            outFrame.SpectatorList = std::move(spectatorSnapshot);
     }
 
     if (config.Visuals.C4)
@@ -4704,6 +5075,9 @@ void ESP::Render(ImDrawList* drawList)
 
         if (config.Visuals.C4)
             RenderC4(drawList, frame.C4);
+
+        if (config.Visuals.SpectatorList)
+            RenderSpectatorList(drawList, frame.SpectatorList);
     }
 
     if (renderVisDebug)

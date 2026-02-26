@@ -76,6 +76,14 @@ struct C4Snapshot
     bool OnScreen = false;
 };
 
+struct SpectatorListSnapshot
+{
+    bool Valid = false;
+    bool LocalIsSpectating = false;
+    std::string TargetName{};
+    std::vector<std::string> WatcherNames{};
+};
+
 struct TriggerBoneSnapshot
 {
     uint64_t Pawn = 0;
@@ -173,6 +181,7 @@ private:
     {
         std::vector<PlayerEspSnapshot> Players{};
         C4Snapshot C4{};
+        SpectatorListSnapshot SpectatorList{};
         GrenadeHelperSnapshot GrenadeHelper{};
         std::string MapStatus = "Map Status: (Waiting)";
         std::uint32_t ResolvedControllers = 0;
@@ -214,6 +223,7 @@ private:
     void RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, ImU32 color) const;
     void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
+    void RenderSpectatorList(ImDrawList* drawList, const SpectatorListSnapshot& spectatorList) const;
     void RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const;
     void RenderVisCheckDebug(ImDrawList* drawList) const;
     void BuildVisCheckDebugOverlaySnapshot();
@@ -299,6 +309,7 @@ private:
     std::chrono::steady_clock::time_point m_LastRoundEpochTick{};
     bool m_LastFreezePeriod = false;
     std::chrono::steady_clock::time_point m_LastFreezeEndTick{};
+    std::chrono::steady_clock::time_point m_LastSpectatorDebugLog{};
 
 public:
     bool IsPawnVisibleCached(uint64_t pawn) const;
