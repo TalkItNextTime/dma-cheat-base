@@ -237,19 +237,14 @@ namespace
 		if (keys.Space) keyboard.push_back("Space");
 
 		std::vector<std::string> out{};
-		out.reserve(keyboard.size() * 2 + 1);
+		out.reserve(keyboard.size() + (includePlus ? 2 : 1));
 		out.push_back(keys.Mouse.empty() ? std::string("LB") : keys.Mouse);
 		if (!keyboard.empty())
 		{
 			if (includePlus)
 			{
 				out.push_back("+");
-				for (size_t i = 0; i < keyboard.size(); ++i)
-				{
-					if (i > 0)
-						out.push_back("+");
-					out.push_back(keyboard[i]);
-				}
+				out.insert(out.end(), keyboard.begin(), keyboard.end());
 			}
 			else
 			{

@@ -14,7 +14,7 @@ if ([string]::IsNullOrWhiteSpace($OutFile)) {
 }
 
 $keysPath = (Resolve-Path -LiteralPath $KeysDir).Path
-$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Shift", "Shift_en", "Ctrl", "Space", "Space_en")
+$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Shift", "Ctrl", "Space")
 $result = [ordered]@{}
 
 foreach ($token in $tokenOrder) {

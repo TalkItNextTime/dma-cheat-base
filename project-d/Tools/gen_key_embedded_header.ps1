@@ -18,7 +18,7 @@ if ($ChunkSize -lt 16) {
     throw "ChunkSize must be >= 16"
 }
 
-$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Shift", "Shift_en", "Ctrl", "Space", "Space_en")
+$tokenOrder = @("LB", "RB", "LRB", "Plus", "W", "A", "S", "D", "Shift", "Ctrl", "Space")
 $jsonText = Get-Content -LiteralPath $JsonPath -Raw -Encoding UTF8
 $icons = $jsonText | ConvertFrom-Json
 

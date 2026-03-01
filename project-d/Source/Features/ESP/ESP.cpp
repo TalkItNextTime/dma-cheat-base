@@ -576,18 +576,13 @@ namespace
         if (keys.Space) keyboard.push_back("Space");
 
         std::vector<std::string> out{};
-        out.reserve(keyboard.size() * 2 + 1);
+        out.reserve(keyboard.size() + 2);
         out.push_back(keys.Mouse.empty() ? std::string("LB") : keys.Mouse);
 
         if (!keyboard.empty())
         {
             out.push_back("Plus");
-            for (size_t i = 0; i < keyboard.size(); ++i)
-            {
-                if (i > 0)
-                    out.push_back("Plus");
-                out.push_back(keyboard[i]);
-            }
+            out.insert(out.end(), keyboard.begin(), keyboard.end());
         }
 
         return out;
@@ -810,13 +805,13 @@ namespace
             upper == "静步" || upper == "静走" || upper == "慢走" || upper == "走" || upper == "静")
             return "Shift";
         if (upper == "SHIFT_EN" || upper == "SHIFTEN" || upper == "SHIFT-EN")
-            return "Shift_en";
+            return "Shift";
         if (upper == "CTRL" || upper == "CONTROL")
             return "Ctrl";
         if (upper == "SPACE")
             return "Space";
         if (upper == "SPACE_EN" || upper == "SPACEEN" || upper == "SPACE-EN")
-            return "Space_en";
+            return "Space";
         return {};
     }
 
@@ -841,13 +836,9 @@ namespace
             return "D";
         if (normalized == "Shift")
             return Localization::Pick("Shift", "静步");
-        if (normalized == "Shift_en")
-            return "Shift";
         if (normalized == "Ctrl")
             return "Ctrl";
         if (normalized == "Space")
-            return "Space";
-        if (normalized == "Space_en")
             return "Space";
         return rawToken;
     }
@@ -1180,12 +1171,6 @@ namespace
         if (token.empty() || !device)
             return nullptr;
 
-        const std::string preferredToken =
-            (token == "Space" && !Localization::IsChinese()) ? std::string("Space_en") :
-            (token == "Shift" && !Localization::IsChinese()) ? std::string("Shift_en") :
-            token;
-        const bool hasFallbackToken = preferredToken != token;
-
         KeyIconCache& cache = GetKeyIconCache();
         std::lock_guard lock(cache.Mutex);
 
@@ -1197,13 +1182,8 @@ namespace
             return loaded->second.Srv ? &loaded->second : nullptr;
         };
 
-        if (const KeyIconTexture* loaded = findLoadedTexture(preferredToken))
+        if (const KeyIconTexture* loaded = findLoadedTexture(token))
             return loaded;
-        if (hasFallbackToken)
-        {
-            if (const KeyIconTexture* loaded = findLoadedTexture(token))
-                return loaded;
-        }
 
         if (!EnsureKeyIconBase64Loaded(cache))
             return nullptr;
@@ -1248,15 +1228,7 @@ namespace
             return cache.Textures[key].Srv ? &cache.Textures[key] : nullptr;
         };
 
-        if (const KeyIconTexture* created = loadEncodedTexture(preferredToken))
-            return created;
-        if (hasFallbackToken)
-        {
-            if (const KeyIconTexture* created = loadEncodedTexture(token))
-                return created;
-        }
-
-        return nullptr;
+        return loadEncodedTexture(token);
     }
 
     struct WeaponIconCache
