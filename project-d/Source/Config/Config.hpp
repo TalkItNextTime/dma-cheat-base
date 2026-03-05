@@ -158,6 +158,7 @@ namespace Config
                 nlohmann::json& out = j["Aim"]["FlickProfiles"][name];
                 out["Fov"] = profile.Fov;
                 out["Smooth"] = profile.Smooth;
+                out["FollowSmooth"] = profile.FollowSmooth;
                 out["MaxFlickTimeMs"] = profile.MaxFlickTimeMs;
                 out["RestartIntervalMs"] = profile.RestartIntervalMs;
                 out["BoneMask"] = profile.BoneMask;
@@ -178,6 +179,7 @@ namespace Config
                 nlohmann::json& out = j["Aim"]["FlickSpecialProfiles"][name];
                 out["Fov"] = profile.Fov;
                 out["Smooth"] = profile.Smooth;
+                out["FollowSmooth"] = profile.FollowSmooth;
                 out["MaxFlickTimeMs"] = profile.MaxFlickTimeMs;
                 out["RestartIntervalMs"] = profile.RestartIntervalMs;
                 out["BoneMask"] = profile.BoneMask;
@@ -629,11 +631,12 @@ namespace Config
                 writeDefaultTriggerProfile("Sniper", 3.8f, 45, 650, 0, Structs::AimAllBoneMask);
                 writeDefaultTriggerProfile("Lmg", 4.2f, 40, 70, 0, Structs::AimAllBoneMask);
 
-                auto writeDefaultFlickProfile = [&](const char* name, float fov, float smooth, int maxFlickTimeMs, int restartIntervalMs, bool dynamicFovEnabled, bool autowallEnabled, bool autowallKillshotOnly, std::uint64_t boneMask)
+                auto writeDefaultFlickProfile = [&](const char* name, float fov, float smooth, float followSmooth, int maxFlickTimeMs, int restartIntervalMs, bool dynamicFovEnabled, bool autowallEnabled, bool autowallKillshotOnly, std::uint64_t boneMask)
                 {
                     nlohmann::json& p = j["Aim"]["FlickProfiles"][name];
                     p["Fov"] = fov;
                     p["Smooth"] = smooth;
+                    p["FollowSmooth"] = followSmooth;
                     p["MaxFlickTimeMs"] = maxFlickTimeMs;
                     p["RestartIntervalMs"] = restartIntervalMs;
                     p["BoneMask"] = boneMask;
@@ -642,12 +645,12 @@ namespace Config
                     p["AutowallKillshotOnly"] = autowallKillshotOnly;
                 };
 
-                writeDefaultFlickProfile("Pistol", 6.8f, 14.0f, 210, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
-                writeDefaultFlickProfile("Smg", 7.6f, 15.5f, 220, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
-                writeDefaultFlickProfile("Shotgun", 9.5f, 11.0f, 200, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
-                writeDefaultFlickProfile("Rifle", 6.2f, 16.0f, 230, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
-                writeDefaultFlickProfile("Sniper", 4.2f, 22.0f, 260, 140, false, false, false, Structs::AimDefaultAimbotBoneMask);
-                writeDefaultFlickProfile("Lmg", 6.8f, 17.0f, 240, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Pistol", 6.8f, 14.0f, 22.0f, 210, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Smg", 7.6f, 15.5f, 22.0f, 220, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Shotgun", 9.5f, 11.0f, 20.0f, 200, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Rifle", 6.2f, 16.0f, 24.0f, 230, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Sniper", 4.2f, 22.0f, 30.0f, 260, 140, false, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Lmg", 6.8f, 17.0f, 24.0f, 240, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
 
                 nlohmann::json& flickSpecial = j["Aim"]["FlickSpecialProfiles"];
                 flickSpecial["DesertEagle"] = j["Aim"]["FlickProfiles"]["Pistol"];
@@ -900,6 +903,7 @@ namespace Config
                     const auto& node = flickRoot[name];
                     if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
                     if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("FollowSmooth")) profile.FollowSmooth = node["FollowSmooth"].get<float>();
                     if (node.contains("MaxFlickTimeMs")) profile.MaxFlickTimeMs = node["MaxFlickTimeMs"].get<int>();
                     if (node.contains("RestartIntervalMs")) profile.RestartIntervalMs = node["RestartIntervalMs"].get<int>();
                     if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
@@ -941,6 +945,7 @@ namespace Config
                     const auto& node = flickSpecialRoot[name];
                     if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
                     if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("FollowSmooth")) profile.FollowSmooth = node["FollowSmooth"].get<float>();
                     if (node.contains("MaxFlickTimeMs")) profile.MaxFlickTimeMs = node["MaxFlickTimeMs"].get<int>();
                     if (node.contains("RestartIntervalMs")) profile.RestartIntervalMs = node["RestartIntervalMs"].get<int>();
                     if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
@@ -1127,6 +1132,7 @@ namespace Config
             {
                 profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
                 profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+                profile.FollowSmooth = std::clamp(profile.FollowSmooth, 1.0f, 100.0f);
                 profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
                 profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
                 profile.BoneMask &= Structs::AimAllBoneMask;
@@ -1138,6 +1144,7 @@ namespace Config
             {
                 profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
                 profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+                profile.FollowSmooth = std::clamp(profile.FollowSmooth, 1.0f, 100.0f);
                 profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
                 profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
                 profile.BoneMask &= Structs::AimAllBoneMask;

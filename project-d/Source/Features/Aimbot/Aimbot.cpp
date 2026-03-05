@@ -950,12 +950,16 @@ void Aimbot::UpdateFlickbot()
 
     auto resetFlickHold = [&]()
     {
+        if (m_FlickOwnsMouseHold)
+            ReleaseTriggerMouseIfHeld();
         m_FlickLockedTargetPawn = 0;
         m_FlickShotFiredThisHold = false;
         m_FlickForceFireThisHold = false;
         m_FlickStartTime = {};
         m_FlickNextCycleAt = {};
         m_LastFlickScanAt = {};
+        m_FlickRevolverFollowMode = false;
+        m_FlickOwnsMouseHold = false;
         m_FlickAutowallTargetPawnVisual.store(0ull, std::memory_order_relaxed);
     };
 
@@ -992,6 +996,8 @@ void Aimbot::UpdateFlickbot()
         m_FlickLockedTargetPawn = 0;
         m_FlickNextCycleAt = {};
         m_LastFlickScanAt = {};
+        m_FlickRevolverFollowMode = false;
+        m_FlickOwnsMouseHold = false;
     }
 
     if (!hotkeyActive)
@@ -1002,6 +1008,10 @@ void Aimbot::UpdateFlickbot()
         return;
     }
     m_FlickHotkeyWasActive = true;
+    const auto now = std::chrono::steady_clock::now();
+    UpdateTriggerMouseState(now);
+    if (!m_TriggerMouseHeld)
+        m_FlickOwnsMouseHold = false;
 
     const SDK::CoreCache core = sdk.GetCoreCache();
     if (!core.IsValid || !IsLikelyUserAddress(core.LocalPawn) || !IsLikelyUserAddress(core.EntityList))
@@ -1065,6 +1075,7 @@ void Aimbot::UpdateFlickbot()
         profile = config.Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Revolver];
     profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
     profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+    profile.FollowSmooth = std::clamp(profile.FollowSmooth, 1.0f, 100.0f);
     profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
     profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
     profile.BoneMask = NormalizeBoneMask(profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
@@ -1146,20 +1157,31 @@ void Aimbot::UpdateFlickbot()
         }
     }
 
-    const auto now = std::chrono::steady_clock::now();
+    constexpr int kRevolverFlickAimWindowMs = 235;
     const int flickRestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
     const int holdFireMs = weapon.IsRevolver
-        ? std::clamp(config.Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Revolver].HoldFireMs, 0, 1200)
+        ? kRevolverFlickAimWindowMs
         : std::clamp(config.Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Deagle].HoldFireMs, 0, 1200);
 
+    const int activeMaxFlickMs = weapon.IsRevolver ? kRevolverFlickAimWindowMs : profile.MaxFlickTimeMs;
     if (!m_FlickShotFiredThisHold &&
         m_FlickStartTime.time_since_epoch().count() != 0 &&
-        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_FlickStartTime).count() >= profile.MaxFlickTimeMs)
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_FlickStartTime).count() >= activeMaxFlickMs)
     {
-        TriggerFireClick(holdFireMs);
+        if (!weapon.IsRevolver)
+        {
+            TriggerFireClick(holdFireMs);
+            m_FlickOwnsMouseHold = true;
+            m_FlickForceFireThisHold = true;
+        }
+        else
+        {
+            m_FlickForceFireThisHold = false;
+        }
+
         m_FlickShotFiredThisHold = true;
-        m_FlickForceFireThisHold = true;
         m_FlickLockedTargetPawn = 0;
+        m_FlickRevolverFollowMode = false;
         m_FlickNextCycleAt = now + std::chrono::milliseconds(flickRestartIntervalMs);
         setFlickVisual(true, false);
         return;
@@ -1179,6 +1201,7 @@ void Aimbot::UpdateFlickbot()
         m_FlickStartTime = {};
         m_FlickNextCycleAt = {};
         m_LastFlickScanAt = {};
+        m_FlickRevolverFollowMode = false;
     }
 
     TargetCandidate activeTarget{};
@@ -1328,9 +1351,27 @@ void Aimbot::UpdateFlickbot()
 
     if (!hasActiveTarget || !activeSnapshot)
     {
+        if (weapon.IsRevolver && m_FlickStartTime.time_since_epoch().count() != 0)
+        {
+            if (m_FlickOwnsMouseHold)
+                ReleaseTriggerMouseIfHeld();
+            m_FlickOwnsMouseHold = false;
+            m_FlickStartTime = {};
+            m_FlickRevolverFollowMode = false;
+        }
+
         m_FlickLockedTargetPawn = 0;
         setFlickVisual(true, false);
         return;
+    }
+
+    if (weapon.IsRevolver && m_FlickStartTime.time_since_epoch().count() == 0)
+    {
+        // R8 mode: only start cock/hold once flick has a valid target.
+        TriggerFireClick(kRevolverFlickAimWindowMs);
+        m_FlickOwnsMouseHold = true;
+        m_FlickStartTime = now;
+        m_FlickRevolverFollowMode = false;
     }
 
     m_FlickLockedTargetPawn = activeTarget.Pawn;
@@ -1349,13 +1390,21 @@ void Aimbot::UpdateFlickbot()
         headRadius,
         bestDistance))
     {
-        TriggerFireClick(holdFireMs);
-        m_FlickShotFiredThisHold = true;
-        m_FlickForceFireThisHold = false;
-        m_FlickLockedTargetPawn = 0;
-        m_FlickNextCycleAt = now + std::chrono::milliseconds(flickRestartIntervalMs);
-        setFlickVisual(true, true);
-        return;
+        if (weapon.IsRevolver)
+        {
+            m_FlickRevolverFollowMode = true;
+        }
+        else
+        {
+            TriggerFireClick(holdFireMs);
+            m_FlickOwnsMouseHold = true;
+            m_FlickShotFiredThisHold = true;
+            m_FlickForceFireThisHold = false;
+            m_FlickLockedTargetPawn = 0;
+            m_FlickNextCycleAt = now + std::chrono::milliseconds(flickRestartIntervalMs);
+            setFlickVisual(true, true);
+            return;
+        }
     }
 
     Vector2 delta{
@@ -1364,7 +1413,10 @@ void Aimbot::UpdateFlickbot()
     };
 
     const float rawDistance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
-    const float smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+    const float activeSmooth = (weapon.IsRevolver && m_FlickRevolverFollowMode)
+        ? profile.FollowSmooth
+        : profile.Smooth;
+    const float smooth = std::clamp(activeSmooth, 1.0f, 100.0f);
     const float baseSmoothing = std::clamp(1.0f / (0.90f + 0.09f * smooth), 0.03f, 1.0f);
     const float distanceBoost = std::clamp(rawDistance / 170.0f, 0.0f, 1.5f);
     const float smoothingFactor = std::clamp(baseSmoothing * (1.0f + distanceBoost * 0.45f), 0.03f, 1.0f);

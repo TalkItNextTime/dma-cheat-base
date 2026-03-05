@@ -1810,7 +1810,15 @@ void Overlay::RenderMenu()
 														config.Aim.FlickSpecialEditorIndex = i;
 														Structs::FlickWeaponProfile& profile = config.Aim.FlickSpecialProfiles[i];
 														ImAdd::SliderFloat(Localization::Pick("Flick Smooth", "甩枪平滑"), &profile.Smooth, 1.0f, 100.0f);
-														ImAdd::SliderInt(Localization::Pick("Max Flick Time (ms)", "最长甩枪时间 (ms)"), &profile.MaxFlickTimeMs, 10, 5000);
+														if (i == Structs::TriggerSpecial_Revolver)
+														{
+															ImGui::TextDisabled("%s", Localization::Pick("R8 max aim time is fixed at 235ms.", "R8 最长瞄准时间固定为 235ms。"));
+															ImAdd::SliderFloat(Localization::Pick("R8 Follow Smooth", "R8 跟枪平滑"), &profile.FollowSmooth, 1.0f, 100.0f);
+														}
+														else
+														{
+															ImAdd::SliderInt(Localization::Pick("Max Flick Time (ms)", "最长甩枪时间 (ms)"), &profile.MaxFlickTimeMs, 10, 5000);
+														}
 														ImAdd::SliderInt(Localization::Pick("Restart Interval (ms)", "重启甩枪间隔 (ms)"), &profile.RestartIntervalMs, 0, 5000);
 														ImAdd::SliderFloat(Localization::Pick("Flick FOV", "甩枪FOV"), &profile.Fov, 0.1f, 60.0f);
 														ImAdd::CheckBox(Localization::Pick("Dynamic FOV", "动态FOV"), &profile.DynamicFovEnabled);

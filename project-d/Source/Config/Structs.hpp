@@ -221,6 +221,7 @@ namespace Structs
     {
         float Fov = 6.0f;
         float Smooth = 14.0f;
+        float FollowSmooth = 22.0f;
         int MaxFlickTimeMs = 220;
         int RestartIntervalMs = 120;
         std::uint64_t BoneMask = AimDefaultAimbotBoneMask;

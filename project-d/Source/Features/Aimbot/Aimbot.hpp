@@ -73,6 +73,8 @@ private:
 	std::chrono::steady_clock::time_point m_FlickStartTime{};
 	std::chrono::steady_clock::time_point m_FlickNextCycleAt{};
 	std::chrono::steady_clock::time_point m_LastFlickScanAt{};
+	bool m_FlickRevolverFollowMode = false;
+	bool m_FlickOwnsMouseHold = false;
 
 	std::chrono::steady_clock::time_point m_LastTargetScanAt{};
 	Vector2 m_RecoilPos{};
