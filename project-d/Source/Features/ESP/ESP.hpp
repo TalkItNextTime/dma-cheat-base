@@ -315,6 +315,7 @@ private:
 
 private:
     std::unique_ptr<VisCheck> m_VisCheck{};
+    mutable std::mutex m_VisCheckMutex{};
     std::vector<PendingMapLoad> m_PendingMapLoads{};
     uint64_t m_NextMapRequestId = 0;
     uint64_t m_ActiveMapRequestId = 0;
@@ -359,6 +360,7 @@ private:
     std::chrono::steady_clock::time_point m_LastSpectatorDebugLog{};
 
 public:
+    bool QueryPenetrationSegments(const Vector3& src, const Vector3& dst, std::vector<VisCheck::PenetrationSegment>& outSegments) const;
     bool IsPawnVisibleCached(uint64_t pawn) const;
     std::unordered_set<uint64_t> GetVisiblePawnSetSnapshot() const;
     std::vector<TriggerBoneSnapshot> GetTriggerBoneSnapshots() const;

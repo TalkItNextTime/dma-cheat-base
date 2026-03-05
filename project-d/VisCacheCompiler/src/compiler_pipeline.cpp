@@ -49,6 +49,7 @@ bool compile_vphys_to_cache(
     map.vertices = std::move(parse_result.mesh.vertices);
     map.indices = std::move(parse_result.mesh.indices);
     map.triangle_kinds = std::move(parse_result.triangle_sources);
+    map.triangle_material_hashes = std::move(parse_result.triangle_material_hashes);
     map.bvh_nodes = std::move(bvh.nodes);
     map.bvh_primitive_order = std::move(bvh.primitive_order);
 

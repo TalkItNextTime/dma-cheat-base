@@ -91,7 +91,7 @@ int main()
 
     while (overlay.shouldRun)
     {
-        PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger, config.DebugVisCheck);
+        PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger, config.DebugVisCheck, config.DebugAutowall);
         PerfDebug::SyncDebugThread();
 
         TIMER("Global render");

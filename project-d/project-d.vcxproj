@@ -82,6 +82,9 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(ProjectDir)Data\autowall" xcopy /Y /I /E "$(ProjectDir)Data\autowall" "$(OutDir)Data\autowall\" &gt;nul</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -107,6 +110,9 @@
       <LargeAddressAware>true</LargeAddressAware>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(ProjectDir)Data\autowall" xcopy /Y /I /E "$(ProjectDir)Data\autowall" "$(OutDir)Data\autowall\" &gt;nul</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="External\imgui\addons\imgui_addons.h" />
@@ -123,6 +129,7 @@
     <ClInclude Include="Source\Math\Parser.hpp" />
     <ClInclude Include="Source\Math\Vector.hpp" />
     <ClInclude Include="Source\Features\Aimbot\Aimbot.hpp" />
+    <ClInclude Include="Source\Features\Aimbot\AutowallEngine.hpp" />
     <ClInclude Include="Source\Config\Config.hpp" />
     <ClInclude Include="Source\Config\Structs.hpp" />
     <ClInclude Include="Source\Features\ESP\ESP.hpp" />
@@ -277,6 +284,7 @@
     </ClCompile>
     <ClCompile Include="Source\Dma\DMA.cpp" />
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp" />
+    <ClCompile Include="Source\Features\Aimbot\AutowallEngine.cpp" />
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
     <ClCompile Include="Source\Features\Radar\Radar.cpp" />
     <ClCompile Include="VisCheckCS2\Parser.cpp">

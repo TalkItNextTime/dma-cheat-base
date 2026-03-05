@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
@@ -24,7 +25,8 @@ namespace
         Indices = 2,
         BvhNodes = 3,
         BvhPrimitiveOrder = 4,
-        TriangleKinds = 5
+        TriangleKinds = 5,
+        TriangleMaterialHashes = 6
     };
 
     struct CacheHeader
@@ -176,6 +178,8 @@ bool VisCheck::LoadCacheGeometry(const std::string& cacheFilePath)
     cacheVertices.clear();
     cacheIndices.clear();
     cacheTriangleKinds.clear();
+    cacheTriangleMaterialHashes.clear();
+    hasMaterialSection = false;
     cacheNodes.clear();
     cachePrimitiveOrder.clear();
     debugTriangles.clear();
@@ -231,6 +235,7 @@ bool VisCheck::LoadCacheGeometry(const std::string& cacheFilePath)
     const CacheSectionEntry* nodesSection = findSection(CacheSectionId::BvhNodes);
     const CacheSectionEntry* orderSection = findSection(CacheSectionId::BvhPrimitiveOrder);
     const CacheSectionEntry* kindsSection = findSection(CacheSectionId::TriangleKinds);
+    const CacheSectionEntry* materialSection = findSection(CacheSectionId::TriangleMaterialHashes);
     if (!verticesSection || !indicesSection || !nodesSection || !orderSection)
         return false;
 
@@ -248,6 +253,18 @@ bool VisCheck::LoadCacheGeometry(const std::string& cacheFilePath)
     else
     {
         cacheTriangleKinds.clear();
+    }
+
+    if (materialSection != nullptr)
+    {
+        if (!CopySectionToVector(bytes, *materialSection, cacheTriangleMaterialHashes))
+            return false;
+        hasMaterialSection = true;
+    }
+    else
+    {
+        cacheTriangleMaterialHashes.clear();
+        hasMaterialSection = false;
     }
 
     std::vector<CacheBvhNodeDisk> diskNodes{};
@@ -279,6 +296,10 @@ bool VisCheck::LoadCacheGeometry(const std::string& cacheFilePath)
 
     const std::size_t triCount = cacheIndices.size() / 3;
     if (!cacheTriangleKinds.empty() && cacheTriangleKinds.size() != triCount)
+        return false;
+    if (!cacheTriangleMaterialHashes.empty() && cacheTriangleMaterialHashes.size() != triCount)
+        return false;
+    if (hasMaterialSection && cacheTriangleMaterialHashes.empty() && triCount > 0)
         return false;
 
     for (const std::uint32_t triId : cachePrimitiveOrder)
@@ -315,6 +336,11 @@ bool VisCheck::LoadCacheGeometry(const std::string& cacheFilePath)
 bool VisCheck::IsReady() const
 {
     return ready;
+}
+
+bool VisCheck::HasPenetrationMaterialData() const
+{
+    return ready && hasMaterialSection && !cacheTriangleMaterialHashes.empty();
 }
 
 void VisCheck::BuildCacheDebugGeometry()
@@ -470,6 +496,180 @@ bool VisCheck::IntersectCacheBvh(
     }
 
     return hit;
+}
+
+void VisCheck::CollectCacheIntersections(
+    const Vector3& rayOrigin,
+    const Vector3& rayDir,
+    const float maxDistance,
+    std::vector<std::pair<float, std::uint32_t>>& outIntersections) const
+{
+    outIntersections.clear();
+    if (!ready || cacheNodes.empty() || cacheIndices.empty() || cacheVertices.empty() || cachePrimitiveOrder.empty())
+        return;
+
+    const RayCache ray = MakeRay(rayOrigin, rayDir);
+    std::vector<std::uint32_t> stack{};
+    stack.reserve(256);
+    stack.push_back(0);
+
+    while (!stack.empty())
+    {
+        const std::uint32_t nodeIndex = stack.back();
+        stack.pop_back();
+        if (nodeIndex >= cacheNodes.size())
+            continue;
+
+        const CacheBvhNode& node = cacheNodes[nodeIndex];
+
+        struct ChildVisit
+        {
+            float tNear = 0.0f;
+            const CacheBvhChild* child = nullptr;
+        };
+
+        std::array<ChildVisit, 4> visits{};
+        std::uint32_t visitCount = 0;
+
+        for (std::uint32_t i = 0; i < node.childCount && i < 4; ++i)
+        {
+            const CacheBvhChild& child = node.children[i];
+            float tNear = 0.0f;
+            if (RayIntersectsAabb(ray, child.bounds, maxDistance, &tNear))
+                visits[visitCount++] = { tNear, &child };
+        }
+
+        std::sort(
+            visits.begin(),
+            visits.begin() + static_cast<std::ptrdiff_t>(visitCount),
+            [](const ChildVisit& lhs, const ChildVisit& rhs)
+            {
+                return lhs.tNear < rhs.tNear;
+            });
+
+        for (std::uint32_t i = 0; i < visitCount; ++i)
+        {
+            const CacheBvhChild* child = visits[i].child;
+            if (!child)
+                continue;
+
+            if (child->isLeaf)
+            {
+                const std::size_t begin = child->index;
+                const std::size_t end = begin + child->count;
+                if (begin > cachePrimitiveOrder.size() || end > cachePrimitiveOrder.size())
+                    continue;
+
+                for (std::size_t primitive = begin; primitive < end; ++primitive)
+                {
+                    const std::uint32_t triId = cachePrimitiveOrder[primitive];
+                    const std::size_t triBase = static_cast<std::size_t>(triId) * 3;
+                    if (triBase + 2 >= cacheIndices.size())
+                        continue;
+
+                    const std::uint32_t i0 = cacheIndices[triBase];
+                    const std::uint32_t i1 = cacheIndices[triBase + 1];
+                    const std::uint32_t i2 = cacheIndices[triBase + 2];
+                    if (i0 >= cacheVertices.size() || i1 >= cacheVertices.size() || i2 >= cacheVertices.size())
+                        continue;
+
+                    const TriangleCombined tri{ cacheVertices[i0], cacheVertices[i1], cacheVertices[i2] };
+                    float t = 0.0f;
+                    if (!RayIntersectsTriangle(rayOrigin, rayDir, tri, t))
+                        continue;
+
+                    if (t > kRayEpsilon && t <= maxDistance)
+                        outIntersections.emplace_back(t, triId);
+                }
+            }
+            else if (child->index < cacheNodes.size())
+            {
+                stack.push_back(child->index);
+            }
+        }
+    }
+
+    if (outIntersections.empty())
+        return;
+
+    std::sort(
+        outIntersections.begin(),
+        outIntersections.end(),
+        [](const std::pair<float, std::uint32_t>& lhs, const std::pair<float, std::uint32_t>& rhs)
+        {
+            if (lhs.first == rhs.first)
+                return lhs.second < rhs.second;
+            return lhs.first < rhs.first;
+        });
+
+    constexpr float kIntersectionDedupEpsilon = 0.03f;
+    std::vector<std::pair<float, std::uint32_t>> deduped{};
+    deduped.reserve(outIntersections.size());
+
+    for (const auto& hit : outIntersections)
+    {
+        if (!deduped.empty() && std::fabs(hit.first - deduped.back().first) <= kIntersectionDedupEpsilon)
+        {
+            if (hit.second < deduped.back().second)
+                deduped.back() = hit;
+            continue;
+        }
+
+        deduped.push_back(hit);
+    }
+
+    outIntersections.swap(deduped);
+}
+
+bool VisCheck::TracePenetrationSegments(
+    const Vector3& point1,
+    const Vector3& point2,
+    std::vector<PenetrationSegment>& outSegments) const
+{
+    outSegments.clear();
+    if (!HasPenetrationMaterialData())
+        return false;
+
+    const Vector3 rayDelta = { point2.x - point1.x, point2.y - point1.y, point2.z - point1.z };
+    const float distance = std::sqrt(VectorDot(rayDelta, rayDelta));
+    if (distance <= 1e-4f)
+        return true;
+
+    const Vector3 rayDir = { rayDelta.x / distance, rayDelta.y / distance, rayDelta.z / distance };
+    std::vector<std::pair<float, std::uint32_t>> intersections{};
+    CollectCacheIntersections(point1, rayDir, distance, intersections);
+
+    if (intersections.size() < 2)
+        return true;
+
+    constexpr float kPairEpsilon = 0.03f;
+    std::size_t index = 0;
+    while (index + 1 < intersections.size())
+    {
+        const float entryDistance = std::clamp(intersections[index].first, 0.0f, distance);
+        const float exitDistance = std::clamp(intersections[index + 1].first, 0.0f, distance);
+        index += 2;
+
+        if (exitDistance <= entryDistance + kPairEpsilon)
+            continue;
+
+        const std::uint32_t entryTriId = intersections[index - 2].second;
+        const std::uint32_t exitTriId = intersections[index - 1].second;
+        const std::uint32_t entryMaterialHash =
+            entryTriId < cacheTriangleMaterialHashes.size() ? cacheTriangleMaterialHashes[entryTriId] : 0u;
+        const std::uint32_t exitMaterialHash =
+            exitTriId < cacheTriangleMaterialHashes.size() ? cacheTriangleMaterialHashes[exitTriId] : 0u;
+
+        PenetrationSegment segment{};
+        segment.entryDistance = entryDistance;
+        segment.exitDistance = exitDistance;
+        segment.thickness = exitDistance - entryDistance;
+        segment.entryMaterialHash = entryMaterialHash;
+        segment.exitMaterialHash = exitMaterialHash;
+        outSegments.push_back(segment);
+    }
+
+    return true;
 }
 
 bool VisCheck::IsPointVisible(const Vector3& point1, const Vector3& point2)

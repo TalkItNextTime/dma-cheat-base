@@ -13,11 +13,13 @@ struct LoadedCacheData {
     const Vec3* vertices = nullptr;
     const std::uint32_t* indices = nullptr;
     const std::uint8_t* triangle_kinds = nullptr; // Optional metadata section.
+    const std::uint32_t* triangle_material_hashes = nullptr; // Optional material metadata section.
     const BvhNodeDisk* bvh_nodes = nullptr;
     const std::uint32_t* bvh_primitive_order = nullptr;
     std::size_t vertex_count = 0;
     std::size_t index_count = 0;
     std::size_t triangle_kind_count = 0;
+    std::size_t triangle_material_hash_count = 0;
     std::size_t bvh_node_count = 0;
     std::size_t bvh_primitive_count = 0;
 };

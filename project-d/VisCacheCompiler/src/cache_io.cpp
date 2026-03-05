@@ -276,6 +276,42 @@ bool CacheFileView::parse(std::string* out_error) {
         }
     }
 
+    const auto it_material_hashes = section_map.find(static_cast<std::uint32_t>(CacheSectionId::TriangleMaterialHashes));
+    const std::uint32_t* triangle_material_hashes_ptr = nullptr;
+    std::size_t triangle_material_hash_count = 0;
+    if (it_material_hashes != section_map.end()) {
+        if ((it_material_hashes->second.size % sizeof(std::uint32_t)) != 0u) {
+            if (out_error != nullptr) {
+                *out_error = "cache material-hash section has invalid byte size";
+            }
+            return false;
+        }
+
+        triangle_material_hashes_ptr = reinterpret_cast<const std::uint32_t*>(
+            ptr_at(base, mapped_size_, it_material_hashes->second.offset, it_material_hashes->second.size));
+        if (triangle_material_hashes_ptr == nullptr) {
+            if (out_error != nullptr) {
+                *out_error = "cache material-hash pointer out of bounds";
+            }
+            return false;
+        }
+
+        triangle_material_hash_count = static_cast<std::size_t>(it_material_hashes->second.size / sizeof(std::uint32_t));
+        if (triangle_material_hash_count != tri_count) {
+            if (out_error != nullptr) {
+                *out_error = "cache material-hash count mismatch";
+            }
+            return false;
+        }
+
+        if (!in_bounds(base, mapped_size_, triangle_material_hashes_ptr, triangle_material_hash_count)) {
+            if (out_error != nullptr) {
+                *out_error = "cache material-hash section failed bounds validation";
+            }
+            return false;
+        }
+    }
+
     if (!in_bounds(base, mapped_size_, vertices_ptr, vertex_count) || !in_bounds(base, mapped_size_, indices_ptr, index_count) ||
         !in_bounds(base, mapped_size_, bvh_nodes_ptr, bvh_node_count) || !in_bounds(base, mapped_size_, bvh_order_ptr, bvh_primitive_count)) {
         if (out_error != nullptr) {
@@ -308,11 +344,13 @@ bool CacheFileView::parse(std::string* out_error) {
     data_.vertices = vertices_ptr;
     data_.indices = indices_ptr;
     data_.triangle_kinds = triangle_kinds_ptr;
+    data_.triangle_material_hashes = triangle_material_hashes_ptr;
     data_.bvh_nodes = bvh_nodes_ptr;
     data_.bvh_primitive_order = bvh_order_ptr;
     data_.vertex_count = vertex_count;
     data_.index_count = index_count;
     data_.triangle_kind_count = triangle_kind_count;
+    data_.triangle_material_hash_count = triangle_material_hash_count;
     data_.bvh_node_count = bvh_node_count;
     data_.bvh_primitive_count = bvh_primitive_count;
     return true;
@@ -339,11 +377,21 @@ bool write_cache_file(const std::string& output_path, const CompiledMapData& dat
         return false;
     }
     const bool has_triangle_kinds = data.triangle_kinds.size() == tri_count && tri_count > 0u;
+    if (!data.triangle_material_hashes.empty() && data.triangle_material_hashes.size() != tri_count) {
+        if (out_error != nullptr) {
+            *out_error = "triangle_material_hashes count does not match triangle count";
+        }
+        return false;
+    }
+    const bool has_triangle_material_hashes = data.triangle_material_hashes.size() == tri_count && tri_count > 0u;
 
     CacheHeader header{};
     std::memcpy(header.magic, kCacheMagic.data(), kCacheMagic.size());
     header.version = kCacheVersion;
-    header.section_count = has_triangle_kinds ? 5u : 4u;
+    header.section_count =
+        4u +
+        (has_triangle_kinds ? 1u : 0u) +
+        (has_triangle_material_hashes ? 1u : 0u);
     header.source_hash = data.source_hash;
     header.build_unix_seconds = static_cast<std::uint64_t>(std::time(nullptr));
     header.static_tri_count = static_cast<std::uint32_t>(data.indices.size() / 3u);
@@ -377,6 +425,9 @@ bool write_cache_file(const std::string& output_path, const CompiledMapData& dat
     if (has_triangle_kinds) {
         add_section(CacheSectionId::Metadata, static_cast<std::uint64_t>(data.triangle_kinds.size() * sizeof(std::uint8_t)));
     }
+    if (has_triangle_material_hashes) {
+        add_section(CacheSectionId::TriangleMaterialHashes, static_cast<std::uint64_t>(data.triangle_material_hashes.size() * sizeof(std::uint32_t)));
+    }
 
     std::vector<std::byte> out_bytes;
     out_bytes.reserve(static_cast<std::size_t>(payload_offset));
@@ -389,6 +440,9 @@ bool write_cache_file(const std::string& output_path, const CompiledMapData& dat
     append_bytes(&out_bytes, data.bvh_primitive_order.data(), data.bvh_primitive_order.size() * sizeof(std::uint32_t));
     if (has_triangle_kinds) {
         append_bytes(&out_bytes, data.triangle_kinds.data(), data.triangle_kinds.size() * sizeof(std::uint8_t));
+    }
+    if (has_triangle_material_hashes) {
+        append_bytes(&out_bytes, data.triangle_material_hashes.data(), data.triangle_material_hashes.size() * sizeof(std::uint32_t));
     }
 
     const std::size_t payload_begin = sizeof(CacheHeader) + sizeof(CacheSectionEntry) * sections.size();

@@ -631,7 +631,9 @@ namespace
 	{
 		AimbotWeapon = 0,
 		TriggerWeapon,
-		TriggerSpecial
+		TriggerSpecial,
+		FlickWeapon,
+		FlickSpecial
 	};
 
 	struct BonePickerPanelState
@@ -695,6 +697,20 @@ namespace
 			outName = LocalizedTriggerSpecialWeaponName(panel.Index);
 			return true;
 
+		case BonePickerTargetType::FlickWeapon:
+			panel.Index = std::clamp(panel.Index, 0, Structs::AimWeapon_Count - 1);
+			outMask = &config.Aim.FlickProfiles[panel.Index].BoneMask;
+			outGroupLabel = Localization::Pick("Flick Weapon", "甩枪武器");
+			outName = LocalizedAimWeaponGroupName(panel.Index);
+			return true;
+
+		case BonePickerTargetType::FlickSpecial:
+			panel.Index = std::clamp(panel.Index, 0, Structs::TriggerSpecial_Count - 1);
+			outMask = &config.Aim.FlickSpecialProfiles[panel.Index].BoneMask;
+			outGroupLabel = Localization::Pick("Flick Special", "甩枪特殊武器");
+			outName = LocalizedTriggerSpecialWeaponName(panel.Index);
+			return true;
+
 		default:
 			break;
 		}
@@ -719,7 +735,11 @@ namespace
 
 		std::uint64_t& mask = *maskPtr;
 		mask &= Structs::AimAllBoneMask;
-		const std::uint64_t fallbackMask = panel.Target == BonePickerTargetType::AimbotWeapon
+		const bool useAimbotFallback =
+			panel.Target == BonePickerTargetType::AimbotWeapon ||
+			panel.Target == BonePickerTargetType::FlickWeapon ||
+			panel.Target == BonePickerTargetType::FlickSpecial;
+		const std::uint64_t fallbackMask = useAimbotFallback
 			? Structs::AimDefaultAimbotBoneMask
 			: Structs::AimAllBoneMask;
 		if (mask == 0ull)
@@ -743,7 +763,9 @@ namespace
 
 		const char* title = panel.Target == BonePickerTargetType::AimbotWeapon
 			? Localization::Pick("Aimbot Bone Picker", "自瞄瞄点面板")
-			: Localization::Pick("Trigger Bone Picker", "扳机瞄点面板");
+			: ((panel.Target == BonePickerTargetType::FlickWeapon || panel.Target == BonePickerTargetType::FlickSpecial)
+				? Localization::Pick("Flick Bone Picker", "甩枪瞄点面板")
+				: Localization::Pick("Trigger Bone Picker", "扳机瞄点面板"));
 		ImGui::SetCursorPosX(ImGui::GetWindowWidth() * 0.5f - ImGui::CalcTextSize(title).x * 0.5f);
 		ImGui::Text("%s", title);
 
@@ -918,6 +940,28 @@ namespace
 			mask,
 			fallbackMask,
 			Localization::Pick("Trigger Points", "触发点")
+		);
+	}
+
+	void DrawFlickBoneSelectorControl(const int weaponIndex, std::uint64_t& mask, const std::uint64_t fallbackMask)
+	{
+		DrawBoneSelectorControl(
+			BonePickerTargetType::FlickWeapon,
+			weaponIndex,
+			mask,
+			fallbackMask,
+			Localization::Pick("Flick Points", "甩枪瞄点")
+		);
+	}
+
+	void DrawFlickSpecialBoneSelectorControl(const int profileIndex, std::uint64_t& mask, const std::uint64_t fallbackMask)
+	{
+		DrawBoneSelectorControl(
+			BonePickerTargetType::FlickSpecial,
+			profileIndex,
+			mask,
+			fallbackMask,
+			Localization::Pick("Flick Points", "甩枪瞄点")
 		);
 	}
 }
@@ -1693,6 +1737,93 @@ void Overlay::RenderMenu()
 
 												ImGui::EndTabBar();
 											}
+											ImGui::EndTabItem();
+										}
+
+										ImGui::EndTabBar();
+									}
+								}
+								else
+								{
+									const char* disconnectedText = Localization::Pick("KMBOX not connected.", "KMBOX 未连接。");
+									ImGui::SetCursorPos(
+										ImVec2(ImGui::GetWindowWidth(), ImGui::GetWindowHeight() - ImGui::GetFrameHeight()) / 2 -
+										ImGui::CalcTextSize(disconnectedText) / 2 + ImVec2(0, ImGui::GetFrameHeight())
+									);
+									ImGui::TextColored(ImVec4(1, 0, 0, 1), "%s", disconnectedText);
+								}
+							}
+
+							ImGui::EndTabItem();
+						}
+
+						if (ImGui::BeginTabItem(Localization::Pick("Flick", "甩枪")))
+						{
+							ImAdd::CheckBox("Flick##Enable", &config.Aim.Flick);
+
+							if (config.Aim.Flick)
+							{
+								if (ProcInfo::KmboxInitialized)
+								{
+									if (ImGui::BeginTabBar("FlickLayoutTabs", ImGuiTabBarFlags_None))
+									{
+										if (ImGui::BeginTabItem(Localization::Pick("General", "通用")))
+										{
+											ImAdd::SeparatorText("Hotkeys");
+											ImAdd::KeyBindOptions flickMode = (ImAdd::KeyBindOptions)config.Aim.FlickKeyMode;
+											ImAdd::KeyBind(Localization::Pick("Flick Key", "甩枪热键"), &config.Aim.FlickKey, 0, &flickMode);
+											config.Aim.FlickKeyMode = (int)flickMode;
+
+											ImAdd::SeparatorText("General");
+											ImGui::TextDisabled("%s", Localization::Pick("Flick = aimbot + trigger cycles while hotkey is held.", "甩枪 = 按住热键时循环执行 自瞄 + 扳机。"));
+											ImGui::TextDisabled("%s", Localization::Pick("Each cycle restarts after the configured restart interval.", "每轮结束后会按设定的重启间隔自动开始下一轮。"));
+											ImGui::TextDisabled("%s", Localization::Pick("Flick thread interval: 2ms (~500Hz).", "甩枪线程间隔：2ms (~500Hz)。"));
+											ImGui::EndTabItem();
+										}
+
+										if (ImGui::BeginTabItem(Localization::Pick("Weapon Tabs", "武器分页")))
+										{
+											if (ImGui::BeginTabBar("FlickWeaponTabs", ImGuiTabBarFlags_None))
+											{
+												for (int i = 0; i < Structs::AimWeapon_Count; ++i)
+												{
+													if (ImGui::BeginTabItem(LocalizedAimWeaponGroupName(i)))
+													{
+														config.Aim.FlickProfileEditorIndex = i;
+														Structs::FlickWeaponProfile& profile = config.Aim.FlickProfiles[i];
+														ImAdd::SliderFloat(Localization::Pick("Flick Smooth", "甩枪平滑"), &profile.Smooth, 1.0f, 100.0f);
+														ImAdd::SliderInt(Localization::Pick("Max Flick Time (ms)", "最长甩枪时间 (ms)"), &profile.MaxFlickTimeMs, 10, 5000);
+														ImAdd::SliderInt(Localization::Pick("Restart Interval (ms)", "重启甩枪间隔 (ms)"), &profile.RestartIntervalMs, 0, 5000);
+														ImAdd::SliderFloat(Localization::Pick("Flick FOV", "甩枪FOV"), &profile.Fov, 0.1f, 60.0f);
+														ImAdd::CheckBox(Localization::Pick("Dynamic FOV", "动态FOV"), &profile.DynamicFovEnabled);
+														ImAdd::CheckBox(Localization::Pick("Autowall", "穿墙甩枪"), &profile.AutowallEnabled);
+														ImAdd::CheckBox(Localization::Pick("Autowall Killshot Only", "仅可斩杀时穿墙甩枪"), &profile.AutowallKillshotOnly);
+														DrawFlickBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
+														ImGui::EndTabItem();
+													}
+												}
+
+												for (int i = 0; i < Structs::TriggerSpecial_Count; ++i)
+												{
+													if (ImGui::BeginTabItem(LocalizedTriggerSpecialWeaponName(i)))
+													{
+														config.Aim.FlickSpecialEditorIndex = i;
+														Structs::FlickWeaponProfile& profile = config.Aim.FlickSpecialProfiles[i];
+														ImAdd::SliderFloat(Localization::Pick("Flick Smooth", "甩枪平滑"), &profile.Smooth, 1.0f, 100.0f);
+														ImAdd::SliderInt(Localization::Pick("Max Flick Time (ms)", "最长甩枪时间 (ms)"), &profile.MaxFlickTimeMs, 10, 5000);
+														ImAdd::SliderInt(Localization::Pick("Restart Interval (ms)", "重启甩枪间隔 (ms)"), &profile.RestartIntervalMs, 0, 5000);
+														ImAdd::SliderFloat(Localization::Pick("Flick FOV", "甩枪FOV"), &profile.Fov, 0.1f, 60.0f);
+														ImAdd::CheckBox(Localization::Pick("Dynamic FOV", "动态FOV"), &profile.DynamicFovEnabled);
+														ImAdd::CheckBox(Localization::Pick("Autowall", "穿墙甩枪"), &profile.AutowallEnabled);
+														ImAdd::CheckBox(Localization::Pick("Autowall Killshot Only", "仅可斩杀时穿墙甩枪"), &profile.AutowallKillshotOnly);
+														DrawFlickSpecialBoneSelectorControl(i, profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
+														ImGui::EndTabItem();
+													}
+												}
+
+												ImGui::EndTabBar();
+											}
+
 											ImGui::EndTabItem();
 										}
 
@@ -2523,6 +2654,7 @@ void Overlay::RenderMenu()
 						config.DebugPerf = false;
 						config.DebugTrigger = false;
 						config.DebugVisCheck = false;
+						config.DebugAutowall = false;
 						config.DebugSpectatorList = false;
 					}
 
@@ -2531,6 +2663,7 @@ void Overlay::RenderMenu()
 						ImAdd::CheckBox(Localization::Pick("Perf Debug Output", "性能调试输出"), &config.DebugPerf);
 						ImAdd::CheckBox(Localization::Pick("Trigger Debug Output", "扳机调试输出"), &config.DebugTrigger);
 						ImAdd::CheckBox(Localization::Pick("VisCheck Debug Overlay", "VisCheck调试叠加"), &config.DebugVisCheck);
+						ImAdd::CheckBox(Localization::Pick("Autowall Debug Output", "穿墙调试输出"), &config.DebugAutowall);
 						ImAdd::CheckBox(Localization::Pick("Spectator Debug Text", "观战名单调试文本"), &config.DebugSpectatorList);
 
 						if (config.DebugVisCheck)
@@ -2557,7 +2690,7 @@ void Overlay::RenderMenu()
 						}
 					}
 
-					PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger, config.DebugVisCheck);
+					PerfDebug::SetDebugOptions(config.DebugEnabled, config.DebugPerf, config.DebugTrigger, config.DebugVisCheck, config.DebugAutowall);
 					PerfDebug::SyncDebugThread();
 
 					ImAdd::SeparatorText(Localization::Pick("Cheat", "功能"));

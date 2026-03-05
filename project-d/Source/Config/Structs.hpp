@@ -217,6 +217,18 @@ namespace Structs
         std::uint64_t BoneMask = AimAllBoneMask;
     };
 
+    struct FlickWeaponProfile
+    {
+        float Fov = 6.0f;
+        float Smooth = 14.0f;
+        int MaxFlickTimeMs = 220;
+        int RestartIntervalMs = 120;
+        std::uint64_t BoneMask = AimDefaultAimbotBoneMask;
+        bool DynamicFovEnabled = false;
+        bool AutowallEnabled = false;
+        bool AutowallKillshotOnly = false;
+    };
+
     struct TriggerSpecialProfile
     {
         float HitboxRadiusPx = 4.5f;
@@ -269,6 +281,10 @@ namespace Structs
         ImVec4 TriggerHitboxDebugActiveColor = ImVec4(0.2f, 1.0f, 0.35f, 0.95f);
         float TriggerHitboxDebugThickness = 1.0f;
 
+        bool Flick = false;
+        int FlickKey = 0;
+        int FlickKeyMode = 1;
+
         bool BlockTriggerWhenFlashed = false;
         bool BlockAimbotWhenFlashed = false;
 
@@ -299,6 +315,11 @@ namespace Structs
 
         std::array<TriggerWeaponProfile, AimWeapon_Count> TriggerProfiles{};
         int TriggerProfileEditorIndex = 0;
+
+        std::array<FlickWeaponProfile, AimWeapon_Count> FlickProfiles{};
+        int FlickProfileEditorIndex = 0;
+        std::array<FlickWeaponProfile, TriggerSpecial_Count> FlickSpecialProfiles{};
+        int FlickSpecialEditorIndex = 0;
 
         std::array<TriggerSpecialProfile, TriggerSpecial_Count> TriggerSpecialProfiles{};
         int TriggerSpecialEditorIndex = 0;

@@ -277,6 +277,37 @@ bool parse_uint_after(const std::string& line, const std::string& marker, std::u
     return true;
 }
 
+void append_decimal_uints(const std::string& line, std::vector<std::uint32_t>* out_values) {
+    if (out_values == nullptr) {
+        return;
+    }
+
+    std::uint64_t value = 0u;
+    bool in_digits = false;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char ch = line[i];
+        if (ch >= '0' && ch <= '9') {
+            value = value * 10u + static_cast<std::uint64_t>(ch - '0');
+            in_digits = true;
+            continue;
+        }
+
+        if (!in_digits) {
+            continue;
+        }
+
+        if (value <= std::numeric_limits<std::uint32_t>::max()) {
+            out_values->push_back(static_cast<std::uint32_t>(value));
+        }
+        value = 0u;
+        in_digits = false;
+    }
+
+    if (in_digits && value <= std::numeric_limits<std::uint32_t>::max()) {
+        out_values->push_back(static_cast<std::uint32_t>(value));
+    }
+}
+
 int hex_value(char c) {
     if (c >= '0' && c <= '9') {
         return c - '0';
@@ -641,6 +672,8 @@ bool parse_vphys_file(
     std::string line;
     std::uint32_t current_collision_idx = 0;
     bool has_collision_idx = false;
+    std::vector<std::uint32_t> surface_property_hashes{};
+    bool reading_surface_property_hashes = false;
 
     BlobType blob_type = BlobType::None;
     std::vector<std::uint8_t> blob_bytes;
@@ -811,6 +844,9 @@ bool parse_vphys_file(
         const std::uint8_t source_kind = generated_from_hull
             ? static_cast<std::uint8_t>(ParsedTriangleSource::Hull)
             : static_cast<std::uint8_t>(ParsedTriangleSource::Mesh);
+        const std::uint32_t material_hash = current_collision_idx < surface_property_hashes.size()
+            ? surface_property_hashes[current_collision_idx]
+            : 0u;
 
         for (std::size_t i = 0; i < tri_triplet_count; ++i) {
             const std::uint32_t l0 = current_triangles[i * 3u + 0u];
@@ -844,6 +880,7 @@ bool parse_vphys_file(
             out_result->mesh.indices.push_back(g1);
             out_result->mesh.indices.push_back(g2);
             out_result->triangle_sources.push_back(source_kind);
+            out_result->triangle_material_hashes.push_back(material_hash);
             out_result->stats.triangles_emitted++;
             if (generated_from_hull) {
                 out_result->stats.triangles_emitted_from_hull++;
@@ -856,6 +893,23 @@ bool parse_vphys_file(
     };
 
     while (std::getline(in, line)) {
+        if (reading_surface_property_hashes) {
+            append_decimal_uints(line, &surface_property_hashes);
+            if (line.find(']') != std::string::npos) {
+                reading_surface_property_hashes = false;
+            }
+            continue;
+        }
+
+        if (line.find("m_surfacePropertyHashes") != std::string::npos) {
+            reading_surface_property_hashes = true;
+            append_decimal_uints(line, &surface_property_hashes);
+            if (line.find(']') != std::string::npos) {
+                reading_surface_property_hashes = false;
+            }
+            continue;
+        }
+
         if (blob_type != BlobType::None) {
             append_hex_bytes(line, &blob_bytes);
             if (line.find(']') != std::string::npos) {

@@ -8,6 +8,7 @@ public:
 	void Update();
 	void UpdateAimbot();
 	void UpdateTriggerbot();
+	void UpdateFlickbot();
 	float GetCurrentFovRadiusPx() const;
 	float GetCurrentTriggerHitboxRadiusPx() const;
 	float GetCurrentTriggerHeadRadiusPx() const;
@@ -17,6 +18,9 @@ public:
 	bool HasAimbotTargetVisual() const;
 	bool IsTriggerHotkeyActiveVisual() const;
 	bool HasTriggerTargetVisual() const;
+	bool IsFlickHotkeyActiveVisual() const;
+	bool HasFlickTargetVisual() const;
+	std::uint64_t GetFlickAutowallTargetPawnVisual() const;
 
 	static Aimbot& Get()
 	{
@@ -46,6 +50,7 @@ private:
 	KeybindState m_AimbotSecondaryKey{};
 	KeybindState m_TriggerPrimaryKey{};
 	KeybindState m_TriggerSecondaryKey{};
+	KeybindState m_FlickPrimaryKey{};
 
 	bool m_AimbotHotkeyWasActive = false;
 
@@ -61,6 +66,13 @@ private:
 	bool m_TriggerShotSinceHotkeyDown = false;
 	bool m_TriggerMouseHeld = false;
 	std::chrono::steady_clock::time_point m_TriggerMouseReleaseAt{};
+	bool m_FlickHotkeyWasActive = false;
+	bool m_FlickShotFiredThisHold = false;
+	bool m_FlickForceFireThisHold = false;
+	std::uint64_t m_FlickLockedTargetPawn = 0;
+	std::chrono::steady_clock::time_point m_FlickStartTime{};
+	std::chrono::steady_clock::time_point m_FlickNextCycleAt{};
+	std::chrono::steady_clock::time_point m_LastFlickScanAt{};
 
 	std::chrono::steady_clock::time_point m_LastTargetScanAt{};
 	Vector2 m_RecoilPos{};
@@ -75,6 +87,9 @@ private:
 	std::atomic<bool> m_AimbotHasTargetVisual{ false };
 	std::atomic<bool> m_TriggerHotkeyActiveVisual{ false };
 	std::atomic<bool> m_TriggerHasTargetVisual{ false };
+	std::atomic<bool> m_FlickHotkeyActiveVisual{ false };
+	std::atomic<bool> m_FlickHasTargetVisual{ false };
+	std::atomic<std::uint64_t> m_FlickAutowallTargetPawnVisual{ 0ull };
 };
 
 inline Aimbot& aim = Aimbot::Get();

@@ -2,6 +2,7 @@
 #include <SDK.hpp>
 #include <ESP/ESP.hpp>
 #include "Aimbot.hpp"
+#include "AutowallEngine.hpp"
 
 #include <array>
 #include <cfloat>
@@ -24,6 +25,9 @@ namespace
         float WorldDistance = FLT_MAX;
         float AllowedFovPx = 0.0f;
         int Team = 0;
+        int BoneId = Structs::AimHeadBoneId;
+        float AutowallDamage = 0.0f;
+        bool ThroughWall = false;
     };
 
     struct WeaponRuntimeState
@@ -76,6 +80,8 @@ namespace
     constexpr float kFlashBlockOverlayStrongThreshold = 0.60f; // 强致盲暂停阈值；值越高，越早恢复自瞄/扳机。
     constexpr float kFlashBlockOverlaySoftThreshold = 0.60f; // 软致盲暂停阈值（需配合 duration）；值越高，恢复越早。
     constexpr float kFlashBlockDurationAssistSec = 0.08f;
+    constexpr auto kFlickTargetScanInterval = std::chrono::milliseconds(8);
+    std::atomic<bool> g_LoggedFlickAutowallUnavailable{ false };
 
     constexpr std::array<BoneLink, 16> kTriggerBoneLinks = {
         BoneLink{ 0, 2, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(2) },
@@ -193,6 +199,25 @@ namespace
     bool IsBoneEnabledByMask(const std::uint64_t mask, const int boneId)
     {
         return (mask & Structs::BoneMaskFromBoneId(boneId)) != 0ull;
+    }
+
+    float FlickBoneDamageMultiplier(const int boneId)
+    {
+        if (boneId == Structs::AimHeadBoneId)
+            return 4.0f;
+
+        switch (boneId)
+        {
+        case 0: // pelvis
+            return 1.25f;
+
+        case 22: case 23: case 24:
+        case 25: case 26: case 27: // legs
+            return 0.75f;
+
+        default:
+            return 1.0f;
+        }
     }
 
     float BonePointRadiusScale(const int boneId)
@@ -728,6 +753,7 @@ namespace
 
 void Aimbot::Update()
 {
+    UpdateFlickbot();
     UpdateAimbot();
     UpdateTriggerbot();
 }
@@ -775,6 +801,21 @@ bool Aimbot::IsTriggerHotkeyActiveVisual() const
 bool Aimbot::HasTriggerTargetVisual() const
 {
     return m_TriggerHasTargetVisual.load(std::memory_order_relaxed);
+}
+
+bool Aimbot::IsFlickHotkeyActiveVisual() const
+{
+    return m_FlickHotkeyActiveVisual.load(std::memory_order_relaxed);
+}
+
+bool Aimbot::HasFlickTargetVisual() const
+{
+    return m_FlickHasTargetVisual.load(std::memory_order_relaxed);
+}
+
+std::uint64_t Aimbot::GetFlickAutowallTargetPawnVisual() const
+{
+    return m_FlickAutowallTargetPawnVisual.load(std::memory_order_relaxed);
 }
 
 void Aimbot::ReleaseTriggerMouseIfHeld()
@@ -899,6 +940,468 @@ void Aimbot::ResetTriggerWindow()
     m_LastTriggerPawn = 0;
 }
 
+void Aimbot::UpdateFlickbot()
+{
+    auto setFlickVisual = [&](const bool hotkeyActive, const bool hasTarget)
+    {
+        m_FlickHotkeyActiveVisual.store(hotkeyActive, std::memory_order_relaxed);
+        m_FlickHasTargetVisual.store(hasTarget, std::memory_order_relaxed);
+    };
+
+    auto resetFlickHold = [&]()
+    {
+        m_FlickLockedTargetPawn = 0;
+        m_FlickShotFiredThisHold = false;
+        m_FlickForceFireThisHold = false;
+        m_FlickStartTime = {};
+        m_FlickNextCycleAt = {};
+        m_LastFlickScanAt = {};
+        m_FlickAutowallTargetPawnVisual.store(0ull, std::memory_order_relaxed);
+    };
+
+    m_FlickAutowallTargetPawnVisual.store(0ull, std::memory_order_relaxed);
+
+    if (!ProcInfo::KmboxInitialized || !config.Aim.Flick)
+    {
+        m_FlickHotkeyWasActive = false;
+        m_FlickPrimaryKey = {};
+        resetFlickHold();
+        setFlickVisual(false, false);
+        return;
+    }
+
+    if (overlay.shouldRenderMenu)
+    {
+        m_FlickHotkeyWasActive = false;
+        resetFlickHold();
+        setFlickVisual(false, false);
+        return;
+    }
+
+    const bool hotkeyActive = IsKeybindActive(
+        config.Aim.FlickKey,
+        config.Aim.FlickKeyMode,
+        m_FlickPrimaryKey.ToggleState,
+        m_FlickPrimaryKey.WasDown);
+
+    if (hotkeyActive && !m_FlickHotkeyWasActive)
+    {
+        m_FlickStartTime = {};
+        m_FlickShotFiredThisHold = false;
+        m_FlickForceFireThisHold = false;
+        m_FlickLockedTargetPawn = 0;
+        m_FlickNextCycleAt = {};
+        m_LastFlickScanAt = {};
+    }
+
+    if (!hotkeyActive)
+    {
+        m_FlickHotkeyWasActive = false;
+        resetFlickHold();
+        setFlickVisual(false, false);
+        return;
+    }
+    m_FlickHotkeyWasActive = true;
+
+    const SDK::CoreCache core = sdk.GetCoreCache();
+    if (!core.IsValid || !IsLikelyUserAddress(core.LocalPawn) || !IsLikelyUserAddress(core.EntityList))
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    if (!Offsets::Schema::m_iHealth || !Offsets::Schema::m_iTeamNum || !Offsets::Schema::m_lifeState)
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    const int localHealth = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iHealth);
+    const int localLifeState = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_lifeState);
+    if (!IsAlive(localHealth, localLifeState))
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    WeaponRuntimeState weapon{};
+    if (!TryReadLocalWeaponState(core, weapon))
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    if (!weapon.IsGun || weapon.IsReloading)
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    if (config.Aim.BlockAimbotWhenFlashed && IsPlayerEffectivelyFlashed(core.LocalPawn))
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    const int localTeam = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iTeamNum);
+    Vector3 localOrigin{};
+    if (Offsets::Schema::m_vOldOrigin)
+        localOrigin = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_vOldOrigin);
+
+    Vector3 localViewOffset{ 0.0f, 0.0f, kDefaultEyeHeight };
+    if (Offsets::Schema::m_vecViewOffset)
+    {
+        const Vector3 rawViewOffset = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_vecViewOffset);
+        if (IsNonZeroPosition(rawViewOffset))
+            localViewOffset = rawViewOffset;
+    }
+    const Vector3 localEye = localOrigin + localViewOffset;
+
+    const int weaponCategory = std::clamp(weapon.Category, 0, Structs::AimWeapon_Count - 1);
+    Structs::FlickWeaponProfile profile = config.Aim.FlickProfiles[weaponCategory];
+    if (weapon.IsDeagle)
+        profile = config.Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Deagle];
+    else if (weapon.IsRevolver)
+        profile = config.Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Revolver];
+    profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
+    profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+    profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
+    profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
+    profile.BoneMask = NormalizeBoneMask(profile.BoneMask, Structs::AimDefaultAimbotBoneMask);
+
+    const Vector2 screenCenter{ ScreenCenter.x, ScreenCenter.y };
+    const float baseFovPx = FovDegreesToPixels(profile.Fov);
+    float effectiveFovPx = baseFovPx;
+    if (effectiveFovPx <= 0.01f)
+    {
+        setFlickVisual(true, false);
+        return;
+    }
+
+    const std::vector<TriggerBoneSnapshot> triggerSnapshots = esp.GetTriggerBoneSnapshots();
+    auto canUseSnapshot = [&](const TriggerBoneSnapshot& target) -> bool
+    {
+        if (!IsLikelyUserAddress(target.Pawn) || target.Pawn == core.LocalPawn)
+            return false;
+        if (!IsAlive(target.Health, target.LifeState))
+            return false;
+        if (!config.Aim.AimFriendly && localTeam > 0 && target.Team == localTeam)
+            return false;
+        return true;
+    };
+
+    auto bestBoneInSnapshot = [&](const TriggerBoneSnapshot& snapshot, Vector3& outWorld, Vector2& outScreen, float& outScreenDistance, int& outBoneId) -> bool
+    {
+        outScreenDistance = FLT_MAX;
+        outBoneId = Structs::AimHeadBoneId;
+        bool found = false;
+
+        for (std::size_t i = 0; i < kTriggerTrackedBones.size(); ++i)
+        {
+            if (i >= snapshot.BoneValid.size() || !snapshot.BoneValid[i])
+                continue;
+
+            const int boneId = kTriggerTrackedBones[i];
+            if (!IsBoneEnabledByMask(profile.BoneMask, boneId))
+                continue;
+
+            const BonePoint& bone = snapshot.Bones[i];
+            const float distancePx = ToScreenDistance(screenCenter, bone.Screen);
+            if (!found || distancePx < outScreenDistance)
+            {
+                found = true;
+                outScreenDistance = distancePx;
+                outWorld = bone.World;
+                outScreen = bone.Screen;
+                outBoneId = boneId;
+            }
+        }
+
+        return found;
+    };
+
+    if (profile.DynamicFovEnabled && !triggerSnapshots.empty())
+    {
+        float nearestEnemyDistance = FLT_MAX;
+        for (const TriggerBoneSnapshot& snapshot : triggerSnapshots)
+        {
+            if (!canUseSnapshot(snapshot))
+                continue;
+
+            Vector3 world{};
+            Vector2 screen{};
+            float distancePx = FLT_MAX;
+            int boneId = Structs::AimHeadBoneId;
+            if (!bestBoneInSnapshot(snapshot, world, screen, distancePx, boneId))
+                continue;
+
+            nearestEnemyDistance = (std::min)(nearestEnemyDistance, distancePx);
+        }
+
+        if (nearestEnemyDistance < FLT_MAX)
+        {
+            const float expansionRangePx = (std::max)(40.0f, baseFovPx * 2.0f);
+            const float nearRatio = std::clamp(1.0f - nearestEnemyDistance / expansionRangePx, 0.0f, 1.0f);
+            effectiveFovPx = baseFovPx * (1.0f + nearRatio * 1.25f);
+        }
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    const int flickRestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
+    const int holdFireMs = weapon.IsRevolver
+        ? std::clamp(config.Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Revolver].HoldFireMs, 0, 1200)
+        : std::clamp(config.Aim.TriggerSpecialProfiles[Structs::TriggerSpecial_Deagle].HoldFireMs, 0, 1200);
+
+    if (!m_FlickShotFiredThisHold &&
+        m_FlickStartTime.time_since_epoch().count() != 0 &&
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_FlickStartTime).count() >= profile.MaxFlickTimeMs)
+    {
+        TriggerFireClick(holdFireMs);
+        m_FlickShotFiredThisHold = true;
+        m_FlickForceFireThisHold = true;
+        m_FlickLockedTargetPawn = 0;
+        m_FlickNextCycleAt = now + std::chrono::milliseconds(flickRestartIntervalMs);
+        setFlickVisual(true, false);
+        return;
+    }
+
+    if (m_FlickShotFiredThisHold || m_FlickForceFireThisHold)
+    {
+        if (m_FlickNextCycleAt.time_since_epoch().count() != 0 && now < m_FlickNextCycleAt)
+        {
+            setFlickVisual(true, false);
+            return;
+        }
+
+        m_FlickShotFiredThisHold = false;
+        m_FlickForceFireThisHold = false;
+        m_FlickLockedTargetPawn = 0;
+        m_FlickStartTime = {};
+        m_FlickNextCycleAt = {};
+        m_LastFlickScanAt = {};
+    }
+
+    TargetCandidate activeTarget{};
+    bool hasActiveTarget = false;
+    const TriggerBoneSnapshot* activeSnapshot = nullptr;
+
+    auto tryAcquireFromSnapshot = [&](const TriggerBoneSnapshot& snapshot, const bool preferLocked) -> bool
+    {
+        if (!canUseSnapshot(snapshot))
+            return false;
+
+        Vector3 targetWorld{};
+        Vector2 targetScreen{};
+        float targetScreenDistance = FLT_MAX;
+        int targetBoneId = Structs::AimHeadBoneId;
+        float autowallDamageOnBone = 0.0f;
+        bool throughWall = false;
+        bool foundCandidate = false;
+
+        for (std::size_t i = 0; i < kTriggerTrackedBones.size(); ++i)
+        {
+            if (i >= snapshot.BoneValid.size() || !snapshot.BoneValid[i])
+                continue;
+
+            const int boneId = kTriggerTrackedBones[i];
+            if (!IsBoneEnabledByMask(profile.BoneMask, boneId))
+                continue;
+
+            const BonePoint& bone = snapshot.Bones[i];
+            const float screenDistance = ToScreenDistance(screenCenter, bone.Screen);
+            if (screenDistance > effectiveFovPx)
+                continue;
+
+            float candidateAutowallDamage = 0.0f;
+            bool candidateThroughWall = false;
+            bool canUseCandidate = snapshot.IsVisible;
+
+            if (!snapshot.IsVisible)
+            {
+                if (!profile.AutowallEnabled)
+                    continue;
+
+                const float requiredDamage = profile.AutowallKillshotOnly
+                    ? static_cast<float>((std::max)(snapshot.Health, 1))
+                    : 0.0f;
+
+                std::vector<VisCheck::PenetrationSegment> segments{};
+                if (!esp.QueryPenetrationSegments(localEye, bone.World, segments))
+                {
+                    PerfDebug::RecordFlickAutowallCheck(
+                        false,
+                        false,
+                        true,
+                        0.0f,
+                        requiredDamage);
+                    bool expected = false;
+                    if (g_LoggedFlickAutowallUnavailable.compare_exchange_strong(expected, true))
+                    {
+                        LOG_WARN("Flick autowall unavailable: map cache lacks material penetration metadata. Rebuild map caches to enable autowall.");
+                    }
+                    continue;
+                }
+
+                const AutowallEngine::Result autowallResult = AutowallEngine::Get().Evaluate(localEye, bone.World, weapon.WeaponId, segments);
+                candidateAutowallDamage = autowallResult.RemainingDamage * FlickBoneDamageMultiplier(boneId);
+                const bool passRequirement = profile.AutowallKillshotOnly
+                    ? (autowallResult.CanPenetrate && candidateAutowallDamage >= requiredDamage)
+                    : autowallResult.CanPenetrate;
+                canUseCandidate = passRequirement;
+                candidateThroughWall = passRequirement;
+                PerfDebug::RecordFlickAutowallCheck(
+                    autowallResult.CanPenetrate,
+                    passRequirement,
+                    false,
+                    candidateAutowallDamage,
+                    requiredDamage);
+            }
+
+            if (!canUseCandidate)
+                continue;
+
+            if (!foundCandidate || screenDistance < targetScreenDistance)
+            {
+                foundCandidate = true;
+                targetWorld = bone.World;
+                targetScreen = bone.Screen;
+                targetScreenDistance = screenDistance;
+                targetBoneId = boneId;
+                autowallDamageOnBone = candidateAutowallDamage;
+                throughWall = candidateThroughWall;
+            }
+        }
+
+        if (!foundCandidate)
+            return false;
+
+        const float worldDistance = std::sqrt(
+            std::pow(targetWorld.x - localEye.x, 2.0f) +
+            std::pow(targetWorld.y - localEye.y, 2.0f) +
+            std::pow(targetWorld.z - localEye.z, 2.0f));
+
+        if (!hasActiveTarget ||
+            (preferLocked && snapshot.Pawn == m_FlickLockedTargetPawn) ||
+            targetScreenDistance < activeTarget.ScreenDistance)
+        {
+            hasActiveTarget = true;
+            activeSnapshot = &snapshot;
+            activeTarget.Pawn = snapshot.Pawn;
+            activeTarget.World = targetWorld;
+            activeTarget.Screen = targetScreen;
+            activeTarget.ScreenDistance = targetScreenDistance;
+            activeTarget.WorldDistance = worldDistance;
+            activeTarget.AllowedFovPx = effectiveFovPx;
+            activeTarget.Team = snapshot.Team;
+            activeTarget.BoneId = targetBoneId;
+            activeTarget.AutowallDamage = autowallDamageOnBone;
+            activeTarget.ThroughWall = throughWall;
+        }
+
+        return true;
+    };
+
+    if (m_FlickLockedTargetPawn != 0)
+    {
+        for (const TriggerBoneSnapshot& snapshot : triggerSnapshots)
+        {
+            if (snapshot.Pawn != m_FlickLockedTargetPawn)
+                continue;
+            tryAcquireFromSnapshot(snapshot, true);
+            break;
+        }
+    }
+
+    if (!hasActiveTarget)
+    {
+        if (m_LastFlickScanAt.time_since_epoch().count() != 0 &&
+            (now - m_LastFlickScanAt) < kFlickTargetScanInterval)
+        {
+            setFlickVisual(true, false);
+            return;
+        }
+
+        m_LastFlickScanAt = now;
+        for (const TriggerBoneSnapshot& snapshot : triggerSnapshots)
+            tryAcquireFromSnapshot(snapshot, false);
+    }
+
+    if (!hasActiveTarget || !activeSnapshot)
+    {
+        m_FlickLockedTargetPawn = 0;
+        setFlickVisual(true, false);
+        return;
+    }
+
+    m_FlickLockedTargetPawn = activeTarget.Pawn;
+    m_FlickAutowallTargetPawnVisual.store(
+        activeTarget.ThroughWall ? activeTarget.Pawn : 0ull,
+        std::memory_order_relaxed);
+
+    const float bodyRadius = std::clamp(config.Aim.TriggerUnifiedHitboxRadiusPx, 0.5f, 40.0f);
+    const float headRadius = std::clamp(config.Aim.TriggerHeadRadiusPx, 0.5f, 80.0f);
+    float bestDistance = FLT_MAX;
+    if (IsCrosshairOnSnapshotBoneHitbox(
+        *activeSnapshot,
+        screenCenter,
+        profile.BoneMask,
+        bodyRadius,
+        headRadius,
+        bestDistance))
+    {
+        TriggerFireClick(holdFireMs);
+        m_FlickShotFiredThisHold = true;
+        m_FlickForceFireThisHold = false;
+        m_FlickLockedTargetPawn = 0;
+        m_FlickNextCycleAt = now + std::chrono::milliseconds(flickRestartIntervalMs);
+        setFlickVisual(true, true);
+        return;
+    }
+
+    Vector2 delta{
+        activeTarget.Screen.x - screenCenter.x,
+        activeTarget.Screen.y - screenCenter.y
+    };
+
+    const float rawDistance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+    const float smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+    const float baseSmoothing = std::clamp(1.0f / (0.90f + 0.09f * smooth), 0.03f, 1.0f);
+    const float distanceBoost = std::clamp(rawDistance / 170.0f, 0.0f, 1.5f);
+    const float smoothingFactor = std::clamp(baseSmoothing * (1.0f + distanceBoost * 0.45f), 0.03f, 1.0f);
+    Vector2 move{
+        delta.x * smoothingFactor,
+        delta.y * smoothingFactor
+    };
+
+    const float deadzone = (std::max)(0.0f, config.Aim.DeadzonePx);
+    if (rawDistance <= deadzone)
+    {
+        move.x = 0.0f;
+        move.y = 0.0f;
+    }
+
+    int moveX = QuantizeMouseStep(move.x);
+    int moveY = QuantizeMouseStep(move.y);
+    if (moveX == 0 && moveY == 0 && rawDistance > deadzone)
+    {
+        if (std::fabs(delta.x) > 0.15f)
+            moveX = delta.x > 0.0f ? 1 : -1;
+        if (std::fabs(delta.y) > 0.15f)
+            moveY = delta.y > 0.0f ? 1 : -1;
+    }
+
+    if (moveX != 0 || moveY != 0)
+    {
+        if (m_FlickStartTime.time_since_epoch().count() == 0)
+            m_FlickStartTime = now;
+
+        std::lock_guard lock(m_KmboxMutex);
+        Kmbox.Mouse.Move(moveX, moveY);
+    }
+
+    setFlickVisual(true, true);
+}
+
 void Aimbot::UpdateAimbot()
 {
     auto setAimbotVisual = [&](const bool hotkeyActive, const bool hasTarget)
@@ -911,6 +1414,16 @@ void Aimbot::UpdateAimbot()
         m_RecoilPos = {};
         m_HasRecoil = false;
     };
+
+    if (config.Aim.Flick && m_FlickHotkeyActiveVisual.load(std::memory_order_relaxed))
+    {
+        m_CurrentFovRadiusPx.store(0.0f, std::memory_order_relaxed);
+        m_LockedTargetPawn = 0;
+        m_LastTargetScanAt = {};
+        resetRecoilState();
+        setAimbotVisual(false, false);
+        return;
+    }
 
     if (!ProcInfo::KmboxInitialized)
     {
@@ -1417,6 +1930,14 @@ void Aimbot::UpdateTriggerbot()
         m_TriggerHotkeyActiveVisual.store(hotkeyActive, std::memory_order_relaxed);
         m_TriggerHasTargetVisual.store(hasTarget, std::memory_order_relaxed);
     };
+
+    if (config.Aim.Flick && m_FlickHotkeyActiveVisual.load(std::memory_order_relaxed))
+    {
+        m_CurrentTriggerHitboxRadiusPx.store(0.0f, std::memory_order_relaxed);
+        m_CurrentTriggerHeadRadiusPx.store(0.0f, std::memory_order_relaxed);
+        setTriggerVisual(false, false);
+        return;
+    }
 
     if (!config.Aim.Trigger || !ProcInfo::KmboxInitialized)
     {

@@ -390,6 +390,9 @@
     <ClInclude Include="Source\Features\Aimbot\Aimbot.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Features\Aimbot\AutowallEngine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="External\imgui\addons\imgui_addons.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -462,6 +465,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Features\Aimbot\AutowallEngine.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="External\imgui\addons\imgui_addons.cpp">

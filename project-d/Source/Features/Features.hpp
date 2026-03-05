@@ -8,6 +8,7 @@ class Features
 public:
 	static constexpr auto kAimbotInterval = chrono::milliseconds(2);
 	static constexpr auto kTriggerInterval = chrono::milliseconds(2);
+	static constexpr auto kFlickInterval = chrono::milliseconds(2);
 
 	void InitAimbotThread()
 	{
@@ -35,6 +36,19 @@ public:
 		}).detach();
 	}
 
+	void InitFlickThread()
+	{
+		thread([this]()
+		{
+			while (Globals::Running)
+			{
+				this_thread::sleep_for(kFlickInterval);
+
+				aim.UpdateFlickbot();
+			}
+		}).detach();
+	}
+
 	static Features& Get()
 	{
 		static Features instance;
@@ -45,6 +59,7 @@ public:
 	{
 		InitAimbotThread();
 		InitTriggerbotThread();
+		InitFlickThread();
 
 		return true;
 	}

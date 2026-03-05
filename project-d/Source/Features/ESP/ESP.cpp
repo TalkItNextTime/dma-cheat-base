@@ -1931,7 +1931,12 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     if (config.Visuals.Bones)
     {
         ImU32 bonesColor = ToImColor(config.Visuals.BonesColor);
-        if (config.Visuals.VisibleCheck && player.IsVisible)
+        const bool flickAutowallCanDamage = config.Aim.Flick &&
+            player.Pawn != 0 &&
+            player.Pawn == aim.GetFlickAutowallTargetPawnVisual();
+        if (flickAutowallCanDamage)
+            bonesColor = IM_COL32(186, 146, 74, 255);
+        else if (config.Visuals.VisibleCheck && player.IsVisible)
             bonesColor = ToImColor(config.Visuals.BonesColorVisible);
         RenderSkeleton(drawList, player, bonesColor);
     }
@@ -2562,7 +2567,8 @@ void ESP::RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot&
 
 void ESP::RenderVisCheckDebug(ImDrawList* drawList) const
 {
-    if (!drawList || !config.DebugEnabled || !config.DebugVisCheck)
+    const bool visDebugEnabled = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
+    if (!drawList || !visDebugEnabled)
         return;
 
     std::vector<VisDebugScreenLine> lineSnapshot{};
@@ -2590,7 +2596,8 @@ void ESP::ClearVisCheckDebugOverlaySnapshot()
 
 void ESP::BuildVisCheckDebugOverlaySnapshot()
 {
-    if (!config.DebugEnabled || !config.DebugVisCheck)
+    const bool visDebugEnabled = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
+    if (!visDebugEnabled)
     {
         ClearVisCheckDebugOverlaySnapshot();
         return;
@@ -3259,7 +3266,7 @@ void ESP::UpdateVisCheckState()
     if (m_LastMapPoll.time_since_epoch().count() == 0 ||
         now - m_LastMapPoll >= std::chrono::milliseconds(1000))
     {
-        m_LastPolledMapName = sdk.GetCurrentMapName();
+        m_LastPolledMapName = NormalizeMapName(sdk.GetCurrentMapName());
         PerfDebug::RecordMapPoll(!m_LastPolledMapName.empty());
         m_LastMapPoll = now;
     }
@@ -3267,7 +3274,10 @@ void ESP::UpdateVisCheckState()
     const std::string& mapName = m_LastPolledMapName;
     if (mapName.empty())
     {
-        m_VisCheck.reset();
+        {
+            std::lock_guard visLock(m_VisCheckMutex);
+            m_VisCheck.reset();
+        }
         ClearMapDebugCache();
         m_CurrentMapName.clear();
         m_CurrentCachePath.clear();
@@ -3275,13 +3285,19 @@ void ESP::UpdateVisCheckState()
         return;
     }
 
-    if (m_VisCheck && mapName == m_CurrentMapName)
+    bool hasVisCheck = false;
+    {
+        std::lock_guard visLock(m_VisCheckMutex);
+        hasVisCheck = m_VisCheck != nullptr;
+    }
+
+    if (hasVisCheck && mapName == m_CurrentMapName)
     {
         m_MapStatus = BuildMapStatus(mapName, "Loaded");
         return;
     }
 
-    if (!m_VisCheck && mapName == m_CurrentMapName && m_CurrentCachePath.empty())
+    if (!hasVisCheck && mapName == m_CurrentMapName && m_CurrentCachePath.empty())
     {
         m_MapStatus = BuildMapStatus(mapName, "Not Found");
         return;
@@ -3296,7 +3312,10 @@ void ESP::UpdateVisCheckState()
     const std::string cachePath = ResolveCachePath(mapName);
     if (cachePath.empty())
     {
-        m_VisCheck.reset();
+        {
+            std::lock_guard visLock(m_VisCheckMutex);
+            m_VisCheck.reset();
+        }
         ClearMapDebugCache();
         m_CurrentMapName = mapName;
         m_CurrentCachePath.clear();
@@ -3351,15 +3370,22 @@ void ESP::ConsumeMapLoadResult()
         {
             if (loadedVisCheck)
             {
-                m_VisCheck = std::move(loadedVisCheck);
-                UpdateMapDebugCacheFromVisCheck(*m_VisCheck);
+                {
+                    std::lock_guard visLock(m_VisCheckMutex);
+                    m_VisCheck = std::move(loadedVisCheck);
+                    if (m_VisCheck)
+                        UpdateMapDebugCacheFromVisCheck(*m_VisCheck);
+                }
                 m_CurrentMapName = pending.MapName;
                 m_CurrentCachePath = pending.CachePath;
                 m_MapStatus = BuildMapStatus(pending.MapName, "Loaded");
             }
             else
             {
-                m_VisCheck.reset();
+                {
+                    std::lock_guard visLock(m_VisCheckMutex);
+                    m_VisCheck.reset();
+                }
                 ClearMapDebugCache();
                 m_CurrentMapName = pending.MapName;
                 m_CurrentCachePath = pending.CachePath;
@@ -3376,7 +3402,9 @@ std::string ESP::ResolveCachePath(const std::string& mapName) const
     if (mapName.empty())
         return {};
 
-    const std::string fileName = mapName;
+    const std::string fileName = NormalizeMapName(mapName);
+    if (fileName.empty())
+        return {};
     std::vector<std::filesystem::path> candidates{};
     candidates.reserve(80);
 
@@ -4085,16 +4113,19 @@ void ESP::UpdateMapDebugCacheFromVisCheck(const VisCheck& visCheck)
 
 bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
 {
-    if (!m_VisCheck)
-        return false;
-
     constexpr float maxDistance = 5000.0f;
     constexpr float maxDistanceSqr = maxDistance * maxDistance;
     if (DistanceSquared3D(src, dst) > maxDistanceSqr)
         return false;
 
+    bool isVisible = false;
     const auto start = std::chrono::steady_clock::now();
-    const bool isVisible = m_VisCheck->IsPointVisible(src, dst);
+    {
+        std::lock_guard visLock(m_VisCheckMutex);
+        if (!m_VisCheck)
+            return false;
+        isVisible = m_VisCheck->IsPointVisible(src, dst);
+    }
     const auto durationUs = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - start
     ).count();
@@ -4103,6 +4134,16 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
         PerfDebug::RecordVisCheck(static_cast<std::uint64_t>(durationUs), isVisible);
 
     return isVisible;
+}
+
+bool ESP::QueryPenetrationSegments(const Vector3& src, const Vector3& dst, std::vector<VisCheck::PenetrationSegment>& outSegments) const
+{
+    outSegments.clear();
+    std::lock_guard visLock(m_VisCheckMutex);
+    if (!m_VisCheck)
+        return false;
+
+    return m_VisCheck->TracePenetrationSegments(src, dst, outSegments);
 }
 
 bool ESP::IsPawnVisibleCached(const uint64_t pawn) const
@@ -5237,14 +5278,16 @@ void ESP::SamplerLoop()
             config.Aim.Trigger &&
             std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox &&
             aim.IsTriggerHotkeyActiveVisual();
+        const bool flickHot = config.Aim.Flick && aim.IsFlickHotkeyActiveVisual();
+        const bool highRateAimSampling = boneTriggerHot || flickHot;
         const bool helperOnlyMode = m_GrenadeHelperOnlyMode.load(std::memory_order_relaxed);
         const bool helperHoldingUtility = m_GrenadeHelperHoldingUtility.load(std::memory_order_relaxed);
         auto targetInterval = helperOnlyMode
             ? (helperHoldingUtility ? kHelperHotInterval : kHelperIdleInterval)
-            : (boneTriggerHot ? kSampleIntervalHot : kSampleIntervalIdle);
+            : (highRateAimSampling ? kSampleIntervalHot : kSampleIntervalIdle);
 
         // Apply soft backpressure when sampling is overloaded to avoid DMA contention spikes.
-        if (!boneTriggerHot && sampleUs > 0)
+        if (!highRateAimSampling && sampleUs > 0)
         {
             const auto sampleDuration = std::chrono::microseconds(sampleUs);
             const auto adaptiveInterval = sampleDuration + sampleDuration / 4; // keep ~25% headroom
@@ -5265,12 +5308,13 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     UpdateVisCheckState();
     outFrame.MapStatus = m_MapStatus;
 
-    const bool needVisibilityChecks = config.Aim.AimVisible || config.Visuals.VisibleCheck;
+    const bool flickSamplingEnabled = config.Aim.Flick;
+    const bool needVisibilityChecks = config.Aim.AimVisible || config.Visuals.VisibleCheck || config.Aim.Flick;
     const bool triggerBoneModeConfigured =
         config.Aim.Trigger &&
         std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox;
     const bool triggerHotkeyActive = triggerBoneModeConfigured && aim.IsTriggerHotkeyActiveVisual();
-    const bool needTriggerBoneSampling = triggerBoneModeConfigured && triggerHotkeyActive;
+    const bool needTriggerBoneSampling = (triggerBoneModeConfigured && triggerHotkeyActive) || flickSamplingEnabled;
     const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
     const bool needGrenadeHelperSampling = config.Visuals.GrenadeHelper;
     m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling, std::memory_order_relaxed);
@@ -5865,6 +5909,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         snapshot.Pawn = entity->Pawn;
         snapshot.SceneNode = entity->SceneNode;
         snapshot.BoneArray = IsLikelyUserAddress(entity->BoneArray) ? entity->BoneArray : 0;
+        snapshot.IsVisible = true;
 
         snapshot.Health = entity->Health;
         snapshot.MaxHealth = entity->MaxHealth > 0 ? entity->MaxHealth : 100;
@@ -6120,12 +6165,15 @@ void ESP::Render(ImDrawList* drawList)
 
     const bool renderEsp = config.Visuals.Enabled;
     const bool renderGrenadeHelper = config.Visuals.GrenadeHelper;
-    const bool renderVisDebug = config.DebugEnabled && config.DebugVisCheck;
+    const bool renderVisDebug = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
     if (!renderEsp && !renderGrenadeHelper && !renderVisDebug)
     {
         publishPerf();
         return;
     }
+
+    if (renderVisDebug && (!config.DebugEnabled || !config.DebugVisCheck))
+        BuildVisCheckDebugOverlaySnapshot();
 
     RenderFrame frame{};
     {

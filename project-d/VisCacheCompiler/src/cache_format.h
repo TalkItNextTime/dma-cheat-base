@@ -19,6 +19,7 @@ enum class CacheSectionId : std::uint32_t {
     BvhNodes = 3,
     BvhPrimitiveOrder = 4,
     Metadata = 5,
+    TriangleMaterialHashes = 6,
 };
 
 struct CacheHeader {
@@ -69,6 +70,7 @@ struct CompiledMapData {
     std::vector<Vec3> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<std::uint8_t> triangle_kinds; // Per-triangle source kind (mesh/hull), indexed by triangle id.
+    std::vector<std::uint32_t> triangle_material_hashes; // Per-triangle material hash, indexed by triangle id.
     std::vector<BvhNodeDisk> bvh_nodes;
     std::vector<std::uint32_t> bvh_primitive_order;
 };

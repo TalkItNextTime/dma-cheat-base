@@ -29,6 +29,7 @@ enum class ParsedTriangleSource : std::uint8_t {
 struct VphysParseResult {
     IndexedMesh mesh;
     std::vector<std::uint8_t> triangle_sources;
+    std::vector<std::uint32_t> triangle_material_hashes;
     VphysParseStats stats;
 };
 

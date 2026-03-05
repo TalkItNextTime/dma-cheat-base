@@ -13,6 +13,7 @@ namespace Config
         bool DebugPerf = false;
         bool DebugTrigger = false;
         bool DebugVisCheck = false;
+        bool DebugAutowall = false;
         bool DebugSpectatorList = false;
         bool DebugRadar = false;
 
@@ -80,6 +81,9 @@ namespace Config
             j["Aim"]["TriggerHitboxDebugColor"] = { Aim.TriggerHitboxDebugColor.x, Aim.TriggerHitboxDebugColor.y, Aim.TriggerHitboxDebugColor.z, Aim.TriggerHitboxDebugColor.w };
             j["Aim"]["TriggerHitboxDebugActiveColor"] = { Aim.TriggerHitboxDebugActiveColor.x, Aim.TriggerHitboxDebugActiveColor.y, Aim.TriggerHitboxDebugActiveColor.z, Aim.TriggerHitboxDebugActiveColor.w };
             j["Aim"]["TriggerHitboxDebugThickness"] = Aim.TriggerHitboxDebugThickness;
+            j["Aim"]["Flick"] = Aim.Flick;
+            j["Aim"]["FlickKey"] = Aim.FlickKey;
+            j["Aim"]["FlickKeyMode"] = Aim.FlickKeyMode;
             j["Aim"]["BlockTriggerWhenFlashed"] = Aim.BlockTriggerWhenFlashed;
             j["Aim"]["BlockAimbotWhenFlashed"] = Aim.BlockAimbotWhenFlashed;
 
@@ -104,6 +108,8 @@ namespace Config
             j["Aim"]["AimbotSmooth"] = Aim.AimbotSmooth;
             j["Aim"]["WeaponProfileEditorIndex"] = Aim.WeaponProfileEditorIndex;
             j["Aim"]["TriggerProfileEditorIndex"] = Aim.TriggerProfileEditorIndex;
+            j["Aim"]["FlickProfileEditorIndex"] = Aim.FlickProfileEditorIndex;
+            j["Aim"]["FlickSpecialEditorIndex"] = Aim.FlickSpecialEditorIndex;
             j["Aim"]["TriggerSpecialEditorIndex"] = Aim.TriggerSpecialEditorIndex;
 
             auto writeWeaponProfile = [&](const char* name, const Structs::AimWeaponProfile& profile)
@@ -146,6 +152,42 @@ namespace Config
             writeTriggerProfile("Rifle", Aim.TriggerProfiles[Structs::AimWeapon_Rifle]);
             writeTriggerProfile("Sniper", Aim.TriggerProfiles[Structs::AimWeapon_Sniper]);
             writeTriggerProfile("Lmg", Aim.TriggerProfiles[Structs::AimWeapon_Lmg]);
+
+            auto writeFlickProfile = [&](const char* name, const Structs::FlickWeaponProfile& profile)
+            {
+                nlohmann::json& out = j["Aim"]["FlickProfiles"][name];
+                out["Fov"] = profile.Fov;
+                out["Smooth"] = profile.Smooth;
+                out["MaxFlickTimeMs"] = profile.MaxFlickTimeMs;
+                out["RestartIntervalMs"] = profile.RestartIntervalMs;
+                out["BoneMask"] = profile.BoneMask;
+                out["DynamicFovEnabled"] = profile.DynamicFovEnabled;
+                out["AutowallEnabled"] = profile.AutowallEnabled;
+                out["AutowallKillshotOnly"] = profile.AutowallKillshotOnly;
+            };
+
+            writeFlickProfile("Pistol", Aim.FlickProfiles[Structs::AimWeapon_Pistol]);
+            writeFlickProfile("Smg", Aim.FlickProfiles[Structs::AimWeapon_Smg]);
+            writeFlickProfile("Shotgun", Aim.FlickProfiles[Structs::AimWeapon_Shotgun]);
+            writeFlickProfile("Rifle", Aim.FlickProfiles[Structs::AimWeapon_Rifle]);
+            writeFlickProfile("Sniper", Aim.FlickProfiles[Structs::AimWeapon_Sniper]);
+            writeFlickProfile("Lmg", Aim.FlickProfiles[Structs::AimWeapon_Lmg]);
+
+            auto writeFlickSpecialProfile = [&](const char* name, const Structs::FlickWeaponProfile& profile)
+            {
+                nlohmann::json& out = j["Aim"]["FlickSpecialProfiles"][name];
+                out["Fov"] = profile.Fov;
+                out["Smooth"] = profile.Smooth;
+                out["MaxFlickTimeMs"] = profile.MaxFlickTimeMs;
+                out["RestartIntervalMs"] = profile.RestartIntervalMs;
+                out["BoneMask"] = profile.BoneMask;
+                out["DynamicFovEnabled"] = profile.DynamicFovEnabled;
+                out["AutowallEnabled"] = profile.AutowallEnabled;
+                out["AutowallKillshotOnly"] = profile.AutowallKillshotOnly;
+            };
+
+            writeFlickSpecialProfile("DesertEagle", Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Deagle]);
+            writeFlickSpecialProfile("R8Revolver", Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Revolver]);
 
             auto writeTriggerSpecial = [&](const char* name, const Structs::TriggerSpecialProfile& profile)
             {
@@ -248,6 +290,7 @@ namespace Config
             j["Info"]["DebugPerf"] = DebugPerf;
             j["Info"]["DebugTrigger"] = DebugTrigger;
             j["Info"]["DebugVisCheck"] = DebugVisCheck;
+            j["Info"]["DebugAutowall"] = DebugAutowall;
             j["Info"]["DebugSpectatorList"] = DebugSpectatorList;
             j["Info"]["DebugRadar"] = DebugRadar;
 
@@ -347,6 +390,7 @@ namespace Config
                     readInfoBool("DebugPerf", DebugPerf);
                     readInfoBool("DebugTrigger", DebugTrigger);
                     readInfoBool("DebugVisCheck", DebugVisCheck);
+                    readInfoBool("DebugAutowall", DebugAutowall);
                     readInfoBool("DebugSpectatorList", DebugSpectatorList);
                     readInfoBool("DebugRadar", DebugRadar);
                     if (!hasDebugVisCheck)
@@ -413,6 +457,7 @@ namespace Config
                                 readInfoBool("DebugPerf", DebugPerf);
                                 readInfoBool("DebugTrigger", DebugTrigger);
                                 readInfoBool("DebugVisCheck", DebugVisCheck);
+                                readInfoBool("DebugAutowall", DebugAutowall);
                                 readInfoBool("DebugSpectatorList", DebugSpectatorList);
                                 readInfoBool("DebugRadar", DebugRadar);
                                 if (!hasDebugVisCheck)
@@ -497,6 +542,9 @@ namespace Config
                 j["Aim"]["TriggerHitboxDebugColor"] = { 1.0f, 0.55f, 0.2f, 0.9f };
                 j["Aim"]["TriggerHitboxDebugActiveColor"] = { 0.2f, 1.0f, 0.35f, 0.95f };
                 j["Aim"]["TriggerHitboxDebugThickness"] = 1.0f;
+                j["Aim"]["Flick"] = false;
+                j["Aim"]["FlickKey"] = 0;
+                j["Aim"]["FlickKeyMode"] = 1;
                 j["Aim"]["BlockTriggerWhenFlashed"] = false;
                 j["Aim"]["BlockAimbotWhenFlashed"] = false;
 
@@ -523,6 +571,8 @@ namespace Config
                 j["Aim"]["AimbotSmooth"] = 16.0f;
                 j["Aim"]["WeaponProfileEditorIndex"] = 0;
                 j["Aim"]["TriggerProfileEditorIndex"] = 0;
+                j["Aim"]["FlickProfileEditorIndex"] = 0;
+                j["Aim"]["FlickSpecialEditorIndex"] = 0;
                 j["Aim"]["TriggerSpecialEditorIndex"] = 0;
 
                 auto writeDefaultWeaponProfile = [&](
@@ -578,6 +628,30 @@ namespace Config
                 writeDefaultTriggerProfile("Rifle", 4.2f, 35, 65, 0, Structs::AimAllBoneMask);
                 writeDefaultTriggerProfile("Sniper", 3.8f, 45, 650, 0, Structs::AimAllBoneMask);
                 writeDefaultTriggerProfile("Lmg", 4.2f, 40, 70, 0, Structs::AimAllBoneMask);
+
+                auto writeDefaultFlickProfile = [&](const char* name, float fov, float smooth, int maxFlickTimeMs, int restartIntervalMs, bool dynamicFovEnabled, bool autowallEnabled, bool autowallKillshotOnly, std::uint64_t boneMask)
+                {
+                    nlohmann::json& p = j["Aim"]["FlickProfiles"][name];
+                    p["Fov"] = fov;
+                    p["Smooth"] = smooth;
+                    p["MaxFlickTimeMs"] = maxFlickTimeMs;
+                    p["RestartIntervalMs"] = restartIntervalMs;
+                    p["BoneMask"] = boneMask;
+                    p["DynamicFovEnabled"] = dynamicFovEnabled;
+                    p["AutowallEnabled"] = autowallEnabled;
+                    p["AutowallKillshotOnly"] = autowallKillshotOnly;
+                };
+
+                writeDefaultFlickProfile("Pistol", 6.8f, 14.0f, 210, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Smg", 7.6f, 15.5f, 220, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Shotgun", 9.5f, 11.0f, 200, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Rifle", 6.2f, 16.0f, 230, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Sniper", 4.2f, 22.0f, 260, 140, false, false, false, Structs::AimDefaultAimbotBoneMask);
+                writeDefaultFlickProfile("Lmg", 6.8f, 17.0f, 240, 120, true, false, false, Structs::AimDefaultAimbotBoneMask);
+
+                nlohmann::json& flickSpecial = j["Aim"]["FlickSpecialProfiles"];
+                flickSpecial["DesertEagle"] = j["Aim"]["FlickProfiles"]["Pistol"];
+                flickSpecial["R8Revolver"] = j["Aim"]["FlickProfiles"]["Pistol"];
 
                 j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["HitboxRadiusPx"] = 4.7f;
                 j["Aim"]["TriggerSpecialProfiles"]["DesertEagle"]["PreFireDelayMs"] = 50;
@@ -670,6 +744,7 @@ namespace Config
                 j["Info"]["DebugPerf"] = false;
                 j["Info"]["DebugTrigger"] = false;
                 j["Info"]["DebugVisCheck"] = false;
+                j["Info"]["DebugAutowall"] = false;
                 j["Info"]["DebugSpectatorList"] = false;
                 j["Info"]["DebugRadar"] = false;
 
@@ -813,6 +888,72 @@ namespace Config
                 }
             }
 
+            if (aimSection.contains("FlickProfiles"))
+            {
+                const auto& flickRoot = aimSection["FlickProfiles"];
+
+                auto readFlickProfile = [&](const char* name, Structs::FlickWeaponProfile& profile) -> bool
+                {
+                    if (!flickRoot.contains(name))
+                        return false;
+
+                    const auto& node = flickRoot[name];
+                    if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
+                    if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("MaxFlickTimeMs")) profile.MaxFlickTimeMs = node["MaxFlickTimeMs"].get<int>();
+                    if (node.contains("RestartIntervalMs")) profile.RestartIntervalMs = node["RestartIntervalMs"].get<int>();
+                    if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
+                    if (node.contains("DynamicFovEnabled")) profile.DynamicFovEnabled = node["DynamicFovEnabled"].get<bool>();
+                    if (node.contains("AutowallEnabled")) profile.AutowallEnabled = node["AutowallEnabled"].get<bool>();
+                    if (node.contains("AutowallKillshotOnly")) profile.AutowallKillshotOnly = node["AutowallKillshotOnly"].get<bool>();
+                    return true;
+                };
+
+                Structs::FlickWeaponProfile legacyDefault{};
+                const bool hasLegacyDefault = readFlickProfile("Default", legacyDefault);
+
+                auto readFlickProfileWithFallback = [&](const char* name, Structs::FlickWeaponProfile& profile)
+                {
+                    if (!readFlickProfile(name, profile) && hasLegacyDefault)
+                        profile = legacyDefault;
+                };
+
+                readFlickProfileWithFallback("Pistol", Aim.FlickProfiles[Structs::AimWeapon_Pistol]);
+                readFlickProfileWithFallback("Smg", Aim.FlickProfiles[Structs::AimWeapon_Smg]);
+                readFlickProfileWithFallback("Shotgun", Aim.FlickProfiles[Structs::AimWeapon_Shotgun]);
+                readFlickProfileWithFallback("Rifle", Aim.FlickProfiles[Structs::AimWeapon_Rifle]);
+                readFlickProfileWithFallback("Sniper", Aim.FlickProfiles[Structs::AimWeapon_Sniper]);
+                readFlickProfileWithFallback("Lmg", Aim.FlickProfiles[Structs::AimWeapon_Lmg]);
+
+                Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Deagle] = Aim.FlickProfiles[Structs::AimWeapon_Pistol];
+                Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Revolver] = Aim.FlickProfiles[Structs::AimWeapon_Pistol];
+            }
+
+            if (aimSection.contains("FlickSpecialProfiles"))
+            {
+                const auto& flickSpecialRoot = aimSection["FlickSpecialProfiles"];
+
+                auto readFlickSpecialProfile = [&](const char* name, Structs::FlickWeaponProfile& profile) -> bool
+                {
+                    if (!flickSpecialRoot.contains(name))
+                        return false;
+
+                    const auto& node = flickSpecialRoot[name];
+                    if (node.contains("Fov")) profile.Fov = node["Fov"].get<float>();
+                    if (node.contains("Smooth")) profile.Smooth = node["Smooth"].get<float>();
+                    if (node.contains("MaxFlickTimeMs")) profile.MaxFlickTimeMs = node["MaxFlickTimeMs"].get<int>();
+                    if (node.contains("RestartIntervalMs")) profile.RestartIntervalMs = node["RestartIntervalMs"].get<int>();
+                    if (node.contains("BoneMask")) profile.BoneMask = node["BoneMask"].get<std::uint64_t>();
+                    if (node.contains("DynamicFovEnabled")) profile.DynamicFovEnabled = node["DynamicFovEnabled"].get<bool>();
+                    if (node.contains("AutowallEnabled")) profile.AutowallEnabled = node["AutowallEnabled"].get<bool>();
+                    if (node.contains("AutowallKillshotOnly")) profile.AutowallKillshotOnly = node["AutowallKillshotOnly"].get<bool>();
+                    return true;
+                };
+
+                readFlickSpecialProfile("DesertEagle", Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Deagle]);
+                readFlickSpecialProfile("R8Revolver", Aim.FlickSpecialProfiles[Structs::TriggerSpecial_Revolver]);
+            }
+
             if (aimSection.contains("TriggerSpecialProfiles"))
             {
                 const auto& specialRoot = aimSection["TriggerSpecialProfiles"];
@@ -843,6 +984,8 @@ namespace Config
 
             Aim.WeaponProfileEditorIndex = std::clamp(Aim.WeaponProfileEditorIndex, 0, Structs::AimWeapon_Count - 1);
             Aim.TriggerProfileEditorIndex = std::clamp(Aim.TriggerProfileEditorIndex, 0, Structs::AimWeapon_Count - 1);
+            Aim.FlickProfileEditorIndex = std::clamp(Aim.FlickProfileEditorIndex, 0, Structs::AimWeapon_Count - 1);
+            Aim.FlickSpecialEditorIndex = std::clamp(Aim.FlickSpecialEditorIndex, 0, Structs::TriggerSpecial_Count - 1);
             Aim.TriggerSpecialEditorIndex = std::clamp(Aim.TriggerSpecialEditorIndex, 0, Structs::TriggerSpecial_Count - 1);
             Aim.TriggerDetectMode = std::clamp(Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1);
 
@@ -980,6 +1123,28 @@ namespace Config
                     profile.BoneMask = Aim.TriggerBoneMask;
             }
 
+            for (Structs::FlickWeaponProfile& profile : Aim.FlickProfiles)
+            {
+                profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
+                profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+                profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
+                profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
+                profile.BoneMask &= Structs::AimAllBoneMask;
+                if (profile.BoneMask == 0ull)
+                    profile.BoneMask = Aim.AimbotBoneMask;
+            }
+
+            for (Structs::FlickWeaponProfile& profile : Aim.FlickSpecialProfiles)
+            {
+                profile.Fov = std::clamp(profile.Fov, 0.1f, 60.0f);
+                profile.Smooth = std::clamp(profile.Smooth, 1.0f, 100.0f);
+                profile.MaxFlickTimeMs = std::clamp(profile.MaxFlickTimeMs, 10, 5000);
+                profile.RestartIntervalMs = std::clamp(profile.RestartIntervalMs, 0, 5000);
+                profile.BoneMask &= Structs::AimAllBoneMask;
+                if (profile.BoneMask == 0ull)
+                    profile.BoneMask = Aim.AimbotBoneMask;
+            }
+
             for (Structs::TriggerSpecialProfile& profile : Aim.TriggerSpecialProfiles)
             {
                 profile.HitboxRadiusPx = std::clamp(profile.HitboxRadiusPx, 0.5f, 30.0f);
@@ -1029,6 +1194,9 @@ namespace Config
                             else if (key == "TriggerHitboxDebugColor") configSection.TriggerHitboxDebugColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "TriggerHitboxDebugActiveColor") configSection.TriggerHitboxDebugActiveColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "TriggerHitboxDebugThickness") configSection.TriggerHitboxDebugThickness = value.get<float>();
+                            else if (key == "Flick") configSection.Flick = value.get<bool>();
+                            else if (key == "FlickKey") configSection.FlickKey = value.get<int>();
+                            else if (key == "FlickKeyMode") configSection.FlickKeyMode = value.get<int>();
                             else if (key == "BlockTriggerWhenFlashed") configSection.BlockTriggerWhenFlashed = value.get<bool>();
                             else if (key == "BlockAimbotWhenFlashed") configSection.BlockAimbotWhenFlashed = value.get<bool>();
 
@@ -1053,6 +1221,8 @@ namespace Config
                             else if (key == "AimbotSmooth") configSection.AimbotSmooth = value.get<float>();
                             else if (key == "WeaponProfileEditorIndex") configSection.WeaponProfileEditorIndex = value.get<int>();
                             else if (key == "TriggerProfileEditorIndex") configSection.TriggerProfileEditorIndex = value.get<int>();
+                            else if (key == "FlickProfileEditorIndex") configSection.FlickProfileEditorIndex = value.get<int>();
+                            else if (key == "FlickSpecialEditorIndex") configSection.FlickSpecialEditorIndex = value.get<int>();
                             else if (key == "TriggerSpecialEditorIndex") configSection.TriggerSpecialEditorIndex = value.get<int>();
                         }
                         else if constexpr (std::is_same_v<T, Structs::KmboxConfig>)

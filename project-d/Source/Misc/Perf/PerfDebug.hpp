@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -71,6 +72,16 @@ namespace PerfDebug
         std::atomic<std::uint64_t> TriggerDecisionUsMax{ 0 };
         std::atomic<std::uint64_t> TriggerSendUsSum{ 0 };
         std::atomic<std::uint64_t> TriggerSendUsMax{ 0 };
+
+        std::atomic<std::uint64_t> FlickAutowallChecks{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallPass{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallQueryFail{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallPenetrable{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallRequirementPass{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallDamageMilliSum{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallDamageMilliMax{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallRequirementMilliSum{ 0 };
+        std::atomic<std::uint64_t> FlickAutowallRequirementMilliMax{ 0 };
     };
 
     inline IntervalCounters Counters{};
@@ -78,6 +89,7 @@ namespace PerfDebug
     inline std::atomic<bool> DebugPerf{ false };
     inline std::atomic<bool> DebugTrigger{ false };
     inline std::atomic<bool> DebugVisCheck{ false };
+    inline std::atomic<bool> DebugAutowall{ false };
     inline std::atomic<bool> DebugThreadStopRequested{ false };
     inline std::mutex DebugThreadMutex{};
     inline std::thread DebugThread{};
@@ -97,6 +109,11 @@ namespace PerfDebug
     inline bool IsVisDebugEnabled()
     {
         return DebugEnabled.load(std::memory_order_relaxed) && DebugVisCheck.load(std::memory_order_relaxed);
+    }
+
+    inline bool IsAutowallCollectionEnabled()
+    {
+        return DebugEnabled.load(std::memory_order_relaxed) && DebugAutowall.load(std::memory_order_relaxed);
     }
 
     inline void RecordOverlayFrame(const std::uint64_t frameUs)
@@ -245,14 +262,46 @@ namespace PerfDebug
             Counters.TriggerDetectFires.fetch_add(1, std::memory_order_relaxed);
     }
 
+    inline void RecordFlickAutowallCheck(
+        const bool canPenetrate,
+        const bool passRequirement,
+        const bool queryFailed,
+        const float damage,
+        const float requiredDamage)
+    {
+        if (!IsAutowallCollectionEnabled())
+            return;
+
+        Counters.FlickAutowallChecks.fetch_add(1, std::memory_order_relaxed);
+        if (canPenetrate)
+            Counters.FlickAutowallPenetrable.fetch_add(1, std::memory_order_relaxed);
+        if (passRequirement)
+            Counters.FlickAutowallRequirementPass.fetch_add(1, std::memory_order_relaxed);
+        if (canPenetrate && passRequirement)
+            Counters.FlickAutowallPass.fetch_add(1, std::memory_order_relaxed);
+        if (queryFailed)
+            Counters.FlickAutowallQueryFail.fetch_add(1, std::memory_order_relaxed);
+
+        const float clampedDamage = std::clamp(damage, 0.0f, 10000.0f);
+        const std::uint64_t damageMilli = static_cast<std::uint64_t>(std::llround(static_cast<double>(clampedDamage) * 1000.0));
+        Counters.FlickAutowallDamageMilliSum.fetch_add(damageMilli, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.FlickAutowallDamageMilliMax, damageMilli);
+
+        const float clampedRequirement = std::clamp(requiredDamage, 0.0f, 10000.0f);
+        const std::uint64_t requirementMilli = static_cast<std::uint64_t>(std::llround(static_cast<double>(clampedRequirement) * 1000.0));
+        Counters.FlickAutowallRequirementMilliSum.fetch_add(requirementMilli, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.FlickAutowallRequirementMilliMax, requirementMilli);
+    }
+
     inline void LogInterval(double intervalSeconds);
 
-    inline void SetDebugOptions(const bool enabled, const bool perfEnabled, const bool triggerEnabled, const bool visCheckEnabled = false)
+    inline void SetDebugOptions(const bool enabled, const bool perfEnabled, const bool triggerEnabled, const bool visCheckEnabled = false, const bool autowallEnabled = false)
     {
         DebugEnabled.store(enabled, std::memory_order_relaxed);
         DebugPerf.store(enabled && perfEnabled, std::memory_order_relaxed);
         DebugTrigger.store(enabled && triggerEnabled, std::memory_order_relaxed);
         DebugVisCheck.store(enabled && visCheckEnabled, std::memory_order_relaxed);
+        DebugAutowall.store(enabled && autowallEnabled, std::memory_order_relaxed);
     }
 
     inline void SetVisDebugTick(std::function<void()> tick)
@@ -411,10 +460,20 @@ namespace PerfDebug
         const std::uint64_t triggerDecisionUsMax = Counters.TriggerDecisionUsMax.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerSendUsSum = Counters.TriggerSendUsSum.exchange(0, std::memory_order_relaxed);
         const std::uint64_t triggerSendUsMax = Counters.TriggerSendUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallChecks = Counters.FlickAutowallChecks.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallPass = Counters.FlickAutowallPass.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallQueryFail = Counters.FlickAutowallQueryFail.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallPenetrable = Counters.FlickAutowallPenetrable.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallRequirementPass = Counters.FlickAutowallRequirementPass.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallDamageMilliSum = Counters.FlickAutowallDamageMilliSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallDamageMilliMax = Counters.FlickAutowallDamageMilliMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallRequirementMilliSum = Counters.FlickAutowallRequirementMilliSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t flickAutowallRequirementMilliMax = Counters.FlickAutowallRequirementMilliMax.exchange(0, std::memory_order_relaxed);
 
         if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && visChecks == 0 && mapPolls == 0 &&
             triggerHotkeyDowns == 0 && triggerTimeoutChecks == 0 && triggerScans == 0 && triggerFires == 0 &&
-            triggerSnapshotFrames == 0 && triggerFallbackScans == 0 && triggerPreFireGateHits == 0)
+            triggerSnapshotFrames == 0 && triggerFallbackScans == 0 && triggerPreFireGateHits == 0 &&
+            flickAutowallChecks == 0)
             return;
 
         const double overlayFps = static_cast<double>(overlayFrames) / safeIntervalSeconds;
@@ -433,7 +492,8 @@ namespace PerfDebug
 
         const bool logPerf = DebugPerf.load(std::memory_order_relaxed);
         const bool logTrigger = DebugTrigger.load(std::memory_order_relaxed);
-        if (!logPerf && !logTrigger)
+        const bool logAutowall = DebugAutowall.load(std::memory_order_relaxed);
+        if (!logPerf && !logTrigger && !logAutowall)
             return;
 
         const double triggerTimeoutAgeAvgMs = triggerTimeoutChecks ? (static_cast<double>(triggerTimeoutAgeUsSum) / static_cast<double>(triggerTimeoutChecks)) / 1000.0 : 0.0;
@@ -448,6 +508,14 @@ namespace PerfDebug
         const double triggerDecisionMaxMs = static_cast<double>(triggerDecisionUsMax) / 1000.0;
         const double triggerSendAvgMs = triggerFires ? (static_cast<double>(triggerSendUsSum) / static_cast<double>(triggerFires)) / 1000.0 : 0.0;
         const double triggerSendMaxMs = static_cast<double>(triggerSendUsMax) / 1000.0;
+        const double flickAutowallDamageAvg = flickAutowallChecks
+            ? static_cast<double>(flickAutowallDamageMilliSum) / static_cast<double>(flickAutowallChecks) / 1000.0
+            : 0.0;
+        const double flickAutowallDamageMax = static_cast<double>(flickAutowallDamageMilliMax) / 1000.0;
+        const double flickAutowallRequirementAvg = flickAutowallChecks
+            ? static_cast<double>(flickAutowallRequirementMilliSum) / static_cast<double>(flickAutowallChecks) / 1000.0
+            : 0.0;
+        const double flickAutowallRequirementMax = static_cast<double>(flickAutowallRequirementMilliMax) / 1000.0;
 
         if (logPerf)
         {
@@ -499,6 +567,22 @@ namespace PerfDebug
                 triggerDecisionMaxMs,
                 triggerSendAvgMs,
                 triggerSendMaxMs
+            );
+        }
+
+        if (logAutowall)
+        {
+            LOG_INFO(
+                "[autowall dbg] flick check={} pen={} req_pass={} pass={} query_fail={} | dmg={:.2f}/{:.2f} req={:.2f}/{:.2f}",
+                flickAutowallChecks,
+                flickAutowallPenetrable,
+                flickAutowallRequirementPass,
+                flickAutowallPass,
+                flickAutowallQueryFail,
+                flickAutowallDamageAvg,
+                flickAutowallDamageMax,
+                flickAutowallRequirementAvg,
+                flickAutowallRequirementMax
             );
         }
     }
