@@ -367,31 +367,23 @@ AutowallEngine::Result AutowallEngine::Evaluate(
 
     const WeaponPenetrationData& weapon = ResolveWeapon(weaponId);
     const float totalDistance = (std::max)(0.0f, Distance3D(shooter, target));
-    const float baseDamage = (std::max)(0.0f, weapon.BaseDamage);
-    float currentDamage = baseDamage;
+    float currentDamage = (std::max)(0.0f, weapon.BaseDamage);
 
     if (currentDamage <= kMinPenetrationDamage || totalDistance <= 0.001f)
         return { 0.0f, false };
 
-    // Primary model: material + thickness + range attenuation (reference-like formula).
     float traveledDistance = 0.0f;
-    bool primaryFailed = false;
-    std::size_t validSegmentCount = 0;
     for (const VisCheck::PenetrationSegment& segment : segments)
     {
         const float entryDistance = std::clamp(segment.entryDistance, 0.0f, totalDistance);
         const float exitDistance = std::clamp(segment.exitDistance, 0.0f, totalDistance);
         if (exitDistance <= entryDistance)
             continue;
-        ++validSegmentCount;
 
         const float stepDistance = (std::max)(0.0f, entryDistance - traveledDistance);
         currentDamage *= std::pow(weapon.RangeModifier, stepDistance / 500.0f);
         if (currentDamage <= kMinPenetrationDamage)
-        {
-            primaryFailed = true;
-            break;
-        }
+            return { 0.0f, false };
 
         const MaterialPenetrationData& entryMaterial = ResolveMaterial(segment.entryMaterialHash);
         const MaterialPenetrationData& exitMaterial = ResolveMaterial(segment.exitMaterialHash);
@@ -412,10 +404,7 @@ AutowallEngine::Result AutowallEngine::Evaluate(
         }
 
         if (combinedPenModifier <= 0.0f)
-        {
-            primaryFailed = true;
-            break;
-        }
+            return { 0.0f, false };
 
         // Segment thickness is already in Source world units; no extra unit conversion here.
         const float insideDistance = (std::max)(0.0f, segment.thickness);
@@ -426,106 +415,17 @@ AutowallEngine::Result AutowallEngine::Evaluate(
             0.0f);
 
         if (lostDamage > currentDamage)
-        {
-            primaryFailed = true;
-            break;
-        }
+            return { 0.0f, false };
 
         currentDamage -= lostDamage;
         if (currentDamage <= kMinPenetrationDamage)
-        {
-            primaryFailed = true;
-            break;
-        }
+            return { 0.0f, false };
 
         traveledDistance = exitDistance;
     }
 
     const float remainingDistance = (std::max)(0.0f, totalDistance - traveledDistance);
-    const float distanceScaledDamage = (std::max)(
-        currentDamage * std::pow(weapon.RangeModifier, remainingDistance / 500.0f),
-        0.0f);
-    if (!primaryFailed && distanceScaledDamage > kMinPenetrationDamage)
-        return { distanceScaledDamage, true };
-
-    // Conservative fallback: reduces false negatives where segment pairing/material noise
-    // can make the strict model collapse to 0 while real shots still deal damage.
-    if (validSegmentCount == 0)
-        return { distanceScaledDamage, distanceScaledDamage > kMinPenetrationDamage };
-
-    float effectiveThickness = 0.0f;
-    float materialResistance = 0.0f;
-    std::uint32_t layerCount = 0;
-    for (const VisCheck::PenetrationSegment& segment : segments)
-    {
-        if (layerCount >= 6u)
-            break;
-
-        const float entryDistance = std::clamp(segment.entryDistance, 0.0f, totalDistance);
-        const float exitDistance = std::clamp(segment.exitDistance, 0.0f, totalDistance);
-        if (exitDistance <= entryDistance)
-            continue;
-
-        const MaterialPenetrationData& entryMaterial = ResolveMaterial(segment.entryMaterialHash);
-        const MaterialPenetrationData& exitMaterial = ResolveMaterial(segment.exitMaterialHash);
-        float combinedDistanceMod = std::clamp(
-            (entryMaterial.DistanceModifier + exitMaterial.DistanceModifier) * 0.5f,
-            0.15f,
-            4.0f);
-        const float combinedDamageMod = std::clamp(
-            (entryMaterial.DamageModifier + exitMaterial.DamageModifier) * 0.5f,
-            0.05f,
-            2.0f);
-
-        if (segment.entryMaterialHash == segment.exitMaterialHash)
-        {
-            const std::string lowerName = ToLowerAscii(entryMaterial.Name);
-            if (lowerName.find("cardboard") != std::string::npos ||
-                lowerName.find("wood") != std::string::npos)
-            {
-                combinedDistanceMod = (std::max)(combinedDistanceMod, 2.4f);
-            }
-            else if (lowerName.find("plastic") != std::string::npos)
-            {
-                combinedDistanceMod = (std::max)(combinedDistanceMod, 1.8f);
-            }
-        }
-
-        // Clamp unrealistic huge pair spans from jittery intersection pairing.
-        const float thickness = std::clamp(exitDistance - entryDistance, 0.0f, 96.0f);
-        if (thickness <= 0.01f)
-            continue;
-
-        ++layerCount;
-        effectiveThickness += thickness / combinedDistanceMod;
-        materialResistance += (1.15f - (std::min)(combinedDamageMod, 1.15f));
-    }
-
-    if (layerCount == 0)
-        return { 0.0f, false };
-
-    const float rangeDamage = (std::max)(baseDamage * std::pow(weapon.RangeModifier, totalDistance / 500.0f), 0.0f);
-    if (rangeDamage <= kMinPenetrationDamage)
-        return { 0.0f, false };
-
-    const float penetrationBudget = (std::max)(10.0f, weapon.PenetrationPower * 0.75f);
-    if (effectiveThickness > penetrationBudget * 2.0f)
-        return { 0.0f, false };
-
-    const float thicknessLoss =
-        effectiveThickness * (0.045f + 30.0f / (std::max)(60.0f, weapon.PenetrationPower));
-    const float layerLoss = static_cast<float>(layerCount) * 1.0f + materialResistance * 2.0f;
-    float fallbackDamage = rangeDamage - thicknessLoss - layerLoss;
-
-    if (fallbackDamage > kMinPenetrationDamage)
-        return { fallbackDamage, true };
-
-    // Non-zero penetrable fallback for edge cases close to budget boundary.
-    if (effectiveThickness <= penetrationBudget * 1.2f)
-    {
-        fallbackDamage = 0.5f;
-        return { fallbackDamage, true };
-    }
-
-    return { 0.0f, false };
+    currentDamage *= std::pow(weapon.RangeModifier, remainingDistance / 500.0f);
+    currentDamage = (std::max)(currentDamage, 0.0f);
+    return { currentDamage, currentDamage > kMinPenetrationDamage };
 }
