@@ -3,6 +3,8 @@
 #include <ESP/ESP.hpp>
 #include "Aimbot.hpp"
 #include "AutowallEngine.hpp"
+#include "RecoilPunchResolver.hpp"
+#include "TriggerHitboxSchema.hpp"
 
 #include <array>
 #include <cfloat>
@@ -51,13 +53,6 @@ namespace
         std::uint64_t BoneMask = 0ull;
     };
 
-    struct BoneLink
-    {
-        int FromBone = 0;
-        int ToBone = 0;
-        std::uint64_t BoneMask = 0;
-    };
-
     struct TriggerHitboxMatch
     {
         int FromBone = -1;
@@ -72,39 +67,14 @@ namespace
     constexpr float kDefaultEyeHeight = 64.0f;
     constexpr int kDefaultTriggerHoldMs = 8;
     constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
-    constexpr auto kTriggerTrackedBones = Structs::AimBoneIds;
-    constexpr float kTriggerHeadScaleFixed = 7.0f;
-    constexpr float kTriggerTorsoScaleFixed = 8.0f;
-    constexpr float kTriggerArmsScaleFixed = 6.0f;
-    constexpr float kTriggerLegsScaleFixed = 5.0f;
+    constexpr auto kTriggerTrackedBones = TriggerHitboxSchema::TrackedBones;
     constexpr float kFlashBlockOverlayStrongThreshold = 0.60f; // 强致盲暂停阈值；值越高，越早恢复自瞄/扳机。
     constexpr float kFlashBlockOverlaySoftThreshold = 0.60f; // 软致盲暂停阈值（需配合 duration）；值越高，恢复越早。
     constexpr float kFlashBlockDurationAssistSec = 0.08f;
     constexpr auto kFlickTargetScanInterval = std::chrono::milliseconds(8);
     std::atomic<bool> g_LoggedFlickAutowallUnavailable{ false };
 
-    constexpr std::array<BoneLink, 16> kTriggerBoneLinks = {
-        BoneLink{ 0, 2, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(2) },
-        BoneLink{ 2, 4, Structs::BoneMaskFromBoneId(2) | Structs::BoneMaskFromBoneId(4) },
-        BoneLink{ 4, 5, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(5) },
-        BoneLink{ 5, 6, Structs::BoneMaskFromBoneId(5) | Structs::BoneMaskFromBoneId(6) },
-
-        BoneLink{ 4, 8, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(8) },
-        BoneLink{ 8, 9, Structs::BoneMaskFromBoneId(8) | Structs::BoneMaskFromBoneId(9) },
-        BoneLink{ 9, 10, Structs::BoneMaskFromBoneId(9) | Structs::BoneMaskFromBoneId(10) },
-
-        BoneLink{ 4, 13, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(13) },
-        BoneLink{ 13, 14, Structs::BoneMaskFromBoneId(13) | Structs::BoneMaskFromBoneId(14) },
-        BoneLink{ 14, 15, Structs::BoneMaskFromBoneId(14) | Structs::BoneMaskFromBoneId(15) },
-
-        BoneLink{ 0, 22, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(22) },
-        BoneLink{ 22, 23, Structs::BoneMaskFromBoneId(22) | Structs::BoneMaskFromBoneId(23) },
-        BoneLink{ 23, 24, Structs::BoneMaskFromBoneId(23) | Structs::BoneMaskFromBoneId(24) },
-
-        BoneLink{ 0, 25, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(25) },
-        BoneLink{ 25, 26, Structs::BoneMaskFromBoneId(25) | Structs::BoneMaskFromBoneId(26) },
-        BoneLink{ 26, 27, Structs::BoneMaskFromBoneId(26) | Structs::BoneMaskFromBoneId(27) }
-    };
+    constexpr auto& kTriggerBoneLinks = TriggerHitboxSchema::Links;
 
     constexpr auto kAimbotProbeBones = Structs::AimBoneIds;
 
@@ -206,80 +176,10 @@ namespace
         if (boneId == Structs::AimHeadBoneId)
             return 4.0f;
 
-        switch (boneId)
-        {
-        case 0: // pelvis
+        if (boneId == TriggerHitboxSchema::SizingRootBoneId)
             return 1.25f;
-
-        case 22: case 23: case 24:
-        case 25: case 26: case 27: // legs
+        if (TriggerHitboxSchema::RegionFromBone(boneId) == 3)
             return 0.75f;
-
-        default:
-            return 1.0f;
-        }
-    }
-
-    float BonePointRadiusScale(const int boneId)
-    {
-        switch (boneId)
-        {
-        case 0: return 1.45f; // pelvis
-        case 2: return 1.35f; // spine
-        case 4: return 1.40f; // chest
-        case 5: return 1.20f; // neck
-
-        case 8:
-        case 13:
-            return 1.15f; // shoulders
-
-        case 9:
-        case 14:
-            return 0.95f; // elbows
-
-        case 10:
-        case 15:
-            return 0.80f; // hands
-
-        case 22:
-        case 25:
-            return 1.25f; // thighs
-
-        case 23:
-        case 26:
-            return 1.05f; // knees
-
-        case 24:
-        case 27:
-            return 0.90f; // feet
-
-        default:
-            break;
-        }
-
-        return 1.0f;
-    }
-
-    float BoneLinkRadiusScale(const int fromBone, const int toBone)
-    {
-        const auto match = [&](const int a, const int b)
-        {
-            return (fromBone == a && toBone == b) || (fromBone == b && toBone == a);
-        };
-
-        if (match(0, 2)) return 1.45f;   // pelvis -> spine
-        if (match(2, 4)) return 1.40f;   // spine -> chest
-        if (match(4, 5)) return 1.25f;   // chest -> neck
-        if (match(5, 6)) return 1.10f;   // neck -> head
-
-        if (match(4, 8) || match(4, 13)) return 1.12f; // shoulder roots
-        if (match(8, 9) || match(13, 14)) return 0.92f; // upper arm
-        if (match(9, 10) || match(14, 15)) return 0.78f; // forearm/hand
-
-        if (match(0, 22) || match(0, 25)) return 1.28f; // hip -> thigh
-        if (match(22, 23) || match(25, 26)) return 1.12f; // thigh -> knee
-        if (match(23, 24) || match(26, 27)) return 0.90f; // calf -> foot
-
         return 1.0f;
     }
 
@@ -381,21 +281,12 @@ namespace
         if (!IsLikelyUserAddress(core.LocalPawn))
             return false;
 
-        if (!Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon ||
-            !Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
+        if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
         {
             return false;
         }
 
-        const std::uint64_t weaponServices = mem.Read<std::uint64_t>(core.LocalPawn + Offsets::Schema::m_pWeaponServices);
-        if (!IsLikelyUserAddress(weaponServices))
-            return false;
-
-        const std::uint32_t activeWeaponHandle = mem.Read<std::uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
-        if (!activeWeaponHandle)
-            return false;
-
-        const std::uint64_t activeWeapon = sdk.ResolveEntityFromHandle(activeWeaponHandle, core.EntityList);
+        const std::uint64_t activeWeapon = sdk.ResolveActiveWeaponFromPawn(core.LocalPawn, core.EntityList);
         if (!IsLikelyUserAddress(activeWeapon))
             return false;
 
@@ -507,44 +398,15 @@ namespace
 
         float adaptiveHeadRadius = clampedHeadRadius;
         const int headSlot = findBoneSlot(Structs::AimHeadBoneId);
-        const int pelvisSlot = findBoneSlot(0);
+        const int pelvisSlot = findBoneSlot(TriggerHitboxSchema::SizingRootBoneId);
         float distanceScale = 1.0f;
         if (headSlot >= 0 && pelvisSlot >= 0 && onScreen[headSlot] && onScreen[pelvisSlot])
         {
-            constexpr float kReferenceBodyHeightPx = 150.0f;
             const float bodyHeight = (std::max)(1.0f, std::fabs(screenBones[pelvisSlot].y - screenBones[headSlot].y));
-            distanceScale = std::clamp(bodyHeight / kReferenceBodyHeightPx, 0.20f, 3.00f);
+            distanceScale = std::clamp(bodyHeight / TriggerHitboxSchema::ReferenceBodyHeightPx, 0.20f, 3.00f);
         }
         adaptiveHeadRadius = std::clamp(clampedHeadRadius * distanceScale, 0.5f, 100.0f);
         const float adaptiveBodyRadius = std::clamp(clampedBodyRadius * distanceScale, 0.5f, 100.0f);
-
-        const auto hitboxRegionFromBone = [](const int boneId) -> int
-        {
-            if (boneId == Structs::AimHeadBoneId)
-                return 0; // head
-            switch (boneId)
-            {
-            case 8: case 9: case 10:
-            case 13: case 14: case 15:
-                return 2; // arms
-            case 22: case 23: case 24:
-            case 25: case 26: case 27:
-                return 3; // legs
-            default:
-                return 1; // torso
-            }
-        };
-        const auto hitboxRegionScale = [](const int region) -> float
-        {
-            switch (region)
-            {
-            case 0: return kTriggerHeadScaleFixed;
-            case 2: return kTriggerArmsScaleFixed;
-            case 3: return kTriggerLegsScaleFixed;
-            default: break;
-            }
-            return kTriggerTorsoScaleFixed;
-        };
 
         for (size_t i = 0; i < kTriggerTrackedBones.size(); ++i)
         {
@@ -555,11 +417,11 @@ namespace
                 continue;
 
             const float pointDistance = ToScreenDistance(crosshair, screenBones[i]);
-            const int pointRegion = hitboxRegionFromBone(kTriggerTrackedBones[i]);
+            const int pointRegion = TriggerHitboxSchema::RegionFromBone(kTriggerTrackedBones[i]);
             const float pointThresholdBase = kTriggerTrackedBones[i] == Structs::AimHeadBoneId
                 ? adaptiveHeadRadius
-                : adaptiveBodyRadius * BonePointRadiusScale(kTriggerTrackedBones[i]);
-            const float pointThreshold = pointThresholdBase * hitboxRegionScale(pointRegion);
+                : adaptiveBodyRadius * TriggerHitboxSchema::BonePointRadiusScale(kTriggerTrackedBones[i]);
+            const float pointThreshold = pointThresholdBase * TriggerHitboxSchema::RegionScale(pointRegion);
             if (pointDistance < outBestDistance)
             {
                 outBestDistance = pointDistance;
@@ -576,7 +438,7 @@ namespace
                 hitDetected = true;
         }
 
-        for (const BoneLink& link : kTriggerBoneLinks)
+        for (const TriggerHitboxSchema::BoneLink& link : kTriggerBoneLinks)
         {
             const bool endpointSelected =
                 IsBoneEnabledByMask(boneMask, link.FromBone) ||
@@ -593,12 +455,8 @@ namespace
                 continue;
 
             const float distance = DistancePointToSegment2D(crosshair, screenBones[fromSlot], screenBones[toSlot]);
-            const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
-                ? 0
-                : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
-                    ? hitboxRegionFromBone(link.FromBone)
-                    : 1);
-            float threshold = adaptiveBodyRadius * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+            const int linkRegion = TriggerHitboxSchema::RegionFromLink(link.FromBone, link.ToBone);
+            float threshold = adaptiveBodyRadius * TriggerHitboxSchema::BoneLinkRadiusScale(link.FromBone, link.ToBone) * TriggerHitboxSchema::RegionScale(linkRegion);
             if (distance < outBestDistance)
             {
                 outBestDistance = distance;
@@ -646,48 +504,19 @@ namespace
 
         float distanceScale = 1.0f;
         const int headSlot = findBoneSlot(Structs::AimHeadBoneId);
-        const int pelvisSlot = findBoneSlot(0);
+        const int pelvisSlot = findBoneSlot(TriggerHitboxSchema::SizingRootBoneId);
         if (headSlot >= 0 && pelvisSlot >= 0 &&
             snapshot.BoneValid[static_cast<std::size_t>(headSlot)] &&
             snapshot.BoneValid[static_cast<std::size_t>(pelvisSlot)])
         {
-            constexpr float kReferenceBodyHeightPx = 150.0f;
             const Vector2 headScreen = snapshot.Bones[static_cast<std::size_t>(headSlot)].Screen;
             const Vector2 pelvisScreen = snapshot.Bones[static_cast<std::size_t>(pelvisSlot)].Screen;
             const float bodyHeight = (std::max)(1.0f, std::fabs(pelvisScreen.y - headScreen.y));
-            distanceScale = std::clamp(bodyHeight / kReferenceBodyHeightPx, 0.20f, 3.00f);
+            distanceScale = std::clamp(bodyHeight / TriggerHitboxSchema::ReferenceBodyHeightPx, 0.20f, 3.00f);
         }
 
         const float adaptiveHeadRadius = std::clamp(clampedHeadRadius * distanceScale, 0.5f, 100.0f);
         const float adaptiveBodyRadius = std::clamp(clampedBodyRadius * distanceScale, 0.5f, 100.0f);
-
-        const auto hitboxRegionFromBone = [](const int boneId) -> int
-        {
-            if (boneId == Structs::AimHeadBoneId)
-                return 0; // head
-            switch (boneId)
-            {
-            case 8: case 9: case 10:
-            case 13: case 14: case 15:
-                return 2; // arms
-            case 22: case 23: case 24:
-            case 25: case 26: case 27:
-                return 3; // legs
-            default:
-                return 1; // torso
-            }
-        };
-        const auto hitboxRegionScale = [](const int region) -> float
-        {
-            switch (region)
-            {
-            case 0: return kTriggerHeadScaleFixed;
-            case 2: return kTriggerArmsScaleFixed;
-            case 3: return kTriggerLegsScaleFixed;
-            default: break;
-            }
-            return kTriggerTorsoScaleFixed;
-        };
 
         for (size_t i = 0; i < kTriggerTrackedBones.size(); ++i)
         {
@@ -698,11 +527,11 @@ namespace
                 continue;
 
             const float pointDistance = ToScreenDistance(crosshair, snapshot.Bones[i].Screen);
-            const int pointRegion = hitboxRegionFromBone(kTriggerTrackedBones[i]);
+            const int pointRegion = TriggerHitboxSchema::RegionFromBone(kTriggerTrackedBones[i]);
             const float pointThresholdBase = kTriggerTrackedBones[i] == Structs::AimHeadBoneId
                 ? adaptiveHeadRadius
-                : adaptiveBodyRadius * BonePointRadiusScale(kTriggerTrackedBones[i]);
-            const float pointThreshold = pointThresholdBase * hitboxRegionScale(pointRegion);
+                : adaptiveBodyRadius * TriggerHitboxSchema::BonePointRadiusScale(kTriggerTrackedBones[i]);
+            const float pointThreshold = pointThresholdBase * TriggerHitboxSchema::RegionScale(pointRegion);
             if (pointDistance < outBestDistance)
                 outBestDistance = pointDistance;
 
@@ -710,7 +539,7 @@ namespace
                 hitDetected = true;
         }
 
-        for (const BoneLink& link : kTriggerBoneLinks)
+        for (const TriggerHitboxSchema::BoneLink& link : kTriggerBoneLinks)
         {
             const bool endpointSelected =
                 IsBoneEnabledByMask(boneMask, link.FromBone) ||
@@ -734,12 +563,8 @@ namespace
                 snapshot.Bones[static_cast<std::size_t>(fromSlot)].Screen,
                 snapshot.Bones[static_cast<std::size_t>(toSlot)].Screen
             );
-            const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
-                ? 0
-                : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
-                    ? hitboxRegionFromBone(link.FromBone)
-                    : 1);
-            const float threshold = adaptiveBodyRadius * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+            const int linkRegion = TriggerHitboxSchema::RegionFromLink(link.FromBone, link.ToBone);
+            const float threshold = adaptiveBodyRadius * TriggerHitboxSchema::BoneLinkRadiusScale(link.FromBone, link.ToBone) * TriggerHitboxSchema::RegionScale(linkRegion);
             if (distance < outBestDistance)
                 outBestDistance = distance;
 
@@ -1608,6 +1433,7 @@ void Aimbot::UpdateAimbot()
     std::unordered_set<std::uint64_t> visiblePawns{};
     if (config.Aim.AimVisible)
         visiblePawns = esp.GetVisiblePawnSetSnapshot();
+    const std::vector<TriggerBoneSnapshot> aimbotSnapshots = esp.GetTriggerBoneSnapshots();
 
     auto isPawnVisibleForAim = [&](const std::uint64_t pawn) -> bool
     {
@@ -1616,109 +1442,63 @@ void Aimbot::UpdateAimbot()
         return visiblePawns.find(pawn) != visiblePawns.end();
     };
 
+    auto findSnapshotByPawn = [&](const std::uint64_t pawn) -> const TriggerBoneSnapshot*
+    {
+        if (!pawn || aimbotSnapshots.empty())
+            return nullptr;
+
+        for (const TriggerBoneSnapshot& snapshot : aimbotSnapshots)
+        {
+            if (snapshot.Pawn == pawn)
+                return &snapshot;
+        }
+
+        return nullptr;
+    };
+
     auto buildCandidate = [&](const std::uint64_t pawn, TargetCandidate& outCandidate) -> bool
     {
-        if (!IsLikelyUserAddress(pawn) || pawn == core.LocalPawn)
+        const TriggerBoneSnapshot* snapshot = findSnapshotByPawn(pawn);
+        if (!snapshot || !IsLikelyUserAddress(snapshot->Pawn) || snapshot->Pawn == core.LocalPawn)
             return false;
 
-        int health = 0;
-        int team = 0;
-        int lifeState = 0;
-        if (!sdk.ReadBasicEntityState(pawn, health, team, lifeState))
+        if (!IsAlive(snapshot->Health, snapshot->LifeState))
             return false;
 
-        if (!IsAlive(health, lifeState))
+        if (!config.Aim.AimFriendly && localTeam > 0 && snapshot->Team == localTeam)
             return false;
 
-        if (!config.Aim.AimFriendly && localTeam > 0 && team == localTeam)
-            return false;
-
-        if (!isPawnVisibleForAim(pawn))
+        if (config.Aim.AimVisible && !snapshot->IsVisible)
             return false;
 
         Vector3 targetWorld{};
         Vector2 targetScreen{};
         bool hasTargetBone = false;
 
-        if (Offsets::Schema::m_pGameSceneNode && Offsets::Schema::m_modelState)
+        float bestDistance = FLT_MAX;
+        for (size_t i = 0; i < snapshot->Bones.size(); ++i)
         {
-            const std::uint64_t sceneNode = mem.Read<std::uint64_t>(pawn + Offsets::Schema::m_pGameSceneNode);
-            if (IsLikelyUserAddress(sceneNode))
+            if (!snapshot->BoneValid[i])
+                continue;
+
+            const BonePoint& bone = snapshot->Bones[i];
+            if (!IsBoneEnabledByMask(aimbotBoneMask, bone.Index))
+                continue;
+            if (!bone.OnScreen || !IsNonZeroPosition(bone.World))
+                continue;
+
+            const float boneDistance = ToScreenDistance(screenCenter, bone.Screen);
+            if (!hasTargetBone || boneDistance < bestDistance)
             {
-                const std::uint64_t boneArray = mem.Read<std::uint64_t>(sceneNode + Offsets::Schema::m_modelState + Offsets::Layout::BoneArray);
-                if (IsLikelyUserAddress(boneArray))
-                {
-                    std::array<BoneDataRaw, kAimbotProbeBones.size()> rawBones{};
-                    const auto scatter = mem.CreateScatterHandle();
-                    if (scatter)
-                    {
-                        for (size_t i = 0; i < kAimbotProbeBones.size(); ++i)
-                        {
-                            const std::uint64_t address = boneArray + static_cast<std::uint64_t>(kAimbotProbeBones[i]) * Offsets::Layout::BoneStride;
-                            mem.AddScatterReadRequest(scatter, address, &rawBones[i], sizeof(BoneDataRaw));
-                        }
-
-                        mem.ExecuteReadScatter(scatter);
-                        mem.CloseScatterHandle(scatter);
-
-                        float bestDistance = FLT_MAX;
-                        for (size_t i = 0; i < kAimbotProbeBones.size(); ++i)
-                        {
-                            const int boneId = kAimbotProbeBones[i];
-                            if (!IsBoneEnabledByMask(aimbotBoneMask, boneId))
-                                continue;
-
-                            const Vector3& boneWorld = rawBones[i].Position;
-                            if (!IsNonZeroPosition(boneWorld))
-                                continue;
-
-                            Vector2 boneScreen{};
-                            if (!sdk.WorldToScreen(boneWorld, boneScreen, core.ViewMatrix))
-                                continue;
-
-                            if (config.Aim.AimVisible)
-                            {
-                                if (boneScreen.x < 0.0f || boneScreen.x > Screen.x ||
-                                    boneScreen.y < 0.0f || boneScreen.y > Screen.y)
-                                {
-                                    continue;
-                                }
-                            }
-
-                            const float boneDistance = ToScreenDistance(screenCenter, boneScreen);
-                            if (!hasTargetBone || boneDistance < bestDistance)
-                            {
-                                hasTargetBone = true;
-                                bestDistance = boneDistance;
-                                targetWorld = boneWorld;
-                                targetScreen = boneScreen;
-                            }
-                        }
-                    }
-                }
+                hasTargetBone = true;
+                bestDistance = boneDistance;
+                targetWorld = bone.World;
+                targetScreen = bone.Screen;
             }
         }
 
         if (!hasTargetBone)
-        {
-            if (!Offsets::Schema::m_vOldOrigin)
-                return false;
-
-            targetWorld = mem.Read<Vector3>(pawn + Offsets::Schema::m_vOldOrigin);
-            targetWorld = targetWorld + Vector3{ 0.0f, 0.0f, 72.0f };
-
-            if (!sdk.WorldToScreen(targetWorld, targetScreen, core.ViewMatrix))
-                return false;
-
-            if (config.Aim.AimVisible)
-            {
-                if (targetScreen.x < 0.0f || targetScreen.x > Screen.x ||
-                    targetScreen.y < 0.0f || targetScreen.y > Screen.y)
-                {
-                    return false;
-                }
-            }
-        }
+            return false;
 
         const float worldDistance = std::sqrt(
             std::pow(targetWorld.x - localEye.x, 2.0f) +
@@ -1728,13 +1508,13 @@ void Aimbot::UpdateAimbot()
 
         const float allowedFovPx = baseFovPx;
 
-        outCandidate.Pawn = pawn;
+        outCandidate.Pawn = snapshot->Pawn;
         outCandidate.World = targetWorld;
         outCandidate.Screen = targetScreen;
         outCandidate.ScreenDistance = ToScreenDistance(screenCenter, targetScreen);
         outCandidate.WorldDistance = worldDistance;
         outCandidate.AllowedFovPx = allowedFovPx;
-        outCandidate.Team = team;
+        outCandidate.Team = snapshot->Team;
         return true;
     };
 
@@ -1841,36 +1621,52 @@ void Aimbot::UpdateAimbot()
     bool sprayConstraintActive = false;
     const bool recoilSupportedWeapon = weaponCategory != Structs::AimWeapon_Pistol &&
                                        weaponCategory != Structs::AimWeapon_Shotgun;
-    if (recoilSupportedWeapon && Offsets::Schema::m_aimPunchAngle && Offsets::Schema::m_iShotsFired)
+    if (recoilSupportedWeapon &&
+        Offsets::Schema::m_iShotsFired &&
+        Offsets::Schema::m_pAimPunchServices &&
+        Offsets::Schema::m_predictableBaseAngle &&
+        Offsets::Schema::m_unpredictableBaseAngle)
     {
         const int shotsFired = mem.Read<int>(core.LocalPawn + Offsets::Schema::m_iShotsFired);
-        const Vector3 aimPunch = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_aimPunchAngle);
-        const float punchSignal = std::fabs(aimPunch.x) + std::fabs(aimPunch.y);
-        constexpr float kRecoilPunchEnterThreshold = 0.0020f;
-        constexpr float kRecoilPunchExitThreshold = 0.0008f;
-        const float punchThreshold = m_HasRecoil ? kRecoilPunchExitThreshold : kRecoilPunchEnterThreshold;
-        const bool punchActive = punchSignal > punchThreshold;
-        sprayConstraintActive = shotsFired > 1 && punchActive;
-
-        if (sprayConstraintActive)
+        const std::uint64_t aimPunchServices = mem.Read<std::uint64_t>(core.LocalPawn + Offsets::Schema::m_pAimPunchServices);
+        if (!aimPunchServices)
         {
-            constexpr float kRecoilAlpha = 0.8f;
-            const float recoilScalePx = (std::max)(1.0f, ScreenCenter.x / 90.0f);
-            const Vector2 cross{ screenCenter.x, screenCenter.y };
-
-            if (!m_HasRecoil)
-            {
-                m_RecoilPos = cross;
-                m_HasRecoil = true;
-            }
-
-            m_RecoilPos.x = m_RecoilPos.x * (1.0f - kRecoilAlpha) + (cross.x - aimPunch.y * recoilScalePx) * kRecoilAlpha;
-            m_RecoilPos.y = m_RecoilPos.y * (1.0f - kRecoilAlpha) + (cross.y - aimPunch.x * recoilScalePx) * kRecoilAlpha;
-            recoilOffset = m_RecoilPos - cross;
+            resetRecoilState();
         }
         else
         {
-            resetRecoilState();
+            const AimPunchServiceState aimPunchState{
+                .PredictableBaseAngle = mem.Read<Vector3>(aimPunchServices + Offsets::Schema::m_predictableBaseAngle),
+                .UnpredictableBaseAngle = mem.Read<Vector3>(aimPunchServices + Offsets::Schema::m_unpredictableBaseAngle),
+            };
+            const Vector3 aimPunch = ResolveRecoilPunch(aimPunchState);
+            const float punchSignal = std::fabs(aimPunch.x) + std::fabs(aimPunch.y);
+            constexpr float kRecoilPunchEnterThreshold = 0.0020f;
+            constexpr float kRecoilPunchExitThreshold = 0.0008f;
+            const float punchThreshold = m_HasRecoil ? kRecoilPunchExitThreshold : kRecoilPunchEnterThreshold;
+            const bool punchActive = punchSignal > punchThreshold;
+            sprayConstraintActive = shotsFired > 1 && punchActive;
+
+            if (sprayConstraintActive)
+            {
+                constexpr float kRecoilAlpha = 0.8f;
+                const float recoilScalePx = (std::max)(1.0f, ScreenCenter.x / 90.0f);
+                const Vector2 cross{ screenCenter.x, screenCenter.y };
+
+                if (!m_HasRecoil)
+                {
+                    m_RecoilPos = cross;
+                    m_HasRecoil = true;
+                }
+
+                m_RecoilPos.x = m_RecoilPos.x * (1.0f - kRecoilAlpha) + (cross.x - aimPunch.y * recoilScalePx) * kRecoilAlpha;
+                m_RecoilPos.y = m_RecoilPos.y * (1.0f - kRecoilAlpha) + (cross.y - aimPunch.x * recoilScalePx) * kRecoilAlpha;
+                recoilOffset = m_RecoilPos - cross;
+            }
+            else
+            {
+                resetRecoilState();
+            }
         }
     }
     else
@@ -2260,7 +2056,9 @@ void Aimbot::UpdateTriggerbot()
         };
 
         const float coarseRadius = std::clamp(
-            (std::max)(effectiveHeadRadius * kTriggerHeadScaleFixed, effectiveBodyRadius * kTriggerTorsoScaleFixed) * 3.0f,
+            (std::max)(
+                effectiveHeadRadius * TriggerHitboxSchema::RegionScale(0),
+                effectiveBodyRadius * TriggerHitboxSchema::RegionScale(1)) * 3.0f,
             24.0f,
             520.0f
         );

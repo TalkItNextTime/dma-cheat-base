@@ -1688,7 +1688,6 @@ void Overlay::RenderMenu()
 											ImGui::TextDisabled("%s", Localization::Pick("Reloading / non-gun is always blocked.", "换弹 / 非枪械时始终阻止触发。"));
 
 											ImAdd::SeparatorText("Hitbox Debug");
-											ImAdd::CheckBox("Enable Trigger Hitbox Debug", &config.Aim.TriggerHitboxDebug);
 											ImAdd::CheckBox("Head Sphere Debug", &config.Aim.TriggerHeadSphereDebug);
 											if (config.Aim.TriggerHitboxDebug)
 											{
@@ -2356,12 +2355,12 @@ void Overlay::RenderMenu()
 					}
 
 					RadarRuntimeState runtime = radarBridge.GetRuntimeState();
-					static std::chrono::steady_clock::time_point radarWatchUrlCopiedUntil{};
+					static std::chrono::steady_clock::time_point radarLinkCopiedUntil{};
 
 					ImAdd::SeparatorText(Localization::Pick("Enable", "启用"));
 					ImAdd::CheckBox(Localization::Pick("Enable Radar Bridge", "启用雷达桥接"), &config.Radar.Enabled);
 
-					ImAdd::SeparatorText(Localization::Pick("Connection", "连接"));
+					ImAdd::SeparatorText(Localization::Pick("Endpoint", "地址"));
 					char hostBuffer[128]{};
 					strncpy_s(hostBuffer, config.Radar.Host.c_str(), _TRUNCATE);
 					if (ImGui::InputText(Localization::Pick("Host", "主机"), hostBuffer, IM_ARRAYSIZE(hostBuffer)))
@@ -2372,45 +2371,19 @@ void Overlay::RenderMenu()
 						config.Radar.StaticPort = std::clamp(staticPort, 1, 65535);
 
 					int ingestPort = config.Radar.IngestPort;
-					if (ImGui::InputInt(Localization::Pick("Ingest Port", "推流端口"), &ingestPort))
+					if (ImGui::InputInt(Localization::Pick("WebSocket Port", "WebSocket端口"), &ingestPort))
 						config.Radar.IngestPort = std::clamp(ingestPort, 1, 65535);
 
-					char adminKeyBuffer[192]{};
-					strncpy_s(adminKeyBuffer, config.Radar.AdminKey.c_str(), _TRUNCATE);
-					if (ImGui::InputText(Localization::Pick("Admin Key", "管理密钥"), adminKeyBuffer, IM_ARRAYSIZE(adminKeyBuffer), ImGuiInputTextFlags_Password))
-						config.Radar.AdminKey = adminKeyBuffer;
-
-					char roomPrefixBuffer[128]{};
-					strncpy_s(roomPrefixBuffer, config.Radar.RoomNamePrefix.c_str(), _TRUNCATE);
-					if (ImGui::InputText(Localization::Pick("Room Name Prefix", "房间名前缀"), roomPrefixBuffer, IM_ARRAYSIZE(roomPrefixBuffer)))
-						config.Radar.RoomNamePrefix = roomPrefixBuffer;
-
-					int publishIntervalMs = config.Radar.PublishIntervalMs;
-					if (ImGui::InputInt(Localization::Pick("Publish Interval (ms)", "推送间隔(毫秒)"), &publishIntervalMs))
-						config.Radar.PublishIntervalMs = std::clamp(publishIntervalMs, 40, 2000);
-
-					if (ImAdd::Button(Localization::Pick("Create Room Now", "立即建房"), ImVec2(130.0f, 0.0f)))
-						radarBridge.ForceCreateRoom();
-					ImGui::SameLine();
-					if (ImAdd::Button(Localization::Pick("Reconnect Ingest", "重连推流"), ImVec2(130.0f, 0.0f)))
-						radarBridge.ForceReconnectIngest();
-					ImGui::SameLine();
-					if (ImAdd::Button(Localization::Pick("Delete Room Now", "立即删房"), ImVec2(130.0f, 0.0f)))
-						radarBridge.ForceDeleteRoom();
-
-					ImAdd::SeparatorText(Localization::Pick("Lifecycle", "生命周期"));
-					ImAdd::CheckBox(Localization::Pick("Auto Delete Room On Exit", "退出时自动删房"), &config.Radar.AutoDeleteRoomOnExit);
-
-					ImAdd::SeparatorText(Localization::Pick("Watch URL", "观看地址"));
-					ImGui::TextWrapped("%s: %s", Localization::Pick("Watch URL", "观看地址"), runtime.watchUrl.empty() ? "-" : runtime.watchUrl.c_str());
-					ImGui::BeginDisabled(runtime.watchUrl.empty());
-					if (ImAdd::Button(Localization::Pick("Copy URL", "复制地址"), ImVec2(130.0f, 0.0f)))
+					ImAdd::SeparatorText(Localization::Pick("Link", "链接"));
+					ImGui::TextWrapped("%s: %s", Localization::Pick("Radar Link", "雷达链接"), runtime.staticUrl.empty() ? "-" : runtime.staticUrl.c_str());
+					ImGui::BeginDisabled(runtime.staticUrl.empty());
+					if (ImAdd::Button(Localization::Pick("Copy Link", "复制链接"), ImVec2(130.0f, 0.0f)))
 					{
-						ImGui::SetClipboardText(runtime.watchUrl.c_str());
-						radarWatchUrlCopiedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+						ImGui::SetClipboardText(runtime.staticUrl.c_str());
+						radarLinkCopiedUntil = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 					}
 					ImGui::EndDisabled();
-					if (std::chrono::steady_clock::now() < radarWatchUrlCopiedUntil)
+					if (std::chrono::steady_clock::now() < radarLinkCopiedUntil)
 					{
 						ImGui::SameLine();
 						ImGui::TextDisabled("%s", Localization::Pick("Copied", "已复制"));
@@ -2420,10 +2393,8 @@ void Overlay::RenderMenu()
 					{
 						ImAdd::SeparatorText(Localization::Pick("Runtime Status", "运行状态"));
 						ImGui::Text("%s: %s", Localization::Pick("Enabled", "启用"), runtime.enabled ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
-						ImGui::Text("%s: %s", Localization::Pick("Room Created", "已建房"), runtime.roomCreated ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
-						ImGui::Text("%s: %s", Localization::Pick("Ingest Connected", "推流已连接"), runtime.ingestConnected ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
-						ImGui::TextWrapped("%s: %s", Localization::Pick("Room ID", "房间ID"), runtime.roomId.empty() ? "-" : runtime.roomId.c_str());
-						ImGui::TextWrapped("%s: %s", Localization::Pick("Ingest URL", "推流地址"), runtime.ingestUrl.empty() ? "-" : runtime.ingestUrl.c_str());
+						ImGui::Text("%s: %s", Localization::Pick("Connected", "已连接"), runtime.connected ? Localization::Pick("Yes", "是") : Localization::Pick("No", "否"));
+						ImGui::TextWrapped("%s: %s", Localization::Pick("WebSocket URL", "WebSocket地址"), runtime.webSocketUrl.empty() ? "-" : runtime.webSocketUrl.c_str());
 						ImGui::TextWrapped("%s: %s", Localization::Pick("Last Error", "最近错误"), runtime.lastError.empty() ? "-" : runtime.lastError.c_str());
 						ImGui::Text("%s: %llu", Localization::Pick("Last Push (epoch ms)", "最后推送(毫秒时间戳)"), static_cast<unsigned long long>(runtime.lastPushEpochMs));
 					}
@@ -2574,12 +2545,18 @@ void Overlay::RenderMenu()
 
 					ImAdd::SeparatorText(Localization::Pick("Hardware", "硬件"));
 
+					const SDK::CoreCache coreCache = sdk.GetCoreCache();
+					const bool dmaRuntimeHealthy =
+						ProcInfo::DmaInitialized ||
+						Globals::ClientBase != 0 ||
+						coreCache.IsValid;
+
 					ImGui::Text("%s", Localization::Pick("DMA:", "DMA:"));
 					ImGui::SameLine();
 					ImGui::TextColored(
-						ProcInfo::DmaInitialized ? ImVec4(0, 1, 0, 1)/* green */ : ImVec4(1, 0, 0, 1)/* red */,
+						dmaRuntimeHealthy ? ImVec4(0, 1, 0, 1)/* green */ : ImVec4(1, 0, 0, 1)/* red */,
 						"%s",
-						ProcInfo::DmaInitialized ? Localization::Pick("Connected", "已连接") : Localization::Pick("Disconnected", "未连接")
+						dmaRuntimeHealthy ? Localization::Pick("Connected", "已连接") : Localization::Pick("Disconnected", "未连接")
 					);
 
 					ImGui::Text("%s", Localization::Pick("KMBOX:", "KMBOX:"));
@@ -2664,10 +2641,12 @@ void Overlay::RenderMenu()
 						config.DebugVisCheck = false;
 						config.DebugAutowall = false;
 						config.DebugSpectatorList = false;
+						config.Aim.TriggerHitboxDebug = false;
 					}
 
 					if (config.DebugEnabled)
 					{
+						ImAdd::CheckBox(Localization::Pick("Enable Trigger Hitbox Debug", "启用扳机碰撞体调试"), &config.Aim.TriggerHitboxDebug);
 						ImAdd::CheckBox(Localization::Pick("Perf Debug Output", "性能调试输出"), &config.DebugPerf);
 						ImAdd::CheckBox(Localization::Pick("Trigger Debug Output", "扳机调试输出"), &config.DebugTrigger);
 						ImAdd::CheckBox(Localization::Pick("VisCheck Debug Overlay", "VisCheck调试叠加"), &config.DebugVisCheck);

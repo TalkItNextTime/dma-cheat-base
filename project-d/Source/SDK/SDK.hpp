@@ -28,6 +28,8 @@ public:
 
 	uint64_t ResolveEntityFromHandle(uint32_t handle) const;
 	uint64_t ResolveEntityFromHandle(uint32_t handle, uint64_t entityList) const;
+	uint64_t ResolveActiveWeaponFromPawn(uint64_t pawn) const;
+	uint64_t ResolveActiveWeaponFromPawn(uint64_t pawn, uint64_t entityList) const;
 	uint64_t ResolvePawnFromController(uint64_t controller) const;
 	bool ReadBasicEntityState(uint64_t entity, int& health, int& team, int& lifeState) const;
 

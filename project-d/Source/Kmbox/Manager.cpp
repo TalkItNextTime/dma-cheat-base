@@ -1,6 +1,11 @@
 #include <Pch.hpp>
 #include "Manager.hpp"
 
+namespace
+{
+	constexpr DWORD kKmBoxSocketTimeoutMs = 1500;
+}
+
 KmBoxNetManager::~KmBoxNetManager()
 {
 	WSACleanup();
@@ -29,6 +34,28 @@ int KmBoxNetManager::InitDevice(const string& IP, WORD Port, const string& Mac)
 	srand(time(NULL));
 
 	this->s_Client = socket(AF_INET, SOCK_DGRAM, 0);
+	if (this->s_Client == INVALID_SOCKET)
+	{
+		WSACleanup();
+		this->s_Client = -1;
+		return err_creat_socket;
+	}
+
+	if (setsockopt(this->s_Client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&kKmBoxSocketTimeoutMs), sizeof(kKmBoxSocketTimeoutMs)) == SOCKET_ERROR)
+	{
+		closesocket(this->s_Client);
+		WSACleanup();
+		this->s_Client = -1;
+		return err_net_rx_timeout;
+	}
+
+	if (setsockopt(this->s_Client, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&kKmBoxSocketTimeoutMs), sizeof(kKmBoxSocketTimeoutMs)) == SOCKET_ERROR)
+	{
+		closesocket(this->s_Client);
+		WSACleanup();
+		this->s_Client = -1;
+		return err_net_rx_timeout;
+	}
 
 	this->AddrServer.sin_addr.S_un.S_addr = inet_addr(IP.c_str());
 	this->AddrServer.sin_family = AF_INET;
@@ -48,7 +75,10 @@ int KmBoxNetManager::InitDevice(const string& IP, WORD Port, const string& Mac)
 	Status = recvfrom(this->s_Client, reinterpret_cast<char*>(&this->ReceiveData), 1024, 0,
 		reinterpret_cast<sockaddr*>(&this->AddrServer), &FromLen);
 	if (Status < 0)
+	{
+		LOG_ERROR("KMBOX handshake timed out or failed. IP={} Port={} UUID={}", IP, Port, Mac);
 		return err_net_rx_timeout;
+	}
 
 	LOG_INFO("Successfully connected to KMBOX:");
 	LOG_INFO("  IP: {}", IP);
@@ -71,7 +101,10 @@ int KmBoxNetManager::SendData(int DataLength)
 		reinterpret_cast<sockaddr*>(&s_NewClient), &FromLen);
 
 	if (Status < 0)
+	{
+		LOG_ERROR("KMBOX command timed out. cmd={} index={}", Kmbox.PostData.head.cmd, Kmbox.PostData.head.indexpts);
 		return err_net_rx_timeout;
+	}
 
 	return NetHandler();
 }

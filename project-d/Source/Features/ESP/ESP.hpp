@@ -74,6 +74,12 @@ struct C4Snapshot
     bool CanDefuse = false;
     uint64_t BombEntity = 0;
     uint64_t BombDefuserPawn = 0;
+    uint64_t BombOwnerPawn = 0;
+    bool StartedArming = false;
+    bool PlantingViaUse = false;
+    float ArmedTime = 0.0f;
+    float PlantCountdown = 0.0f;
+    float PlantLength = 3.2f;
     Vector3 Position{};
     Vector2 Screen{};
     bool OnScreen = false;
@@ -180,24 +186,16 @@ private:
         std::future<std::unique_ptr<VisCheck>> Future{};
     };
 
-    struct RenderFrame
-    {
-        std::vector<PlayerEspSnapshot> Players{};
-        C4Snapshot C4{};
-        SpectatorListSnapshot SpectatorList{};
-        GrenadeHelperSnapshot GrenadeHelper{};
-        std::string MapStatus = "Map Status: (Waiting)";
-        std::uint32_t ResolvedControllers = 0;
-    };
-
     struct RadarPlayerFrameItem
     {
         std::string PlayerId{};
+        std::string SteamId{};
         uint64_t Controller = 0;
         uint64_t Pawn = 0;
         int Team = 0;
         int Health = 0;
         int Armor = 0;
+        int Money = 0;
         int Flashed = 0;
         int AmmoClip = -1;
         int CompTeammateColor = -1;
@@ -205,9 +203,17 @@ private:
         Vector3 EyeAngles{};
         std::string Name{};
         std::string WeaponName{};
+        std::string PrimaryWeaponName{};
+        std::string SecondaryWeaponName{};
+        std::vector<std::string> UtilityNames{};
+        bool HasDefuser = false;
+        bool HasHelmet = false;
+        bool Connected = false;
+        bool InBuyZone = false;
+        bool Active = false;
+        bool HasBomb = false;
         bool IsLocal = false;
         bool IsAlive = false;
-        bool Shooting = false;
     };
 
     struct RadarPublishFrame
@@ -216,10 +222,23 @@ private:
         C4Snapshot C4{};
         Vector3 LocalViewAngles{};
         std::string MapName{};
-        std::uint64_t BombOwnerPawn = 0;
+        int CtScore = 0;
+        int TScore = 0;
+        bool CanBuy = false;
         bool FreezePeriod = false;
         int GamePhaseRaw = -1;
         float PhaseEndsIn = 0.0f;
+    };
+
+    struct RenderFrame
+    {
+        std::vector<PlayerEspSnapshot> Players{};
+        C4Snapshot C4{};
+        RadarPublishFrame Radar{};
+        SpectatorListSnapshot SpectatorList{};
+        GrenadeHelperSnapshot GrenadeHelper{};
+        std::string MapStatus = "Map Status: (Waiting)";
+        std::uint32_t ResolvedControllers = 0;
     };
 
     struct ControllerIdentityCache
@@ -239,12 +258,17 @@ private:
         bool IsScoped = false;
         bool HasDefuser = false;
         bool HasHelmet = false;
+        bool InBuyZone = false;
         float FlashDuration = 0.0f;
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
         std::chrono::steady_clock::time_point LastStatusRead{};
-        int LastAmmoClip = -1;
-        std::chrono::steady_clock::time_point LastShotTick{};
+        std::string RadarActiveWeapon{};
+        std::string RadarPrimaryWeapon{};
+        std::string RadarSecondaryWeapon{};
+        std::vector<std::string> RadarUtilities{};
+        bool RadarHasBomb = false;
+        std::chrono::steady_clock::time_point LastInventoryRead{};
     };
 
     struct VisDebugScreenLine
@@ -347,8 +371,6 @@ private:
     std::unordered_map<uint64_t, ControllerIdentityCache> m_ControllerIdentityCache{};
     std::unordered_map<uint64_t, PawnRuntimeCache> m_PawnRuntimeCache{};
     std::unordered_map<uint64_t, int> m_RadarObserverSlots{};
-    std::unordered_map<uint64_t, int> m_RadarLastAmmoClip{};
-    std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_RadarLastShotTick{};
     C4Snapshot m_C4Cache{};
     std::chrono::steady_clock::time_point m_LastC4Sample{};
     std::uint64_t m_RoundEpoch = 1;
@@ -358,6 +380,9 @@ private:
     bool m_LastFreezePeriod = false;
     std::chrono::steady_clock::time_point m_LastFreezeEndTick{};
     std::chrono::steady_clock::time_point m_LastSpectatorDebugLog{};
+    std::chrono::steady_clock::time_point m_LastRadarScoreRead{};
+    int m_RadarCtScore = 0;
+    int m_RadarTScore = 0;
 
 public:
     bool QueryPenetrationSegments(const Vector3& src, const Vector3& dst, std::vector<VisCheck::PenetrationSegment>& outSegments) const;

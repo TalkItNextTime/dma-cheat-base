@@ -1,11 +1,14 @@
 ﻿#include <Pch.hpp>
 #include <SDK.hpp>
+#include "C4CardModel.hpp"
 #include "ESP.hpp"
 #include "KeyIconsEmbedded.hpp"
 #include "WeaponIconsEmbedded.hpp"
+#include <Aimbot/TriggerHitboxSchema.hpp>
 #include <Aimbot/Aimbot.hpp>
 #include <Overlay/Localization.hpp>
 #include <Overlay/Overlay.hpp>
+#include <Radar/ObservRadarProtocol.hpp>
 #include <Radar/Radar.hpp>
 #include <array>
 #include <cmath>
@@ -99,11 +102,7 @@ namespace
     constexpr int kMaxControllers = 64;
     constexpr int kAliveLifeStateA = 0;
     constexpr int kAliveLifeStateB = 256;
-    constexpr int kHeadBone = 6;
-    constexpr float kTriggerHeadScaleFixed = 7.0f;
-    constexpr float kTriggerTorsoScaleFixed = 8.0f;
-    constexpr float kTriggerArmsScaleFixed = 6.0f;
-    constexpr float kTriggerLegsScaleFixed = 5.0f;
+    constexpr int kHeadBone = Structs::AimHeadBoneId;
     constexpr float kFlashedStatusStrongThreshold = 0.60f; // 强致盲强度阈值；值越高，致盲状态越早消失。
     constexpr float kFlashedStatusSoftThreshold = 0.30f; // 软致盲强度阈值（需配合 duration）；值越高，恢复越早判定为未致盲。
 
@@ -112,66 +111,32 @@ namespace
         return std::chrono::milliseconds(std::clamp(config.Radar.PublishIntervalMs, 40, 2000));
     }
 
-    constexpr std::array<int, 17> kTrackedBones = {
-        0, 2, 4, 5, 6,
-        8, 9, 10,
-        13, 14, 15,
-        22, 23, 24,
-        25, 26, 27
-    };
+    constexpr auto kTrackedBones = TriggerHitboxSchema::TrackedBones;
 
     constexpr std::array<std::pair<int, int>, 16> kBoneLinks = {
-        std::pair{ 0, 2 },
-        std::pair{ 2, 4 },
-        std::pair{ 4, 5 },
-        std::pair{ 5, 6 },
+        std::pair{ 1, 2 },
+        std::pair{ 2, 23 },
+        std::pair{ 23, 6 },
+        std::pair{ 6, 7 },
 
-        std::pair{ 4, 8 },
-        std::pair{ 8, 9 },
+        std::pair{ 6, 9 },
         std::pair{ 9, 10 },
+        std::pair{ 10, 11 },
 
-        std::pair{ 4, 13 },
+        std::pair{ 6, 13 },
         std::pair{ 13, 14 },
         std::pair{ 14, 15 },
 
-        std::pair{ 0, 22 },
-        std::pair{ 22, 23 },
-        std::pair{ 23, 24 },
+        std::pair{ 1, 17 },
+        std::pair{ 17, 18 },
+        std::pair{ 18, 19 },
 
-        std::pair{ 0, 25 },
-        std::pair{ 25, 26 },
-        std::pair{ 26, 27 }
+        std::pair{ 1, 20 },
+        std::pair{ 20, 21 },
+        std::pair{ 21, 22 }
     };
 
-    struct DebugBoneLink
-    {
-        int FromBone = 0;
-        int ToBone = 0;
-        std::uint64_t BoneMask = 0;
-    };
-
-    constexpr std::array<DebugBoneLink, 16> kDebugBoneLinks = {
-        DebugBoneLink{ 0, 2, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(2) },
-        DebugBoneLink{ 2, 4, Structs::BoneMaskFromBoneId(2) | Structs::BoneMaskFromBoneId(4) },
-        DebugBoneLink{ 4, 5, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(5) },
-        DebugBoneLink{ 5, 6, Structs::BoneMaskFromBoneId(5) | Structs::BoneMaskFromBoneId(6) },
-
-        DebugBoneLink{ 4, 8, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(8) },
-        DebugBoneLink{ 8, 9, Structs::BoneMaskFromBoneId(8) | Structs::BoneMaskFromBoneId(9) },
-        DebugBoneLink{ 9, 10, Structs::BoneMaskFromBoneId(9) | Structs::BoneMaskFromBoneId(10) },
-
-        DebugBoneLink{ 4, 13, Structs::BoneMaskFromBoneId(4) | Structs::BoneMaskFromBoneId(13) },
-        DebugBoneLink{ 13, 14, Structs::BoneMaskFromBoneId(13) | Structs::BoneMaskFromBoneId(14) },
-        DebugBoneLink{ 14, 15, Structs::BoneMaskFromBoneId(14) | Structs::BoneMaskFromBoneId(15) },
-
-        DebugBoneLink{ 0, 22, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(22) },
-        DebugBoneLink{ 22, 23, Structs::BoneMaskFromBoneId(22) | Structs::BoneMaskFromBoneId(23) },
-        DebugBoneLink{ 23, 24, Structs::BoneMaskFromBoneId(23) | Structs::BoneMaskFromBoneId(24) },
-
-        DebugBoneLink{ 0, 25, Structs::BoneMaskFromBoneId(0) | Structs::BoneMaskFromBoneId(25) },
-        DebugBoneLink{ 25, 26, Structs::BoneMaskFromBoneId(25) | Structs::BoneMaskFromBoneId(26) },
-        DebugBoneLink{ 26, 27, Structs::BoneMaskFromBoneId(26) | Structs::BoneMaskFromBoneId(27) }
-    };
+    constexpr auto& kDebugBoneLinks = TriggerHitboxSchema::Links;
 
     constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
 
@@ -1458,29 +1423,6 @@ namespace
         return Distance2D(point, closest);
     }
 
-    float BoneLinkRadiusScale(const int fromBone, const int toBone)
-    {
-        const auto match = [&](const int a, const int b)
-        {
-            return (fromBone == a && toBone == b) || (fromBone == b && toBone == a);
-        };
-
-        if (match(0, 2)) return 1.45f;
-        if (match(2, 4)) return 1.40f;
-        if (match(4, 5)) return 1.25f;
-        if (match(5, 6)) return 1.10f;
-
-        if (match(4, 8) || match(4, 13)) return 1.12f;
-        if (match(8, 9) || match(13, 14)) return 0.92f;
-        if (match(9, 10) || match(14, 15)) return 0.78f;
-
-        if (match(0, 22) || match(0, 25)) return 1.28f;
-        if (match(22, 23) || match(25, 26)) return 1.12f;
-        if (match(23, 24) || match(26, 27)) return 0.90f;
-
-        return 1.0f;
-    }
-
     bool BuildProjectedSegmentBoxCorners(
         const Vector3& fromWorld,
         const Vector3& toWorld,
@@ -1649,6 +1591,18 @@ namespace
         return std::to_string(static_cast<unsigned long long>(controller));
     }
 
+    std::string RadarPlayerIdFromSteamId(const std::uint64_t steamId, const std::uint64_t controller)
+    {
+        if (steamId != 0)
+            return std::to_string(static_cast<unsigned long long>(steamId));
+        return GsiPlayerIdFromController(controller);
+    }
+
+    bool IsRadarConnectedState(const int connectedState)
+    {
+        return connectedState == 0 || connectedState == 1 || connectedState == 2;
+    }
+
     Vector3 ForwardFromAngles(const Vector3& angles)
     {
         constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
@@ -1676,18 +1630,80 @@ namespace
         return offset + teammateColorRaw;
     }
 
+    bool IsPistolWeaponId(const int weaponId)
+    {
+        switch (weaponId)
+        {
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 30:
+        case 32:
+        case 36:
+        case 61:
+        case 63:
+        case 64:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool IsUtilityWeaponId(const int weaponId)
+    {
+        return weaponId >= 43 && weaponId <= 48;
+    }
+
+    bool IsIgnoredInventoryWeaponId(const int weaponId)
+    {
+        switch (weaponId)
+        {
+        case 31:
+        case 42:
+        case 57:
+        case 59:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    bool IsPrimaryWeaponId(const int weaponId)
+    {
+        if (weaponId <= 0)
+            return false;
+        if (weaponId == 49 || IsPistolWeaponId(weaponId) || IsUtilityWeaponId(weaponId) || IsIgnoredInventoryWeaponId(weaponId))
+            return false;
+        return true;
+    }
+
+    std::uint64_t ResolveEntityIndexPointer(const std::uint64_t entityList, const std::uint32_t index)
+    {
+        if (!IsLikelyUserAddress(entityList) || index == 0)
+            return 0;
+
+        const std::uint32_t hi = index >> Offsets::EntityList::HandleHighShift;
+        const std::uint32_t lo = index & Offsets::EntityList::HandleLowMask;
+        const std::uint64_t listEntry = mem.Read<std::uint64_t>(
+            entityList + Offsets::EntityList::ListStart + static_cast<std::uint64_t>(hi) * Offsets::EntityList::ChunkStride
+        );
+        if (!IsLikelyUserAddress(listEntry))
+            return 0;
+
+        return mem.Read<std::uint64_t>(listEntry + static_cast<std::uint64_t>(lo) * Offsets::EntityList::EntryStride);
+    }
+
     std::string ResolveRoundPhaseName(
         const bool freezePeriod,
         const bool bombPlanted,
         const bool beingDefused,
         const int gamePhaseRaw)
     {
-        if (beingDefused)
-            return "defuse";
-        if (bombPlanted)
-            return "bomb";
         if (freezePeriod)
             return "freezetime";
+        if (bombPlanted || beingDefused)
+            return "live";
 
         switch (gamePhaseRaw)
         {
@@ -1708,6 +1724,9 @@ namespace
     {
         int HandleIndex = 0;
         uint64_t Controller = 0;
+        int CompTeammateColor = -1;
+        int ConnectedState = 4;
+        std::uint64_t SteamId = 0;
 
         uint32_t PawnHandle = 0;
         uint64_t Pawn = 0;
@@ -1735,6 +1754,7 @@ namespace
         bool IsScoped = false;
         bool HasDefuser = false;
         bool HasHelmet = false;
+        bool InBuyZone = false;
         float FlashDuration = 0.0f;
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
@@ -2044,44 +2064,16 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
 
     float distanceScale = 1.0f;
     const BonePoint* headBoneForSizing = getBone(Structs::AimHeadBoneId);
-    const BonePoint* pelvisBoneForSizing = getBone(0);
+    const BonePoint* pelvisBoneForSizing = getBone(TriggerHitboxSchema::SizingRootBoneId);
     if (headBoneForSizing && pelvisBoneForSizing && headBoneForSizing->OnScreen && pelvisBoneForSizing->OnScreen)
     {
-        constexpr float kReferenceBodyHeightPx = 150.0f;
         const float bodyHeight = (std::max)(1.0f, std::fabs(pelvisBoneForSizing->Screen.y - headBoneForSizing->Screen.y));
-        distanceScale = std::clamp(bodyHeight / kReferenceBodyHeightPx, 0.20f, 3.00f);
+        distanceScale = std::clamp(bodyHeight / TriggerHitboxSchema::ReferenceBodyHeightPx, 0.20f, 3.00f);
     }
     const float adaptiveBodyRadiusPx = std::clamp(hitboxRadiusPx * distanceScale, 0.5f, 100.0f);
     const float adaptiveHeadRadiusPx = std::clamp(headRadiusPx * distanceScale, 0.5f, 100.0f);
-    const auto hitboxRegionFromBone = [](const int boneId) -> int
-    {
-        if (boneId == Structs::AimHeadBoneId)
-            return 0; // head
-        switch (boneId)
-        {
-        case 8: case 9: case 10:
-        case 13: case 14: case 15:
-            return 2; // arms
-        case 22: case 23: case 24:
-        case 25: case 26: case 27:
-            return 3; // legs
-        default:
-            return 1; // torso
-        }
-    };
-    const auto hitboxRegionScale = [](const int region) -> float
-    {
-        switch (region)
-        {
-        case 0: return kTriggerHeadScaleFixed;
-        case 2: return kTriggerArmsScaleFixed;
-        case 3: return kTriggerLegsScaleFixed;
-        default: break;
-        }
-        return kTriggerTorsoScaleFixed;
-    };
 
-    for (const DebugBoneLink& link : kDebugBoneLinks)
+    for (const TriggerHitboxSchema::BoneLink& link : kDebugBoneLinks)
     {
         const bool endpointSelected =
             (boneMask & Structs::BoneMaskFromBoneId(link.FromBone)) != 0ull ||
@@ -2095,12 +2087,8 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
             continue;
 
         const float distancePx = DistancePointToSegment2D(crosshair, fromBone->Screen, toBone->Screen);
-        const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
-            ? 0
-            : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
-                ? hitboxRegionFromBone(link.FromBone)
-                : 1);
-        const float threshold = adaptiveBodyRadiusPx * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+        const int linkRegion = TriggerHitboxSchema::RegionFromLink(link.FromBone, link.ToBone);
+        const float threshold = adaptiveBodyRadiusPx * TriggerHitboxSchema::BoneLinkRadiusScale(link.FromBone, link.ToBone) * TriggerHitboxSchema::RegionScale(linkRegion);
         const float normalized = distancePx / threshold;
         if (normalized < bestNormalizedDistance)
         {
@@ -2122,7 +2110,7 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
     };
 
     const Matrix viewMatrix = Globals::ViewMatrix;
-    for (const DebugBoneLink& link : kDebugBoneLinks)
+    for (const TriggerHitboxSchema::BoneLink& link : kDebugBoneLinks)
     {
         const bool endpointSelected =
             (boneMask & Structs::BoneMaskFromBoneId(link.FromBone)) != 0ull ||
@@ -2138,12 +2126,8 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
         if (!IsNonZeroPosition(fromBone->World) || !IsNonZeroPosition(toBone->World))
             continue;
 
-        const int linkRegion = (hitboxRegionFromBone(link.FromBone) == 0 || hitboxRegionFromBone(link.ToBone) == 0)
-            ? 0
-            : (hitboxRegionFromBone(link.FromBone) == hitboxRegionFromBone(link.ToBone)
-                ? hitboxRegionFromBone(link.FromBone)
-                : 1);
-        const float segmentRadiusPx = adaptiveBodyRadiusPx * BoneLinkRadiusScale(link.FromBone, link.ToBone) * hitboxRegionScale(linkRegion);
+        const int linkRegion = TriggerHitboxSchema::RegionFromLink(link.FromBone, link.ToBone);
+        const float segmentRadiusPx = adaptiveBodyRadiusPx * TriggerHitboxSchema::BoneLinkRadiusScale(link.FromBone, link.ToBone) * TriggerHitboxSchema::RegionScale(linkRegion);
         std::array<Vector2, 8> projectedCorners{};
         if (!BuildProjectedSegmentBoxCorners(fromBone->World, toBone->World, segmentRadiusPx, viewMatrix, projectedCorners))
             continue;
@@ -2168,7 +2152,7 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
         const BonePoint* headBone = getBone(Structs::AimHeadBoneId);
         if (headBone && headBone->OnScreen)
         {
-            const float headThreshold = (std::max)(0.5f, adaptiveHeadRadiusPx * hitboxRegionScale(0));
+            const float headThreshold = (std::max)(0.5f, adaptiveHeadRadiusPx * TriggerHitboxSchema::RegionScale(0));
             const bool headActive = Distance2D(crosshair, headBone->Screen) <= headThreshold;
             drawList->AddCircle(
                 headBone->Screen.ToImVec2(),
@@ -2205,33 +2189,25 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         );
     }
 
-    if (!c4.Planted)
+    const C4CardModel card = BuildC4CardModel({
+        .Valid = c4.Valid,
+        .Planted = c4.Planted,
+        .StartedArming = c4.StartedArming,
+        .PlantingViaUse = c4.PlantingViaUse,
+        .BombSite = c4.BombSite,
+        .BeingDefused = c4.BeingDefused,
+        .TimeRemaining = c4.TimeRemaining,
+        .DefuseCountDown = c4.DefuseCountDown,
+        .CanDefuse = c4.CanDefuse,
+        .PlantCountdown = c4.PlantCountdown,
+    });
+
+    if (card.Mode == C4CardMode::Hidden)
         return;
-
-    std::string siteName = Localization::Pick("Unknown", "未知");
-    if (c4.BombSite == 0)
-        siteName = "A";
-    else if (c4.BombSite == 1)
-        siteName = "B";
-
-    const std::string line1 =
-        std::string(Localization::Pick("C4 Site: ", "C4包点: ")) +
-        siteName + " | " +
-        (c4.BeingDefused ? Localization::Pick("Defusing", "正在拆包") : Localization::Pick("Not Defusing", "未在拆包"));
-
-    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(c4.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆除: ");
-    if (c4.BeingDefused)
-        line2 += formatSeconds1(c4.DefuseCountDown) + "s";
-    else
-        line2 += "--";
-
-    std::string line3 = Localization::Pick("Defuse Result: --", "拆除结果: --");
-    if (c4.BeingDefused)
-        line3 = std::string(Localization::Pick("Defuse Result: ", "拆除结果: ")) + (c4.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
 
     const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
     constexpr float panelW = 250.0f;
-    constexpr float panelH = 84.0f;
+    const float panelH = card.Mode == C4CardMode::Planting ? 64.0f : 84.0f;
     const float panelX = std::clamp(config.Visuals.C4PanelPosX * displaySize.x, 8.0f, (std::max)(8.0f, displaySize.x - panelW - 8.0f));
     const float panelY = std::clamp(config.Visuals.C4PanelPosY * displaySize.y, 8.0f, (std::max)(8.0f, displaySize.y - panelH - 8.0f));
     drawList->AddRectFilled(
@@ -2249,15 +2225,46 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         1.2f
     );
 
+    if (card.Mode == C4CardMode::Planting)
+    {
+        const std::string line1 = Localization::Pick("C4 Status: Planting", "C4状态: 下包中");
+        const std::string line2 = std::string(Localization::Pick("Plant: ", "安包: ")) + formatSeconds1(card.PlantCountdown) + "s";
+
+        drawList->AddText(ImVec2(panelX + 10.0f, panelY + 8.0f), ToImColor(config.Visuals.C4Color), line1.c_str());
+        drawList->AddText(ImVec2(panelX + 10.0f, panelY + 30.0f), IM_COL32(225, 225, 225, 255), line2.c_str());
+        return;
+    }
+
+    std::string siteName = Localization::Pick("Unknown", "未知");
+    if (card.BombSite == 0)
+        siteName = "A";
+    else if (card.BombSite == 1)
+        siteName = "B";
+
+    const std::string line1 =
+        std::string(Localization::Pick("C4 Site: ", "C4包点: ")) +
+        siteName + " | " +
+        (card.BeingDefused ? Localization::Pick("Defusing", "正在拆包") : Localization::Pick("Not Defusing", "未在拆包"));
+
+    std::string line2 = std::string(Localization::Pick("Explode: ", "爆炸: ")) + formatSeconds1(card.TimeRemaining) + "s  " + Localization::Pick("Defuse: ", "拆除: ");
+    if (card.BeingDefused)
+        line2 += formatSeconds1(card.DefuseCountDown) + "s";
+    else
+        line2 += "--";
+
+    std::string line3 = Localization::Pick("Defuse Result: --", "拆除结果: --");
+    if (card.BeingDefused)
+        line3 = std::string(Localization::Pick("Defuse Result: ", "拆除结果: ")) + (card.CanDefuse ? Localization::Pick("SUCCESS", "成功") : Localization::Pick("FAIL", "失败"));
+
     drawList->AddText(ImVec2(panelX + 10.0f, panelY + 8.0f), ToImColor(config.Visuals.C4Color), line1.c_str());
     drawList->AddText(
         ImVec2(panelX + 10.0f, panelY + 28.0f),
-        c4.BeingDefused ? ToImColor(config.Visuals.DefuserColor) : IM_COL32(225, 225, 225, 255),
+        card.BeingDefused ? ToImColor(config.Visuals.DefuserColor) : IM_COL32(225, 225, 225, 255),
         line2.c_str()
     );
     drawList->AddText(
         ImVec2(panelX + 10.0f, panelY + 48.0f),
-        c4.BeingDefused ? (c4.CanDefuse ? IM_COL32(120, 235, 120, 255) : IM_COL32(255, 110, 110, 255)) : IM_COL32(225, 225, 225, 255),
+        card.BeingDefused ? (card.CanDefuse ? IM_COL32(120, 235, 120, 255) : IM_COL32(255, 110, 110, 255)) : IM_COL32(225, 225, 225, 255),
         line3.c_str()
     );
 }
@@ -2999,6 +3006,11 @@ C4Snapshot ESP::ReadC4Snapshot() const
     {
         snapshot.Valid = true;
         snapshot.BombEntity = plantedEntity;
+        snapshot.BombOwnerPawn = 0;
+        snapshot.StartedArming = false;
+        snapshot.PlantingViaUse = false;
+        snapshot.ArmedTime = 0.0f;
+        snapshot.PlantCountdown = 0.0f;
 
         if (Offsets::Schema::m_nBombSite)
         {
@@ -3109,7 +3121,31 @@ C4Snapshot ESP::ReadC4Snapshot() const
             {
                 snapshot.Valid = true;
                 snapshot.Planted = false;
+                snapshot.BombEntity = weaponEntity;
                 readBombWorldPos(weaponEntity, snapshot.Position);
+
+                if (Offsets::Schema::m_bStartedArming)
+                    readBool(weaponEntity + Offsets::Schema::m_bStartedArming, snapshot.StartedArming);
+                if (Offsets::Schema::m_bIsPlantingViaUse)
+                    readBool(weaponEntity + Offsets::Schema::m_bIsPlantingViaUse, snapshot.PlantingViaUse);
+                if (Offsets::Schema::m_fArmedTime)
+                    snapshot.ArmedTime = mem.Read<float>(weaponEntity + Offsets::Schema::m_fArmedTime);
+                if (Offsets::Schema::m_hOwnerEntity)
+                {
+                    const std::uint32_t ownerHandle = mem.Read<std::uint32_t>(weaponEntity + Offsets::Schema::m_hOwnerEntity);
+                    if (ownerHandle & Offsets::EntityList::HandleMask)
+                        snapshot.BombOwnerPawn = sdk.ResolveEntityFromHandle(ownerHandle);
+                }
+
+                if ((snapshot.StartedArming || snapshot.PlantingViaUse) &&
+                    snapshot.ArmedTime > 0.001f &&
+                    gameTime > 0.001f)
+                {
+                    snapshot.PlantCountdown = std::clamp(
+                        snapshot.ArmedTime - gameTime,
+                        0.0f,
+                        snapshot.PlantLength);
+                }
             }
         }
     }
@@ -3178,20 +3214,10 @@ int ESP::ReadMoney(const uint64_t controller) const
 
 int ESP::ReadWeaponId(const uint64_t pawn) const
 {
-    if (!pawn || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon)
-        return 0;
     if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
         return 0;
 
-    const uint64_t weaponServices = mem.Read<uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
-    if (!weaponServices || !IsLikelyUserAddress(weaponServices))
-        return 0;
-
-    const uint32_t activeWeaponHandle = mem.Read<uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
-    if (!activeWeaponHandle)
-        return 0;
-
-    const uint64_t weapon = sdk.ResolveEntityFromHandle(activeWeaponHandle);
+    const uint64_t weapon = sdk.ResolveActiveWeaponFromPawn(pawn);
     if (!weapon || !IsLikelyUserAddress(weapon))
         return 0;
 
@@ -3206,18 +3232,10 @@ int ESP::ReadWeaponId(const uint64_t pawn) const
 
 int ESP::ReadActiveWeaponClip(const uint64_t pawn) const
 {
-    if (!pawn || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon || !Offsets::Schema::m_iClip1)
+    if (!pawn || !Offsets::Schema::m_iClip1)
         return -1;
 
-    const uint64_t weaponServices = mem.Read<uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
-    if (!weaponServices || !IsLikelyUserAddress(weaponServices))
-        return -1;
-
-    const uint32_t activeWeaponHandle = mem.Read<uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
-    if (!(activeWeaponHandle & Offsets::EntityList::HandleMask))
-        return -1;
-
-    const uint64_t weapon = sdk.ResolveEntityFromHandle(activeWeaponHandle);
+    const uint64_t weapon = sdk.ResolveActiveWeaponFromPawn(pawn);
     if (!weapon || !IsLikelyUserAddress(weapon))
         return -1;
 
@@ -4519,459 +4537,9 @@ void ESP::EnsureRadarPublisherStarted()
 
 bool ESP::BuildRadarPublishFrameFromMemory(RadarPublishFrame& outFrame)
 {
-    const SDK::CoreCache core = sdk.GetCoreCache();
-    if (!core.IsValid || !core.LocalPawn || !core.EntityList || !Offsets::Schema::m_hPawn)
-        return false;
-
-    const auto now = std::chrono::steady_clock::now();
-
-    struct RadarEntityData
-    {
-        uint64_t Controller = 0;
-        uint32_t PawnHandle = 0;
-        uint64_t Pawn = 0;
-        int CompTeammateColor = -1;
-        int Team = 0;
-        int Health = 0;
-        int LifeState = 0;
-        int Armor = 0;
-        float FlashDuration = 0.0f;
-        float FlashOverlayAlpha = 0.0f;
-        float FlashMaxAlpha = 255.0f;
-        uint64_t SceneNode = 0;
-        Vector3 OldOrigin{};
-        Vector3 AbsOrigin{};
-        bool HasAbsOrigin = false;
-        Vector3 ViewOffset{ 0.0f, 0.0f, 64.0f };
-        Vector3 EyeAngles{};
-    };
-
-    struct LocalFields
-    {
-        int Team = 0;
-        int Health = 0;
-        int LifeState = 0;
-        int Armor = 0;
-        float FlashDuration = 0.0f;
-        float FlashOverlayAlpha = 0.0f;
-        float FlashMaxAlpha = 255.0f;
-        Vector3 Origin{};
-        Vector3 ViewOffset{};
-    } local{};
-
-    const auto localScatter = mem.CreateScatterHandle();
-    if (!localScatter)
-        return false;
-
-    if (Offsets::Schema::m_iTeamNum)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_iTeamNum, &local.Team, sizeof(local.Team));
-    if (Offsets::Schema::m_iHealth)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_iHealth, &local.Health, sizeof(local.Health));
-    if (Offsets::Schema::m_lifeState)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_lifeState, &local.LifeState, sizeof(local.LifeState));
-    if (Offsets::Schema::m_ArmorValue)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_ArmorValue, &local.Armor, sizeof(local.Armor));
-    if (Offsets::Schema::m_flFlashDuration)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashDuration, &local.FlashDuration, sizeof(local.FlashDuration));
-    if (Offsets::Schema::m_flFlashOverlayAlpha)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashOverlayAlpha, &local.FlashOverlayAlpha, sizeof(local.FlashOverlayAlpha));
-    if (Offsets::Schema::m_flFlashMaxAlpha)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashMaxAlpha, &local.FlashMaxAlpha, sizeof(local.FlashMaxAlpha));
-    if (Offsets::Schema::m_vOldOrigin)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_vOldOrigin, &local.Origin, sizeof(local.Origin));
-    if (Offsets::Schema::m_vecViewOffset)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_vecViewOffset, &local.ViewOffset, sizeof(local.ViewOffset));
-
-    mem.ExecuteReadScatter(localScatter);
-    mem.CloseScatterHandle(localScatter);
-
-    Vector3 localViewAngles{};
-    if (Globals::ClientBase && Offsets::Client::dwViewAngles)
-        mem.Read(Globals::ClientBase + Offsets::Client::dwViewAngles, &localViewAngles, sizeof(localViewAngles));
-
-    outFrame.LocalViewAngles = localViewAngles;
-    outFrame.MapName = sdk.GetCurrentMapName();
-
-    outFrame.FreezePeriod = false;
-    outFrame.GamePhaseRaw = -1;
-    outFrame.PhaseEndsIn = 0.0f;
-    if (Offsets::Client::dwGameRules)
-    {
-        const uint64_t gameRules = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwGameRules);
-        if (IsLikelyUserAddress(gameRules))
-        {
-            if (Offsets::Schema::m_bFreezePeriod)
-                outFrame.FreezePeriod = mem.Read<bool>(gameRules + Offsets::Schema::m_bFreezePeriod);
-            if (Offsets::Schema::m_gamePhase)
-                outFrame.GamePhaseRaw = mem.Read<int>(gameRules + Offsets::Schema::m_gamePhase);
-            if (Offsets::Schema::m_timeUntilNextPhaseStarts)
-                outFrame.PhaseEndsIn = mem.Read<float>(gameRules + Offsets::Schema::m_timeUntilNextPhaseStarts);
-        }
-    }
-
-    const uint64_t controllerChunk = mem.Read<uint64_t>(core.EntityList + Offsets::EntityList::ListStart);
-    if (!IsLikelyUserAddress(controllerChunk))
-        return false;
-
-    std::array<uint64_t, kMaxControllers + 1> controllerPointers{};
-    if (const auto controllerScatter = mem.CreateScatterHandle())
-    {
-        for (int index = 1; index <= kMaxControllers; ++index)
-        {
-            const uint64_t entryAddress = controllerChunk + static_cast<uint64_t>(index) * Offsets::EntityList::EntryStride;
-            mem.AddScatterReadRequest(controllerScatter, entryAddress, &controllerPointers[index], sizeof(uint64_t));
-        }
-
-        mem.ExecuteReadScatter(controllerScatter);
-        mem.CloseScatterHandle(controllerScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    std::vector<RadarEntityData> entities{};
-    entities.reserve(kMaxControllers);
-    for (int index = 1; index <= kMaxControllers; ++index)
-    {
-        const uint64_t controller = controllerPointers[index];
-        if (!IsLikelyUserAddress(controller))
-            continue;
-
-        RadarEntityData entity{};
-        entity.Controller = controller;
-        entities.push_back(entity);
-    }
-
-    if (entities.empty())
-        return false;
-
-    if (const auto pawnHandleScatter = mem.CreateScatterHandle())
-    {
-        for (RadarEntityData& entity : entities)
-        {
-            mem.AddScatterReadRequest(
-                pawnHandleScatter,
-                entity.Controller + Offsets::Schema::m_hPawn,
-                &entity.PawnHandle,
-                sizeof(entity.PawnHandle)
-            );
-
-            if (Offsets::Schema::m_iCompTeammateColor)
-            {
-                mem.AddScatterReadRequest(
-                    pawnHandleScatter,
-                    entity.Controller + Offsets::Schema::m_iCompTeammateColor,
-                    &entity.CompTeammateColor,
-                    sizeof(entity.CompTeammateColor)
-                );
-            }
-        }
-
-        mem.ExecuteReadScatter(pawnHandleScatter);
-        mem.CloseScatterHandle(pawnHandleScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    std::vector<uint32_t> decodedHi(entities.size(), 0);
-    std::vector<uint32_t> decodedLo(entities.size(), 0);
-    std::unordered_set<uint32_t> uniqueHi{};
-
-    for (size_t i = 0; i < entities.size(); ++i)
-    {
-        const uint32_t handleIndex = entities[i].PawnHandle & Offsets::EntityList::HandleMask;
-        if (!handleIndex)
-            continue;
-
-        const uint32_t hi = handleIndex >> Offsets::EntityList::HandleHighShift;
-        const uint32_t lo = handleIndex & Offsets::EntityList::HandleLowMask;
-        decodedHi[i] = hi;
-        decodedLo[i] = lo;
-        uniqueHi.insert(hi);
-    }
-
-    std::unordered_map<uint32_t, uint64_t> chunkPointers{};
-    chunkPointers.reserve(uniqueHi.size());
-    for (const uint32_t hi : uniqueHi)
-        chunkPointers.emplace(hi, 0ULL);
-
-    if (!chunkPointers.empty())
-    {
-        if (const auto chunkScatter = mem.CreateScatterHandle())
-        {
-            for (auto& [hi, chunkPointer] : chunkPointers)
-            {
-                const uint64_t chunkAddress = core.EntityList + Offsets::EntityList::ListStart + static_cast<uint64_t>(hi) * Offsets::EntityList::ChunkStride;
-                mem.AddScatterReadRequest(chunkScatter, chunkAddress, &chunkPointer, sizeof(uint64_t));
-            }
-
-            mem.ExecuteReadScatter(chunkScatter);
-            mem.CloseScatterHandle(chunkScatter);
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    if (const auto pawnPointerScatter = mem.CreateScatterHandle())
-    {
-        for (size_t i = 0; i < entities.size(); ++i)
-        {
-            if (!(entities[i].PawnHandle & Offsets::EntityList::HandleMask))
-                continue;
-
-            const auto chunkIt = chunkPointers.find(decodedHi[i]);
-            if (chunkIt == chunkPointers.end())
-                continue;
-
-            const uint64_t chunkPointer = chunkIt->second;
-            if (!IsLikelyUserAddress(chunkPointer))
-                continue;
-
-            const uint64_t pawnAddress = chunkPointer + static_cast<uint64_t>(decodedLo[i]) * Offsets::EntityList::EntryStride;
-            mem.AddScatterReadRequest(pawnPointerScatter, pawnAddress, &entities[i].Pawn, sizeof(uint64_t));
-        }
-
-        mem.ExecuteReadScatter(pawnPointerScatter);
-        mem.CloseScatterHandle(pawnPointerScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    std::vector<RadarEntityData*> activeEntities{};
-    activeEntities.reserve(entities.size());
-    for (RadarEntityData& entity : entities)
-    {
-        if (!IsLikelyUserAddress(entity.Pawn))
-            continue;
-        activeEntities.push_back(&entity);
-    }
-
-    if (activeEntities.empty())
-        return false;
-
-    if (const auto pawnFieldScatter = mem.CreateScatterHandle())
-    {
-        for (RadarEntityData* entity : activeEntities)
-        {
-            if (Offsets::Schema::m_iHealth)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iHealth, &entity->Health, sizeof(entity->Health));
-            if (Offsets::Schema::m_iTeamNum)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iTeamNum, &entity->Team, sizeof(entity->Team));
-            if (Offsets::Schema::m_lifeState)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_lifeState, &entity->LifeState, sizeof(entity->LifeState));
-            if (Offsets::Schema::m_ArmorValue)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_ArmorValue, &entity->Armor, sizeof(entity->Armor));
-            if (Offsets::Schema::m_flFlashDuration)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
-            if (Offsets::Schema::m_flFlashOverlayAlpha)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashOverlayAlpha, &entity->FlashOverlayAlpha, sizeof(entity->FlashOverlayAlpha));
-            if (Offsets::Schema::m_flFlashMaxAlpha)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashMaxAlpha, &entity->FlashMaxAlpha, sizeof(entity->FlashMaxAlpha));
-            if (Offsets::Schema::m_pGameSceneNode)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_pGameSceneNode, &entity->SceneNode, sizeof(entity->SceneNode));
-            if (Offsets::Schema::m_vOldOrigin)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vOldOrigin, &entity->OldOrigin, sizeof(entity->OldOrigin));
-            if (Offsets::Schema::m_vecViewOffset)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vecViewOffset, &entity->ViewOffset, sizeof(entity->ViewOffset));
-            if (Offsets::Schema::m_angEyeAngles)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_angEyeAngles, &entity->EyeAngles, sizeof(entity->EyeAngles));
-        }
-
-        mem.ExecuteReadScatter(pawnFieldScatter);
-        mem.CloseScatterHandle(pawnFieldScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    if (const auto sceneScatter = mem.CreateScatterHandle())
-    {
-        for (RadarEntityData* entity : activeEntities)
-        {
-            if (!IsLikelyUserAddress(entity->SceneNode))
-                continue;
-
-            if (Offsets::Schema::m_vecAbsOrigin)
-            {
-                mem.AddScatterReadRequest(
-                    sceneScatter,
-                    entity->SceneNode + Offsets::Schema::m_vecAbsOrigin,
-                    &entity->AbsOrigin,
-                    sizeof(entity->AbsOrigin)
-                );
-                entity->HasAbsOrigin = true;
-            }
-        }
-
-        mem.ExecuteReadScatter(sceneScatter);
-        mem.CloseScatterHandle(sceneScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    outFrame.Players.clear();
-    outFrame.Players.reserve(activeEntities.size() + 1);
-    std::unordered_set<uint64_t> seenPawns{};
-    seenPawns.reserve(activeEntities.size() + 1);
-    bool localIncluded = false;
-
-    for (RadarEntityData* entity : activeEntities)
-    {
-        const bool isAlive = IsAlive(entity->Health, entity->LifeState);
-        const Vector3 position = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
-        const int flashedValue = std::clamp(
-            static_cast<int>((std::max)(entity->FlashOverlayAlpha, entity->FlashDuration * 64.0f)),
-            0,
-            255
-        );
-        const int ammoClip = isAlive ? ReadActiveWeaponClip(entity->Pawn) : -1;
-        bool shooting = false;
-
-        auto clipIt = m_RadarLastAmmoClip.find(entity->Pawn);
-        const int prevAmmoClip = clipIt == m_RadarLastAmmoClip.end() ? -1 : clipIt->second;
-        if (isAlive && ammoClip >= 0)
-        {
-            if (prevAmmoClip >= 0 && ammoClip < prevAmmoClip)
-                m_RadarLastShotTick[entity->Pawn] = now;
-            m_RadarLastAmmoClip[entity->Pawn] = ammoClip;
-        }
-        else
-        {
-            m_RadarLastAmmoClip[entity->Pawn] = -1;
-        }
-
-        const auto shotIt = m_RadarLastShotTick.find(entity->Pawn);
-        if (shotIt != m_RadarLastShotTick.end() && now - shotIt->second <= std::chrono::milliseconds(180))
-            shooting = true;
-
-        RadarPlayerFrameItem radarItem{};
-        radarItem.PlayerId = GsiPlayerIdFromController(entity->Controller);
-        radarItem.Controller = entity->Controller;
-        radarItem.Pawn = entity->Pawn;
-        radarItem.Team = entity->Team;
-        radarItem.Health = isAlive ? std::clamp(entity->Health, 0, 100) : 0;
-        radarItem.Armor = isAlive ? std::clamp(entity->Armor, 0, 100) : 0;
-        radarItem.Flashed = isAlive ? flashedValue : 0;
-        radarItem.AmmoClip = ammoClip;
-        radarItem.CompTeammateColor = entity->CompTeammateColor;
-        radarItem.Position = position;
-        radarItem.EyeAngles = entity->EyeAngles;
-        radarItem.Name = ReadPlayerName(entity->Controller);
-        radarItem.WeaponName = ReadWeaponName(entity->Pawn);
-        radarItem.IsLocal = entity->Controller == core.LocalController || entity->Pawn == core.LocalPawn;
-        radarItem.IsAlive = isAlive;
-        radarItem.Shooting = shooting;
-
-        if (radarItem.IsLocal)
-            localIncluded = true;
-
-        seenPawns.insert(entity->Pawn);
-        outFrame.Players.push_back(std::move(radarItem));
-    }
-
-    if (!localIncluded && IsLikelyUserAddress(core.LocalController))
-    {
-        const bool localAlive = IsAlive(local.Health, local.LifeState);
-        const int localAmmoClip = localAlive ? ReadActiveWeaponClip(core.LocalPawn) : -1;
-        bool localShooting = false;
-        auto clipIt = m_RadarLastAmmoClip.find(core.LocalPawn);
-        const int prevLocalClip = clipIt == m_RadarLastAmmoClip.end() ? -1 : clipIt->second;
-        if (localAlive && localAmmoClip >= 0)
-        {
-            if (prevLocalClip >= 0 && localAmmoClip < prevLocalClip)
-                m_RadarLastShotTick[core.LocalPawn] = now;
-            m_RadarLastAmmoClip[core.LocalPawn] = localAmmoClip;
-        }
-        else
-        {
-            m_RadarLastAmmoClip[core.LocalPawn] = -1;
-        }
-
-        const auto shotIt = m_RadarLastShotTick.find(core.LocalPawn);
-        if (shotIt != m_RadarLastShotTick.end() && now - shotIt->second <= std::chrono::milliseconds(180))
-            localShooting = true;
-
-        int localCompTeammateColor = -1;
-        if (Offsets::Schema::m_iCompTeammateColor)
-            localCompTeammateColor = mem.Read<int>(core.LocalController + Offsets::Schema::m_iCompTeammateColor);
-
-        RadarPlayerFrameItem localRadar{};
-        localRadar.PlayerId = GsiPlayerIdFromController(core.LocalController);
-        localRadar.Controller = core.LocalController;
-        localRadar.Pawn = core.LocalPawn;
-        localRadar.Team = local.Team;
-        localRadar.Health = localAlive ? std::clamp(local.Health, 0, 100) : 0;
-        localRadar.Armor = localAlive ? std::clamp(local.Armor, 0, 100) : 0;
-        localRadar.Flashed = localAlive ? std::clamp(
-            static_cast<int>((std::max)(local.FlashOverlayAlpha, local.FlashDuration * 64.0f)),
-            0,
-            255
-        ) : 0;
-        localRadar.AmmoClip = localAmmoClip;
-        localRadar.CompTeammateColor = localCompTeammateColor;
-        localRadar.Position = local.Origin;
-        localRadar.EyeAngles = localViewAngles;
-        localRadar.Name = ReadPlayerName(core.LocalController);
-        localRadar.WeaponName = ReadWeaponName(core.LocalPawn);
-        localRadar.IsLocal = true;
-        localRadar.IsAlive = localAlive;
-        localRadar.Shooting = localShooting;
-        outFrame.Players.push_back(std::move(localRadar));
-        seenPawns.insert(core.LocalPawn);
-    }
-
-    for (auto it = m_RadarLastAmmoClip.begin(); it != m_RadarLastAmmoClip.end();)
-    {
-        if (seenPawns.find(it->first) == seenPawns.end())
-            it = m_RadarLastAmmoClip.erase(it);
-        else
-            ++it;
-    }
-    for (auto it = m_RadarLastShotTick.begin(); it != m_RadarLastShotTick.end();)
-    {
-        if (seenPawns.find(it->first) == seenPawns.end())
-            it = m_RadarLastShotTick.erase(it);
-        else
-            ++it;
-    }
-
-    outFrame.C4 = ReadC4Snapshot();
-    outFrame.BombOwnerPawn = 0;
-    if (!outFrame.C4.Planted && Offsets::Client::dwWeaponC4 && Offsets::Schema::m_hOwnerEntity)
-    {
-        const uint64_t bombHolder = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwWeaponC4);
-        if (IsLikelyUserAddress(bombHolder))
-        {
-            uint64_t bombEntity = bombHolder;
-            const uint64_t indirect = mem.Read<uint64_t>(bombHolder);
-            if (IsLikelyUserAddress(indirect))
-                bombEntity = indirect;
-
-            if (IsLikelyUserAddress(bombEntity))
-            {
-                const uint32_t ownerHandle = mem.Read<uint32_t>(bombEntity + Offsets::Schema::m_hOwnerEntity);
-                if (ownerHandle & Offsets::EntityList::HandleMask)
-                    outFrame.BombOwnerPawn = sdk.ResolveEntityFromHandle(ownerHandle, core.EntityList);
-            }
-        }
-    }
-
-    if (outFrame.PhaseEndsIn < 0.0f || outFrame.PhaseEndsIn > 3600.0f)
-        outFrame.PhaseEndsIn = 0.0f;
-    if (outFrame.PhaseEndsIn <= 0.0f && outFrame.C4.Planted)
-        outFrame.PhaseEndsIn = (std::max)(0.0f, outFrame.C4.TimeRemaining);
-
-    return true;
+    std::lock_guard lock(m_RenderFrameMutex);
+    outFrame = m_RenderFrame.Radar;
+    return !outFrame.Players.empty();
 }
 
 std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
@@ -4982,7 +4550,6 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
     slotByController.reserve(frame.Players.size());
     seenRadarControllers.reserve(frame.Players.size());
 
-    int localObserverSlot = 0;
     for (const RadarPlayerFrameItem& player : frame.Players)
     {
         seenRadarControllers.insert(player.Controller);
@@ -5023,9 +4590,6 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
         slotUsed[slot] = true;
         m_RadarObserverSlots[player.Controller] = slot;
         slotByController[player.Controller] = slot;
-
-        if (player.IsLocal)
-            localObserverSlot = slot;
     }
 
     for (auto it = m_RadarObserverSlots.begin(); it != m_RadarObserverSlots.end();)
@@ -5036,21 +4600,18 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
             ++it;
     }
 
-    std::string bombOwnerName{};
     std::string bombOwnerPlayerId{};
-    std::string bombOwnerWeapon{};
     Vector3 bombOwnerPos{};
     bool bombOwnerPosValid = false;
+    bool bombHasDefuseKit = false;
     std::unordered_map<uint64_t, std::string> playerIdByPawn{};
     playerIdByPawn.reserve(frame.Players.size());
 
-    nlohmann::json payload{};
-    payload["provider"]["name"] = "CS2";
-    payload["provider"]["appid"] = 730;
-    payload["provider"]["timestamp"] = EpochMsNow();
-    payload["map"]["name"] = frame.MapName;
+    ObservRadarFrame payload{};
+    payload.ProviderName = "project-d";
+    payload.ProviderTimestampMs = EpochMsNow();
+    payload.MapName = frame.MapName;
 
-    nlohmann::json allplayers = nlohmann::json::object();
     for (const RadarPlayerFrameItem& player : frame.Players)
     {
         const auto slotIt = slotByController.find(player.Controller);
@@ -5063,79 +4624,82 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
         playerIdByPawn[player.Pawn] = playerId;
 
         const int observerSlot = std::clamp(slotIt->second, 0, 9);
-        nlohmann::json playerNode{};
-        playerNode["observer_slot"] = observerSlot;
-        playerNode["name"] = player.Name.empty() ? ("Player " + std::to_string(observerSlot)) : player.Name;
-        playerNode["team"] = TeamToGsi(player.Team);
-        playerNode["state"]["health"] = player.IsAlive ? std::clamp(player.Health, 0, 100) : 0;
-        playerNode["state"]["armor"] = std::clamp(player.Armor, 0, 100);
-        playerNode["state"]["flashed"] = std::clamp(player.Flashed, 0, 255);
-        playerNode["state"]["shooting"] = player.Shooting;
-        playerNode["position"] = FormatVec3String(player.Position);
+        const std::string activeWeapon = player.WeaponName.empty() ? "weapon_knife" : player.WeaponName;
+        const std::string primaryWeapon = player.PrimaryWeaponName;
+        const std::string secondaryWeapon = player.SecondaryWeaponName;
+        const float angleYaw = player.IsLocal &&
+            std::abs(player.EyeAngles.x) < 0.001f &&
+            std::abs(player.EyeAngles.y) < 0.001f &&
+            std::abs(player.EyeAngles.z) < 0.001f
+            ? frame.LocalViewAngles.y
+            : player.EyeAngles.y;
 
-        Vector3 forward = ForwardFromAngles(player.EyeAngles);
-        if (std::abs(forward.x) < 0.001f && std::abs(forward.y) < 0.001f && std::abs(forward.z) < 0.001f && player.IsLocal)
-            forward = ForwardFromAngles(frame.LocalViewAngles);
-        playerNode["forward"] = FormatVec3String(forward);
+        ObservRadarPlayerPacket encodedPlayer{};
+        encodedPlayer.Id = playerId;
+        encodedPlayer.SteamId = player.SteamId.empty() ? playerId : player.SteamId;
+        encodedPlayer.Num = observerSlot;
+        encodedPlayer.Name = player.Name.empty() ? ("Player " + std::to_string(observerSlot)) : player.Name;
+        encodedPlayer.Team = TeamToGsi(player.Team);
+        encodedPlayer.Health = player.IsAlive ? std::clamp(player.Health, 0, 100) : 0;
+        encodedPlayer.Armor = std::clamp(player.Armor, 0, 100);
+        encodedPlayer.Money = (std::max)(0, player.Money);
+        encodedPlayer.HasHelmet = player.HasHelmet;
+        encodedPlayer.HasDefuser = player.HasDefuser;
+        encodedPlayer.Connected = player.Connected;
+        encodedPlayer.Active = player.Active;
+        encodedPlayer.Flashed = std::clamp(player.Flashed, 0, 255);
+        encodedPlayer.Bomb = player.HasBomb;
+        encodedPlayer.Position = player.Position;
+        encodedPlayer.Angle = NormalizeObservRadarAngle(angleYaw);
+        encodedPlayer.ActiveWeapon = activeWeapon;
+        encodedPlayer.PrimaryWeapon = primaryWeapon;
+        encodedPlayer.SecondaryWeapon = secondaryWeapon;
+        encodedPlayer.Utilities = player.UtilityNames;
+        if (player.AmmoClip >= 0 && !activeWeapon.empty())
+            encodedPlayer.Ammo.push_back({ activeWeapon, player.AmmoClip });
+        payload.Players.push_back(std::move(encodedPlayer));
 
-        nlohmann::json weapons = nlohmann::json::object();
-        const std::string activeWeapon = ToGsiWeaponName(player.WeaponName);
-        if (!activeWeapon.empty())
+        if (frame.C4.BombOwnerPawn != 0 && player.Pawn == frame.C4.BombOwnerPawn)
         {
-            weapons["active"]["name"] = activeWeapon;
-            weapons["active"]["state"] = "active";
-            weapons["active"]["ammo_clip"] = player.AmmoClip >= 0 ? player.AmmoClip : 0;
-        }
-
-        if (frame.BombOwnerPawn != 0 && player.Pawn == frame.BombOwnerPawn)
-        {
-            bombOwnerName = playerNode["name"].get<std::string>();
             bombOwnerPlayerId = playerId;
-            bombOwnerWeapon = activeWeapon;
             bombOwnerPos = player.Position;
             bombOwnerPosValid = true;
-            weapons["bomb"]["name"] = "weapon_c4";
-            weapons["bomb"]["state"] = activeWeapon == "weapon_c4" ? "active" : "holstered";
         }
-
-        playerNode["weapons"] = std::move(weapons);
-        allplayers[playerId] = std::move(playerNode);
+        if (frame.C4.BombDefuserPawn != 0 && player.Pawn == frame.C4.BombDefuserPawn)
+            bombHasDefuseKit = player.HasDefuser;
     }
 
-    payload["allplayers"] = std::move(allplayers);
-    payload["player"]["observer_slot"] = std::clamp(localObserverSlot, 0, 9);
+    if (payload.Players.empty())
+        return {};
 
-    const float phaseEndsIn = std::clamp(frame.PhaseEndsIn, 0.0f, 3600.0f);
-    const std::string roundPhase = ResolveRoundPhaseName(
+    payload.Score.Ct = frame.CtScore;
+    payload.Score.T = frame.TScore;
+    payload.RoundState = ResolveObservRadarRoundState(
         frame.FreezePeriod,
         frame.C4.Planted,
         frame.C4.BeingDefused,
         frame.GamePhaseRaw
     );
+    payload.CanBuy = frame.CanBuy;
 
-    payload["round"]["phase"] = roundPhase;
-    payload["phase_countdowns"]["phase"] = roundPhase;
-    payload["phase_countdowns"]["phase_ends_in"] = phaseEndsIn;
-
-    std::string bombState = "dropped";
+    const std::string bombState = ResolveObservRadarBombState({
+        .BombValid = frame.C4.Valid,
+        .BombPlanted = frame.C4.Planted,
+        .BombDefused = frame.C4.BombDefused,
+        .BombBeingDefused = frame.C4.BeingDefused,
+        .BombTimeRemaining = frame.C4.TimeRemaining,
+        .BombOwnerPresent = frame.C4.BombOwnerPawn != 0,
+        .BombOwnerStartedArming = frame.C4.StartedArming,
+        .BombOwnerPlantingViaUse = frame.C4.PlantingViaUse,
+    });
     std::string bombPlayerId = bombOwnerPlayerId;
-    float bombCountdown = 0.0f;
     float bombExplodeCountdown = (std::max)(0.0f, frame.C4.TimeRemaining);
     float bombDefuseCountdown = 0.0f;
     Vector3 bombPosition = frame.C4.Position;
+    float bombPlantCountdown = frame.C4.PlantCountdown;
 
     if (frame.C4.Planted)
     {
-        if (frame.C4.BombDefused)
-            bombState = "defused";
-        else if (frame.C4.BeingDefused)
-            bombState = "defusing";
-        else if (frame.C4.TimeRemaining <= 0.0f)
-            bombState = "exploded";
-        else
-            bombState = "planted";
-
-        bombCountdown = bombExplodeCountdown;
         if (frame.C4.BombDefuserPawn != 0 && bombState == "defusing")
         {
             const auto defuserIt = playerIdByPawn.find(frame.C4.BombDefuserPawn);
@@ -5146,29 +4710,27 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
         if (bombState == "defusing")
         {
             bombDefuseCountdown = (std::max)(0.0f, frame.C4.DefuseCountDown);
-            bombCountdown = bombDefuseCountdown > 0.0f ? bombDefuseCountdown : bombExplodeCountdown;
         }
     }
-    else if (frame.BombOwnerPawn != 0)
+    else if (frame.C4.BombOwnerPawn != 0)
     {
-        bombState = bombOwnerWeapon == "weapon_c4" ? "planting" : "carried";
         if (bombOwnerPosValid)
             bombPosition = bombOwnerPos;
     }
-    else if (!frame.C4.Valid)
-    {
-        bombState = "carried";
-    }
 
-    payload["bomb"]["state"] = bombState;
-    payload["bomb"]["player"] = bombPlayerId;
-    payload["bomb"]["player_name"] = bombOwnerName;
-    payload["bomb"]["countdown"] = bombCountdown;
-    payload["bomb"]["explode_countdown"] = bombExplodeCountdown;
-    payload["bomb"]["defuse_countdown"] = bombDefuseCountdown;
-    payload["bomb"]["position"] = FormatVec3String(bombPosition);
+    payload.Bomb.State = bombState;
+    payload.Bomb.Player = bombPlayerId;
+    payload.Bomb.Countdown = bombDefuseCountdown > 0.0f ? bombDefuseCountdown : bombExplodeCountdown;
+    payload.Bomb.DefuseCountdown = bombDefuseCountdown;
+    payload.Bomb.PlantCountdown = bombPlantCountdown;
+    payload.Bomb.BombTicking = frame.C4.BombTicking;
+    payload.Bomb.TimerLength = frame.C4.TimerLength > 0.0f ? frame.C4.TimerLength : 40.0f;
+    payload.Bomb.PlantLength = frame.C4.PlantLength > 0.0f ? frame.C4.PlantLength : 3.2f;
+    payload.Bomb.Site = frame.C4.BombSite == 0 ? "A" : (frame.C4.BombSite == 1 ? "B" : "");
+    payload.Bomb.HasDefuseKit = bombHasDefuseKit;
+    payload.Bomb.Position = bombPosition;
 
-    return payload.dump();
+    return BuildObservRadarPayload(payload);
 }
 
 void ESP::RadarPublisherLoop()
@@ -5274,12 +4836,13 @@ void ESP::SamplerLoop()
         if (sampleUs >= 0)
             PerfDebug::RecordEspSampleFrame(static_cast<std::uint64_t>(sampleUs));
 
+        const bool aimbotHot = config.Aim.Aimbot && aim.IsAimbotHotkeyActiveVisual();
         const bool boneTriggerHot =
             config.Aim.Trigger &&
             std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox &&
             aim.IsTriggerHotkeyActiveVisual();
         const bool flickHot = config.Aim.Flick && aim.IsFlickHotkeyActiveVisual();
-        const bool highRateAimSampling = boneTriggerHot || flickHot;
+        const bool highRateAimSampling = aimbotHot || boneTriggerHot || flickHot;
         const bool helperOnlyMode = m_GrenadeHelperOnlyMode.load(std::memory_order_relaxed);
         const bool helperHoldingUtility = m_GrenadeHelperHoldingUtility.load(std::memory_order_relaxed);
         auto targetInterval = helperOnlyMode
@@ -5307,20 +4870,26 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 {
     UpdateVisCheckState();
     outFrame.MapStatus = m_MapStatus;
+    outFrame.Radar = {};
 
     const bool flickSamplingEnabled = config.Aim.Flick;
     const bool needVisibilityChecks = config.Aim.AimVisible || config.Visuals.VisibleCheck || config.Aim.Flick;
     const bool triggerBoneModeConfigured =
         config.Aim.Trigger &&
         std::clamp(config.Aim.TriggerDetectMode, 0, static_cast<int>(Structs::TriggerDetectModeNames.size()) - 1) == Structs::TriggerDetect_BoneHitbox;
+    const bool aimbotBoneSamplingEnabled = config.Aim.Aimbot && aim.IsAimbotHotkeyActiveVisual();
     const bool triggerHotkeyActive = triggerBoneModeConfigured && aim.IsTriggerHotkeyActiveVisual();
-    const bool needTriggerBoneSampling = (triggerBoneModeConfigured && triggerHotkeyActive) || flickSamplingEnabled;
+    const bool needTriggerBoneSampling =
+        aimbotBoneSamplingEnabled ||
+        (triggerBoneModeConfigured && triggerHotkeyActive) ||
+        flickSamplingEnabled;
+    const bool needRadarSampling = config.Radar.Enabled;
     const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
     const bool needGrenadeHelperSampling = config.Visuals.GrenadeHelper;
-    m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling, std::memory_order_relaxed);
+    m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling && !needRadarSampling, std::memory_order_relaxed);
     if (!needGrenadeHelperSampling)
         m_GrenadeHelperHoldingUtility.store(false, std::memory_order_relaxed);
-    if (!needEspSampling && !needGrenadeHelperSampling)
+    if (!needEspSampling && !needGrenadeHelperSampling && !needRadarSampling)
         return true;
 
     const SDK::CoreCache core = sdk.GetCoreCache();
@@ -5338,7 +4907,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     {
         outFrame.GrenadeHelper = {};
         m_LastGrenadeSelectedSpotId = 0;
-        if (!needEspSampling)
+        if (!needEspSampling && !needRadarSampling)
             return true;
     }
 
@@ -5348,9 +4917,16 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         int Health = 0;
         int LifeState = 0;
         int Armor = 0;
+        int Money = 0;
+        int CompTeammateColor = -1;
+        int ConnectedState = 4;
         float FlashDuration = 0.0f;
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
+        std::uint64_t SteamId = 0;
+        bool HasDefuser = false;
+        bool HasHelmet = false;
+        bool InBuyZone = false;
         Vector3 Origin{};
         Vector3 ViewOffset{};
     } local{};
@@ -5367,6 +4943,16 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_lifeState, &local.LifeState, sizeof(local.LifeState));
     if (Offsets::Schema::m_ArmorValue)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_ArmorValue, &local.Armor, sizeof(local.Armor));
+    if (Offsets::Schema::m_bPawnHasDefuser)
+        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_bPawnHasDefuser, &local.HasDefuser, sizeof(local.HasDefuser));
+    else if (Offsets::Schema::m_bHasDefuser)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bHasDefuser, &local.HasDefuser, sizeof(local.HasDefuser));
+    if (Offsets::Schema::m_bPawnHasHelmet)
+        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_bPawnHasHelmet, &local.HasHelmet, sizeof(local.HasHelmet));
+    else if (Offsets::Schema::m_bHasHelmet)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bHasHelmet, &local.HasHelmet, sizeof(local.HasHelmet));
+    if (Offsets::Schema::m_bInBuyZone)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bInBuyZone, &local.InBuyZone, sizeof(local.InBuyZone));
     if (Offsets::Schema::m_flFlashDuration)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_flFlashDuration, &local.FlashDuration, sizeof(local.FlashDuration));
     if (Offsets::Schema::m_flFlashOverlayAlpha)
@@ -5377,9 +4963,16 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_vOldOrigin, &local.Origin, sizeof(local.Origin));
     if (Offsets::Schema::m_vecViewOffset)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_vecViewOffset, &local.ViewOffset, sizeof(local.ViewOffset));
+    if (Offsets::Schema::m_iCompTeammateColor)
+        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_iCompTeammateColor, &local.CompTeammateColor, sizeof(local.CompTeammateColor));
+    if (Offsets::Schema::m_iConnected)
+        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_iConnected, &local.ConnectedState, sizeof(local.ConnectedState));
+    if (Offsets::Schema::m_steamID)
+        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_steamID, &local.SteamId, sizeof(local.SteamId));
 
     mem.ExecuteReadScatter(localScatter);
     mem.CloseScatterHandle(localScatter);
+    local.Money = ReadMoney(core.LocalController);
 
     Vector3 localViewOffset = { 0.0f, 0.0f, 64.0f };
     if (std::abs(local.ViewOffset.x) > 0.001f || std::abs(local.ViewOffset.y) > 0.001f || std::abs(local.ViewOffset.z) > 0.001f)
@@ -5408,7 +5001,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         m_LastGrenadeSelectedSpotId = 0;
     }
 
-    if (!needEspSampling)
+    if (!needEspSampling && !needRadarSampling)
         return true;
 
     UpdateRoundEpoch(core.LocalPawn, IsAlive(local.Health, local.LifeState));
@@ -5416,6 +5009,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     bool freezePeriod = false;
     bool freezeValid = false;
+    int gamePhaseRaw = -1;
+    float phaseEndsIn = 0.0f;
     if (Offsets::Client::dwGameRules && Offsets::Schema::m_bFreezePeriod)
     {
         const uint64_t gameRules = mem.Read<uint64_t>(Globals::ClientBase + Offsets::Client::dwGameRules);
@@ -5423,6 +5018,10 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         {
             freezePeriod = mem.Read<bool>(gameRules + Offsets::Schema::m_bFreezePeriod);
             freezeValid = true;
+            if (Offsets::Schema::m_gamePhase)
+                gamePhaseRaw = mem.Read<int>(gameRules + Offsets::Schema::m_gamePhase);
+            if (Offsets::Schema::m_timeUntilNextPhaseStarts)
+                phaseEndsIn = mem.Read<float>(gameRules + Offsets::Schema::m_timeUntilNextPhaseStarts);
         }
     }
 
@@ -5517,6 +5116,33 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     entities[i].Controller + Offsets::Schema::m_bPawnHasHelmet,
                     &entities[i].PawnHasHelmet,
                     sizeof(entities[i].PawnHasHelmet)
+                );
+            }
+            if (Offsets::Schema::m_iCompTeammateColor)
+            {
+                mem.AddScatterReadRequest(
+                    pawnHandleScatter,
+                    entities[i].Controller + Offsets::Schema::m_iCompTeammateColor,
+                    &entities[i].CompTeammateColor,
+                    sizeof(entities[i].CompTeammateColor)
+                );
+            }
+            if (Offsets::Schema::m_iConnected)
+            {
+                mem.AddScatterReadRequest(
+                    pawnHandleScatter,
+                    entities[i].Controller + Offsets::Schema::m_iConnected,
+                    &entities[i].ConnectedState,
+                    sizeof(entities[i].ConnectedState)
+                );
+            }
+            if (Offsets::Schema::m_steamID)
+            {
+                mem.AddScatterReadRequest(
+                    pawnHandleScatter,
+                    entities[i].Controller + Offsets::Schema::m_steamID,
+                    &entities[i].SteamId,
+                    sizeof(entities[i].SteamId)
                 );
             }
         }
@@ -5685,140 +5311,147 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         activeEntities.push_back(&entity);
     }
 
-    if (activeEntities.empty())
+    if (activeEntities.empty() && !needRadarSampling)
         return true;
 
-    if (const auto pawnFieldScatter = mem.CreateScatterHandle())
+    if (!activeEntities.empty())
     {
+        if (const auto pawnFieldScatter = mem.CreateScatterHandle())
+        {
+            for (SampledEntityData* entity : activeEntities)
+            {
+                if (Offsets::Schema::m_iHealth)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iHealth, &entity->Health, sizeof(entity->Health));
+                if (Offsets::Schema::m_iTeamNum)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iTeamNum, &entity->Team, sizeof(entity->Team));
+                if (Offsets::Schema::m_lifeState)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_lifeState, &entity->LifeState, sizeof(entity->LifeState));
+                if (Offsets::Schema::m_iMaxHealth)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iMaxHealth, &entity->MaxHealth, sizeof(entity->MaxHealth));
+                if (Offsets::Schema::m_pGameSceneNode)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_pGameSceneNode, &entity->SceneNode, sizeof(entity->SceneNode));
+                if (Offsets::Schema::m_vOldOrigin)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vOldOrigin, &entity->OldOrigin, sizeof(entity->OldOrigin));
+                if (Offsets::Schema::m_vecViewOffset)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vecViewOffset, &entity->ViewOffset, sizeof(entity->ViewOffset));
+                if (Offsets::Schema::m_angEyeAngles)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_angEyeAngles, &entity->EyeAngles, sizeof(entity->EyeAngles));
+
+                PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
+                entity->RefreshStatus = runtimeCache.LastStatusRead.time_since_epoch().count() == 0 ||
+                    now - runtimeCache.LastStatusRead >= std::chrono::milliseconds(150);
+
+                if (!entity->RefreshStatus)
+                {
+                    entity->Armor = runtimeCache.Armor;
+                    entity->IsScoped = runtimeCache.IsScoped;
+                    entity->HasDefuser = runtimeCache.HasDefuser;
+                    entity->HasHelmet = runtimeCache.HasHelmet;
+                    entity->InBuyZone = runtimeCache.InBuyZone;
+                    entity->FlashDuration = runtimeCache.FlashDuration;
+                    entity->FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
+                    entity->FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
+                }
+                else
+                {
+                    if (Offsets::Schema::m_ArmorValue)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_ArmorValue, &entity->Armor, sizeof(entity->Armor));
+                    if (Offsets::Schema::m_bIsScoped)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bIsScoped, &entity->IsScoped, sizeof(entity->IsScoped));
+                    if (Offsets::Schema::m_bPawnHasDefuser)
+                    {
+                        entity->HasDefuser = entity->PawnHasDefuser;
+                    }
+                    else if (Offsets::Schema::m_bHasDefuser)
+                    {
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
+                    }
+                    if (Offsets::Schema::m_bPawnHasHelmet)
+                    {
+                        entity->HasHelmet = entity->PawnHasHelmet;
+                    }
+                    else if (Offsets::Schema::m_bHasHelmet)
+                    {
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasHelmet, &entity->HasHelmet, sizeof(entity->HasHelmet));
+                    }
+                    if (Offsets::Schema::m_bInBuyZone)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bInBuyZone, &entity->InBuyZone, sizeof(entity->InBuyZone));
+                    if (Offsets::Schema::m_flFlashDuration)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
+                    if (Offsets::Schema::m_flFlashOverlayAlpha)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashOverlayAlpha, &entity->FlashOverlayAlpha, sizeof(entity->FlashOverlayAlpha));
+                    if (Offsets::Schema::m_flFlashMaxAlpha)
+                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashMaxAlpha, &entity->FlashMaxAlpha, sizeof(entity->FlashMaxAlpha));
+                }
+            }
+
+            mem.ExecuteReadScatter(pawnFieldScatter);
+            mem.CloseScatterHandle(pawnFieldScatter);
+        }
+        else
+        {
+            return false;
+        }
+
         for (SampledEntityData* entity : activeEntities)
         {
-            if (Offsets::Schema::m_iHealth)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iHealth, &entity->Health, sizeof(entity->Health));
-            if (Offsets::Schema::m_iTeamNum)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iTeamNum, &entity->Team, sizeof(entity->Team));
-            if (Offsets::Schema::m_lifeState)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_lifeState, &entity->LifeState, sizeof(entity->LifeState));
-            if (Offsets::Schema::m_iMaxHealth)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_iMaxHealth, &entity->MaxHealth, sizeof(entity->MaxHealth));
-            if (Offsets::Schema::m_pGameSceneNode)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_pGameSceneNode, &entity->SceneNode, sizeof(entity->SceneNode));
-            if (Offsets::Schema::m_vOldOrigin)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vOldOrigin, &entity->OldOrigin, sizeof(entity->OldOrigin));
-            if (Offsets::Schema::m_vecViewOffset)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vecViewOffset, &entity->ViewOffset, sizeof(entity->ViewOffset));
-            if (Offsets::Schema::m_angEyeAngles)
-                mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_angEyeAngles, &entity->EyeAngles, sizeof(entity->EyeAngles));
+            if (std::abs(entity->ViewOffset.x) <= 0.001f && std::abs(entity->ViewOffset.y) <= 0.001f && std::abs(entity->ViewOffset.z) <= 0.001f)
+                entity->ViewOffset = { 0.0f, 0.0f, 64.0f };
 
-            PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
-            entity->RefreshStatus = runtimeCache.LastStatusRead.time_since_epoch().count() == 0 ||
-                now - runtimeCache.LastStatusRead >= std::chrono::milliseconds(150);
+            if (entity->RefreshStatus)
+            {
+                PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
+                runtimeCache.Armor = (std::max)(0, entity->Armor);
+                runtimeCache.IsScoped = entity->IsScoped;
+                runtimeCache.HasDefuser = entity->HasDefuser;
+                runtimeCache.HasHelmet = entity->HasHelmet;
+                runtimeCache.InBuyZone = entity->InBuyZone;
+                runtimeCache.FlashDuration = (std::max)(0.0f, entity->FlashDuration);
+                runtimeCache.FlashOverlayAlpha = (std::max)(0.0f, entity->FlashOverlayAlpha);
+                runtimeCache.FlashMaxAlpha = std::clamp(entity->FlashMaxAlpha, 0.0f, 255.0f);
+                runtimeCache.LastStatusRead = now;
+            }
 
-            if (!entity->RefreshStatus)
-            {
-                entity->Armor = runtimeCache.Armor;
-                entity->IsScoped = runtimeCache.IsScoped;
-                entity->HasDefuser = runtimeCache.HasDefuser;
-                entity->HasHelmet = runtimeCache.HasHelmet;
-                entity->FlashDuration = runtimeCache.FlashDuration;
-                entity->FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
-                entity->FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
-            }
-            else
-            {
-                if (Offsets::Schema::m_ArmorValue)
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_ArmorValue, &entity->Armor, sizeof(entity->Armor));
-                if (Offsets::Schema::m_bIsScoped)
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bIsScoped, &entity->IsScoped, sizeof(entity->IsScoped));
-                if (Offsets::Schema::m_bPawnHasDefuser)
-                {
-                    entity->HasDefuser = entity->PawnHasDefuser;
-                }
-                else if (Offsets::Schema::m_bHasDefuser)
-                {
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
-                }
-                if (Offsets::Schema::m_bPawnHasHelmet)
-                {
-                    entity->HasHelmet = entity->PawnHasHelmet;
-                }
-                else if (Offsets::Schema::m_bHasHelmet)
-                {
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasHelmet, &entity->HasHelmet, sizeof(entity->HasHelmet));
-                }
-                if (Offsets::Schema::m_flFlashDuration)
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashDuration, &entity->FlashDuration, sizeof(entity->FlashDuration));
-                if (Offsets::Schema::m_flFlashOverlayAlpha)
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashOverlayAlpha, &entity->FlashOverlayAlpha, sizeof(entity->FlashOverlayAlpha));
-                if (Offsets::Schema::m_flFlashMaxAlpha)
-                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_flFlashMaxAlpha, &entity->FlashMaxAlpha, sizeof(entity->FlashMaxAlpha));
-            }
+            if (!IsLikelyUserAddress(entity->SceneNode))
+                entity->SceneNode = 0;
         }
 
-        mem.ExecuteReadScatter(pawnFieldScatter);
-        mem.CloseScatterHandle(pawnFieldScatter);
-    }
-    else
-    {
-        return false;
-    }
-
-    for (SampledEntityData* entity : activeEntities)
-    {
-        if (std::abs(entity->ViewOffset.x) <= 0.001f && std::abs(entity->ViewOffset.y) <= 0.001f && std::abs(entity->ViewOffset.z) <= 0.001f)
-            entity->ViewOffset = { 0.0f, 0.0f, 64.0f };
-
-        if (entity->RefreshStatus)
+        if (const auto sceneScatter = mem.CreateScatterHandle())
         {
-            PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
-            runtimeCache.Armor = (std::max)(0, entity->Armor);
-            runtimeCache.IsScoped = entity->IsScoped;
-            runtimeCache.HasDefuser = entity->HasDefuser;
-            runtimeCache.HasHelmet = entity->HasHelmet;
-            runtimeCache.FlashDuration = (std::max)(0.0f, entity->FlashDuration);
-            runtimeCache.FlashOverlayAlpha = (std::max)(0.0f, entity->FlashOverlayAlpha);
-            runtimeCache.FlashMaxAlpha = std::clamp(entity->FlashMaxAlpha, 0.0f, 255.0f);
-            runtimeCache.LastStatusRead = now;
+            for (SampledEntityData* entity : activeEntities)
+            {
+                if (!entity->SceneNode)
+                    continue;
+
+                if (Offsets::Schema::m_vecAbsOrigin)
+                {
+                    mem.AddScatterReadRequest(
+                        sceneScatter,
+                        entity->SceneNode + Offsets::Schema::m_vecAbsOrigin,
+                        &entity->AbsOrigin,
+                        sizeof(entity->AbsOrigin)
+                    );
+                    entity->HasAbsOrigin = true;
+                }
+
+                if (Offsets::Schema::m_modelState)
+                {
+                    mem.AddScatterReadRequest(
+                        sceneScatter,
+                        entity->SceneNode + Offsets::Schema::m_modelState + Offsets::Layout::BoneArray,
+                        &entity->BoneArray,
+                        sizeof(entity->BoneArray)
+                    );
+                }
+            }
+
+            mem.ExecuteReadScatter(sceneScatter);
+            mem.CloseScatterHandle(sceneScatter);
         }
-
-        if (!IsLikelyUserAddress(entity->SceneNode))
-            entity->SceneNode = 0;
-    }
-
-    if (const auto sceneScatter = mem.CreateScatterHandle())
-    {
-        for (SampledEntityData* entity : activeEntities)
+        else
         {
-            if (!entity->SceneNode)
-                continue;
-
-            if (Offsets::Schema::m_vecAbsOrigin)
-            {
-                mem.AddScatterReadRequest(
-                    sceneScatter,
-                    entity->SceneNode + Offsets::Schema::m_vecAbsOrigin,
-                    &entity->AbsOrigin,
-                    sizeof(entity->AbsOrigin)
-                );
-                entity->HasAbsOrigin = true;
-            }
-
-            if (Offsets::Schema::m_modelState)
-            {
-                mem.AddScatterReadRequest(
-                    sceneScatter,
-                    entity->SceneNode + Offsets::Schema::m_modelState + Offsets::Layout::BoneArray,
-                    &entity->BoneArray,
-                    sizeof(entity->BoneArray)
-                );
-            }
+            return false;
         }
-
-        mem.ExecuteReadScatter(sceneScatter);
-        mem.CloseScatterHandle(sceneScatter);
-    }
-    else
-    {
-        return false;
     }
 
     outFrame.Players.clear();
@@ -5855,15 +5488,246 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         }
     }
 
-    const bool needPlayerNames = config.Visuals.Name || config.Visuals.SpectatorList;
-    const bool needWeaponNames = config.Visuals.Weapon;
+    const bool needPlayerNames = needRadarSampling || config.Visuals.Name || config.Visuals.SpectatorList;
+    const bool needWeaponNames = needRadarSampling || config.Visuals.Weapon;
+    const bool needMoneySampling = needRadarSampling || (moneyWindowActive && config.Visuals.Money);
+
+    std::uint64_t activePawn = core.LocalPawn;
+    if (Offsets::Schema::m_pObserverServices && Offsets::Schema::m_hObserverTarget)
+    {
+        const std::uint64_t observerServices = mem.Read<std::uint64_t>(core.LocalPawn + Offsets::Schema::m_pObserverServices);
+        if (IsLikelyUserAddress(observerServices))
+        {
+            const std::uint32_t observerTargetHandle = mem.Read<std::uint32_t>(observerServices + Offsets::Schema::m_hObserverTarget);
+            if (observerTargetHandle & Offsets::EntityList::HandleMask)
+            {
+                const std::uint64_t observerTargetPawn = sdk.ResolveEntityFromHandle(observerTargetHandle, core.EntityList);
+                if (IsLikelyUserAddress(observerTargetPawn))
+                    activePawn = observerTargetPawn;
+            }
+        }
+    }
+
+    struct RadarInventoryData
+    {
+        std::string ActiveWeapon{};
+        std::string PrimaryWeapon{};
+        std::string SecondaryWeapon{};
+        std::vector<std::string> Utilities{};
+        bool HasBomb = false;
+    };
+
+    auto buildInventory = [&](const std::uint64_t pawn) -> RadarInventoryData
+    {
+        RadarInventoryData inventory{};
+        if (!pawn)
+        {
+            inventory.ActiveWeapon = ToGsiWeaponName(ReadWeaponName(pawn));
+            return inventory;
+        }
+
+        const auto readWeaponIdFromEntity = [&](const std::uint64_t weaponEntity) -> int
+        {
+            if (!IsLikelyUserAddress(weaponEntity))
+                return 0;
+            if (!Offsets::Schema::m_AttributeManager || !Offsets::Schema::m_Item || !Offsets::Schema::m_iItemDefinitionIndex)
+                return 0;
+
+            const std::uint64_t itemDefinitionIndexAddress =
+                weaponEntity +
+                static_cast<std::uint64_t>(Offsets::Schema::m_AttributeManager) +
+                static_cast<std::uint64_t>(Offsets::Schema::m_Item) +
+                static_cast<std::uint64_t>(Offsets::Schema::m_iItemDefinitionIndex);
+
+            return mem.Read<int>(itemDefinitionIndexAddress);
+        };
+
+        const std::uint64_t activeWeaponEntity = sdk.ResolveActiveWeaponFromPawn(pawn, core.EntityList);
+        const int activeWeaponId = readWeaponIdFromEntity(activeWeaponEntity);
+        if (activeWeaponId > 0)
+            inventory.ActiveWeapon = ToGsiWeaponName(WeaponIdToName(activeWeaponId));
+
+        if (Offsets::Schema::m_hMyWeapons && Offsets::Schema::m_pWeaponServices)
+        {
+            const std::uint64_t weaponServices = mem.Read<std::uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
+            std::array<std::uint32_t, 64> weaponHandles{};
+            if (IsLikelyUserAddress(weaponServices) &&
+                mem.Read(weaponServices + Offsets::Schema::m_hMyWeapons, weaponHandles.data(), sizeof(weaponHandles)))
+            {
+                for (const std::uint32_t weaponHandle : weaponHandles)
+                {
+                    if (!Offsets::EntityList::IsHandleValid(weaponHandle))
+                        continue;
+
+                    const std::uint64_t weaponEntity = sdk.ResolveEntityFromHandle(weaponHandle, core.EntityList);
+                    const int weaponId = readWeaponIdFromEntity(weaponEntity);
+                    if (weaponId <= 0)
+                        continue;
+
+                    const std::string weaponToken = ToGsiWeaponName(WeaponIdToName(weaponId));
+                    if (weaponId == 49 || weaponToken == "weapon_c4")
+                    {
+                        inventory.HasBomb = true;
+                        continue;
+                    }
+
+                    if (IsUtilityWeaponId(weaponId))
+                    {
+                        if (!weaponToken.empty() &&
+                            std::find(inventory.Utilities.begin(), inventory.Utilities.end(), weaponToken) == inventory.Utilities.end())
+                        {
+                            inventory.Utilities.push_back(weaponToken);
+                        }
+                        continue;
+                    }
+
+                    if (IsPistolWeaponId(weaponId))
+                    {
+                        if (inventory.SecondaryWeapon.empty())
+                            inventory.SecondaryWeapon = weaponToken;
+                        continue;
+                    }
+
+                    if (IsPrimaryWeaponId(weaponId))
+                    {
+                        if (inventory.PrimaryWeapon.empty())
+                            inventory.PrimaryWeapon = weaponToken;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if (inventory.ActiveWeapon.empty())
+            inventory.ActiveWeapon = ToGsiWeaponName(ReadWeaponName(pawn));
+
+        if (activeWeaponId == 49 || inventory.ActiveWeapon == "weapon_c4")
+            inventory.HasBomb = true;
+        if (inventory.PrimaryWeapon.empty() && IsPrimaryWeaponId(activeWeaponId))
+            inventory.PrimaryWeapon = inventory.ActiveWeapon;
+        if (inventory.SecondaryWeapon.empty() && IsPistolWeaponId(activeWeaponId))
+            inventory.SecondaryWeapon = inventory.ActiveWeapon;
+        if (IsUtilityWeaponId(activeWeaponId) &&
+            !inventory.ActiveWeapon.empty() &&
+            std::find(inventory.Utilities.begin(), inventory.Utilities.end(), inventory.ActiveWeapon) == inventory.Utilities.end())
+        {
+            inventory.Utilities.push_back(inventory.ActiveWeapon);
+        }
+
+        return inventory;
+    };
+
+    auto refreshRadarInventory = [&](const std::uint64_t pawn, PawnRuntimeCache& runtimeCache)
+    {
+        if (!needRadarSampling || !pawn)
+            return;
+
+        if (!runtimeCache.RadarActiveWeapon.empty() &&
+            runtimeCache.LastInventoryRead.time_since_epoch().count() != 0 &&
+            now - runtimeCache.LastInventoryRead < std::chrono::milliseconds(500))
+        {
+            return;
+        }
+
+        const RadarInventoryData inventory = buildInventory(pawn);
+        runtimeCache.RadarActiveWeapon = inventory.ActiveWeapon;
+        runtimeCache.RadarPrimaryWeapon = inventory.PrimaryWeapon;
+        runtimeCache.RadarSecondaryWeapon = inventory.SecondaryWeapon;
+        runtimeCache.RadarUtilities = inventory.Utilities;
+        runtimeCache.RadarHasBomb = inventory.HasBomb;
+        runtimeCache.LastInventoryRead = now;
+    };
+
+    if (needRadarSampling)
+    {
+        outFrame.Radar.MapName = sdk.GetCurrentMapName();
+        outFrame.Radar.LocalViewAngles = localViewAngles;
+        outFrame.Radar.FreezePeriod = freezePeriod;
+        outFrame.Radar.GamePhaseRaw = gamePhaseRaw;
+        outFrame.Radar.PhaseEndsIn = phaseEndsIn;
+        outFrame.Radar.CanBuy = false;
+
+        constexpr auto kScorePollInterval = std::chrono::seconds(1);
+        if (m_LastRadarScoreRead.time_since_epoch().count() == 0 || now - m_LastRadarScoreRead >= kScorePollInterval)
+        {
+            int nextCtScore = m_RadarCtScore;
+            int nextTScore = m_RadarTScore;
+            if (Offsets::Schema::m_iScore && Offsets::Schema::m_szTeamname)
+            {
+                for (std::uint32_t index = 1; index <= 255; ++index)
+                {
+                    const std::uint64_t entity = ResolveEntityIndexPointer(core.EntityList, index);
+                    if (!IsLikelyUserAddress(entity))
+                        continue;
+
+                    char teamNameBuffer[64]{};
+                    if (!mem.Read(entity + Offsets::Schema::m_szTeamname, teamNameBuffer, sizeof(teamNameBuffer)))
+                        continue;
+
+                    const std::string teamName = ToLowerAscii(teamNameBuffer);
+                    const int score = mem.Read<int>(entity + Offsets::Schema::m_iScore);
+                    if (score < 0 || score > 200)
+                        continue;
+
+                    if (teamName.find("terrorist") != std::string::npos)
+                        nextTScore = score;
+                    else if (teamName.find("counter") != std::string::npos || teamName == "ct")
+                        nextCtScore = score;
+                }
+            }
+
+            m_RadarCtScore = nextCtScore;
+            m_RadarTScore = nextTScore;
+            m_LastRadarScoreRead = now;
+        }
+
+        outFrame.Radar.CtScore = m_RadarCtScore;
+        outFrame.Radar.TScore = m_RadarTScore;
+    }
+
+    ControllerIdentityCache& localIdentityCache = m_ControllerIdentityCache[core.LocalController];
+    if (needPlayerNames && localIdentityCache.RoundEpoch != m_RoundEpoch)
+    {
+        localIdentityCache.Name = ReadPlayerName(core.LocalController);
+        localIdentityCache.RoundEpoch = m_RoundEpoch;
+    }
+    else if (!needPlayerNames && localIdentityCache.RoundEpoch != m_RoundEpoch)
+    {
+        localIdentityCache.RoundEpoch = m_RoundEpoch;
+    }
+    if (needMoneySampling &&
+        (localIdentityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
+            now - localIdentityCache.LastMoneyRead >= kMoneyPollInterval))
+    {
+        localIdentityCache.Money = local.Money;
+        localIdentityCache.LastMoneyRead = now;
+    }
+
+    if (IsLikelyUserAddress(core.LocalPawn))
+    {
+        activePawns.insert(core.LocalPawn);
+        PawnRuntimeCache& localRuntimeCache = m_PawnRuntimeCache[core.LocalPawn];
+        localRuntimeCache.Armor = (std::max)(0, local.Armor);
+        localRuntimeCache.HasDefuser = local.HasDefuser;
+        localRuntimeCache.HasHelmet = local.HasHelmet;
+        localRuntimeCache.InBuyZone = local.InBuyZone;
+        localRuntimeCache.FlashDuration = (std::max)(0.0f, local.FlashDuration);
+        localRuntimeCache.FlashOverlayAlpha = (std::max)(0.0f, local.FlashOverlayAlpha);
+        localRuntimeCache.FlashMaxAlpha = std::clamp(local.FlashMaxAlpha, 0.0f, 255.0f);
+        localRuntimeCache.LastStatusRead = now;
+        if (needWeaponNames &&
+            (localRuntimeCache.WeaponName.empty() ||
+                localRuntimeCache.LastWeaponRead.time_since_epoch().count() == 0 ||
+                now - localRuntimeCache.LastWeaponRead >= std::chrono::milliseconds(500)))
+        {
+            localRuntimeCache.WeaponName = ReadWeaponName(core.LocalPawn);
+            localRuntimeCache.LastWeaponRead = now;
+        }
+        refreshRadarInventory(core.LocalPawn, localRuntimeCache);
+    }
 
     for (SampledEntityData* entity : activeEntities)
     {
-        const bool entityAlive = IsAlive(entity->Health, entity->LifeState);
-        if (!entityAlive)
-            continue;
-
         activePawns.insert(entity->Pawn);
 
         ControllerIdentityCache& identityCache = m_ControllerIdentityCache[entity->Controller];
@@ -5871,17 +5735,12 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         {
             identityCache.Name = ReadPlayerName(entity->Controller);
             identityCache.RoundEpoch = m_RoundEpoch;
-            if (moneyWindowActive && config.Visuals.Money)
-            {
-                identityCache.Money = ReadMoney(entity->Controller);
-                identityCache.LastMoneyRead = now;
-            }
         }
         else if (!needPlayerNames && identityCache.RoundEpoch != m_RoundEpoch)
         {
             identityCache.RoundEpoch = m_RoundEpoch;
         }
-        else if (moneyWindowActive && config.Visuals.Money &&
+        if (needMoneySampling &&
             (identityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
                 now - identityCache.LastMoneyRead >= kMoneyPollInterval))
         {
@@ -5892,14 +5751,59 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
         if (needWeaponNames &&
             (runtimeCache.WeaponName.empty() ||
-            runtimeCache.LastWeaponRead.time_since_epoch().count() == 0 ||
-            now - runtimeCache.LastWeaponRead >= std::chrono::milliseconds(500)))
+                runtimeCache.LastWeaponRead.time_since_epoch().count() == 0 ||
+                now - runtimeCache.LastWeaponRead >= std::chrono::milliseconds(500)))
         {
             runtimeCache.WeaponName = ReadWeaponName(entity->Pawn);
             runtimeCache.LastWeaponRead = now;
         }
+        refreshRadarInventory(entity->Pawn, runtimeCache);
 
+        const bool entityAlive = IsAlive(entity->Health, entity->LifeState);
         const Vector3 entityOrigin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
+
+        if (needRadarSampling && IsRadarConnectedState(entity->ConnectedState) && (entity->Team == 2 || entity->Team == 3))
+        {
+            const int flashedValue = entityAlive ? std::clamp(
+                static_cast<int>((std::max)(entity->FlashOverlayAlpha, entity->FlashDuration * 64.0f)),
+                0,
+                255) : 0;
+            const int ammoClip = entityAlive ? ReadActiveWeaponClip(entity->Pawn) : -1;
+
+            RadarPlayerFrameItem radarItem{};
+            radarItem.PlayerId = RadarPlayerIdFromSteamId(entity->SteamId, entity->Controller);
+            radarItem.SteamId = entity->SteamId == 0 ? std::string{} : std::to_string(static_cast<unsigned long long>(entity->SteamId));
+            radarItem.Controller = entity->Controller;
+            radarItem.Pawn = entity->Pawn;
+            radarItem.Team = entity->Team;
+            radarItem.Health = entityAlive ? std::clamp(entity->Health, 0, 100) : 0;
+            radarItem.Armor = entityAlive ? std::clamp(entity->Armor, 0, 100) : 0;
+            radarItem.Money = (std::max)(0, identityCache.Money);
+            radarItem.Flashed = flashedValue;
+            radarItem.AmmoClip = ammoClip;
+            radarItem.CompTeammateColor = entity->CompTeammateColor;
+            radarItem.Position = entityOrigin;
+            radarItem.EyeAngles = entity->EyeAngles;
+            radarItem.Name = identityCache.Name;
+            radarItem.WeaponName = runtimeCache.RadarActiveWeapon.empty() ? ToGsiWeaponName(runtimeCache.WeaponName) : runtimeCache.RadarActiveWeapon;
+            radarItem.PrimaryWeaponName = runtimeCache.RadarPrimaryWeapon;
+            radarItem.SecondaryWeaponName = runtimeCache.RadarSecondaryWeapon;
+            radarItem.UtilityNames = runtimeCache.RadarUtilities;
+            radarItem.HasDefuser = entity->HasDefuser;
+            radarItem.HasHelmet = entity->HasHelmet;
+            radarItem.Connected = true;
+            radarItem.InBuyZone = entityAlive && entity->InBuyZone;
+            radarItem.Active = entity->Pawn == activePawn;
+            radarItem.HasBomb = runtimeCache.RadarHasBomb;
+            radarItem.IsLocal = false;
+            radarItem.IsAlive = entityAlive;
+            if (radarItem.InBuyZone)
+                outFrame.Radar.CanBuy = true;
+            outFrame.Radar.Players.push_back(std::move(radarItem));
+        }
+
+        if (!entityAlive)
+            continue;
 
         if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
             continue;
@@ -5959,6 +5863,51 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             snapshot.IsVisible = CheckVisibility(localEyePosition, snapshot.HeadPosition);
 
         outFrame.Players.push_back(std::move(snapshot));
+    }
+
+    if (needRadarSampling &&
+        IsLikelyUserAddress(core.LocalController) &&
+        (local.Team == 2 || local.Team == 3) &&
+        IsRadarConnectedState(local.ConnectedState))
+    {
+        PawnRuntimeCache& localRuntimeCache = m_PawnRuntimeCache[core.LocalPawn];
+        const bool localAlive = IsAlive(local.Health, local.LifeState);
+        const int localAmmoClip = localAlive ? ReadActiveWeaponClip(core.LocalPawn) : -1;
+        const int localFlashed = localAlive ? std::clamp(
+            static_cast<int>((std::max)(local.FlashOverlayAlpha, local.FlashDuration * 64.0f)),
+            0,
+            255) : 0;
+
+        RadarPlayerFrameItem localRadar{};
+        localRadar.PlayerId = RadarPlayerIdFromSteamId(local.SteamId, core.LocalController);
+        localRadar.SteamId = local.SteamId == 0 ? std::string{} : std::to_string(static_cast<unsigned long long>(local.SteamId));
+        localRadar.Controller = core.LocalController;
+        localRadar.Pawn = core.LocalPawn;
+        localRadar.Team = local.Team;
+        localRadar.Health = localAlive ? std::clamp(local.Health, 0, 100) : 0;
+        localRadar.Armor = localAlive ? std::clamp(local.Armor, 0, 100) : 0;
+        localRadar.Money = (std::max)(0, localIdentityCache.Money);
+        localRadar.Flashed = localFlashed;
+        localRadar.AmmoClip = localAmmoClip;
+        localRadar.CompTeammateColor = local.CompTeammateColor;
+        localRadar.Position = local.Origin;
+        localRadar.EyeAngles = localViewAngles;
+        localRadar.Name = localIdentityCache.Name;
+        localRadar.WeaponName = localRuntimeCache.RadarActiveWeapon.empty() ? ToGsiWeaponName(localRuntimeCache.WeaponName) : localRuntimeCache.RadarActiveWeapon;
+        localRadar.PrimaryWeaponName = localRuntimeCache.RadarPrimaryWeapon;
+        localRadar.SecondaryWeaponName = localRuntimeCache.RadarSecondaryWeapon;
+        localRadar.UtilityNames = localRuntimeCache.RadarUtilities;
+        localRadar.HasDefuser = local.HasDefuser;
+        localRadar.HasHelmet = local.HasHelmet;
+        localRadar.Connected = true;
+        localRadar.InBuyZone = localAlive && local.InBuyZone;
+        localRadar.Active = core.LocalPawn == activePawn;
+        localRadar.HasBomb = localRuntimeCache.RadarHasBomb;
+        localRadar.IsLocal = true;
+        localRadar.IsAlive = localAlive;
+        if (localRadar.InBuyZone)
+            outFrame.Radar.CanBuy = true;
+        outFrame.Radar.Players.push_back(std::move(localRadar));
     }
 
     for (auto it = m_ControllerIdentityCache.begin(); it != m_ControllerIdentityCache.end();)
@@ -6108,7 +6057,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             outFrame.SpectatorList = std::move(spectatorSnapshot);
     }
 
-    if (config.Visuals.C4)
+    if (config.Visuals.C4 || needRadarSampling)
     {
         constexpr auto kC4IntervalIdle = std::chrono::microseconds(16667);   // 60Hz
         constexpr auto kC4IntervalPlanted = std::chrono::microseconds(10000); // 100Hz
@@ -6130,6 +6079,9 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         m_LastC4Sample = {};
         outFrame.C4 = C4Snapshot{};
     }
+
+    if (needRadarSampling)
+        outFrame.Radar.C4 = outFrame.C4;
 
     return true;
 }

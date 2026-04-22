@@ -46,6 +46,17 @@ namespace Offsets
         inline constexpr std::uint64_t ListStart = 0x10;
         inline constexpr std::uint64_t ChunkStride = 0x8;
         inline constexpr std::uint64_t EntryStride = 0x70;
+
+        inline constexpr std::uint32_t HandleIndex(const std::uint32_t handle)
+        {
+            return handle & HandleMask;
+        }
+
+        inline constexpr bool IsHandleValid(const std::uint32_t handle)
+        {
+            const std::uint32_t index = HandleIndex(handle);
+            return index != 0 && index != HandleMask;
+        }
     }
 
     namespace Schema
@@ -56,6 +67,8 @@ namespace Offsets
         inline std::uint32_t m_iCompTeammateColor = 0;
         inline std::uint32_t m_bPawnHasDefuser = 0;
         inline std::uint32_t m_bPawnHasHelmet = 0;
+        inline std::uint32_t m_iConnected = 0;
+        inline std::uint32_t m_steamID = 0;
         inline std::uint32_t m_iszPlayerName = 0;
         inline std::uint32_t m_pInGameMoneyServices = 0;
         inline std::uint32_t m_iAccount = 0;
@@ -78,18 +91,24 @@ namespace Offsets
         inline std::uint32_t m_flFlashOverlayAlpha = 0;
         inline std::uint32_t m_iIDEntIndex = 0;
         inline std::uint32_t m_iShotsFired = 0;
-        inline std::uint32_t m_aimPunchAngle = 0;
+        inline std::uint32_t m_pAimPunchServices = 0;
+        inline std::uint32_t m_predictableBaseAngle = 0;
+        inline std::uint32_t m_unpredictableBaseAngle = 0;
         inline std::uint32_t m_iObserverMode = 0;
         inline std::uint32_t m_hObserverTarget = 0;
         inline std::uint32_t m_hActiveWeapon = 0;
+        inline std::uint32_t m_hMyWeapons = 0;
         inline std::uint32_t m_AttributeManager = 0;
         inline std::uint32_t m_Item = 0;
         inline std::uint32_t m_iItemDefinitionIndex = 0;
         inline std::uint32_t m_iClip1 = 0;
         inline std::uint32_t m_bInReload = 0;
         inline std::uint32_t m_hOwnerEntity = 0;
+        inline std::uint32_t m_bInBuyZone = 0;
         inline std::uint32_t m_bHasDefuser = 0;
         inline std::uint32_t m_bHasHelmet = 0;
+        inline std::uint32_t m_iScore = 0;
+        inline std::uint32_t m_szTeamname = 0;
         inline std::uint32_t m_bBombTicking = 0;
         inline std::uint32_t m_bBombDefused = 0;
         inline std::uint32_t m_nBombSite = 0;
@@ -100,6 +119,9 @@ namespace Offsets
         inline std::uint32_t m_flDefuseCountDown = 0;
         inline std::uint32_t m_hBombDefuser = 0;
         inline std::uint32_t m_vecC4ExplodeSpectatePos = 0;
+        inline std::uint32_t m_bStartedArming = 0;
+        inline std::uint32_t m_bIsPlantingViaUse = 0;
+        inline std::uint32_t m_fArmedTime = 0;
         inline std::uint32_t m_bFreezePeriod = 0;
         inline std::uint32_t m_gamePhase = 0;
         inline std::uint32_t m_timeUntilNextPhaseStarts = 0;

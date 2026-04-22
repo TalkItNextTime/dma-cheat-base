@@ -85,11 +85,11 @@ namespace Structs
     };
 
     inline constexpr std::array<int, 17> AimBoneIds = {
-        0, 2, 4, 5, 6,
-        8, 9, 10,
+        1, 2, 23, 6, 7,
+        9, 10, 11,
         13, 14, 15,
-        22, 23, 24,
-        25, 26, 27
+        17, 18, 19,
+        20, 21, 22
     };
 
     inline constexpr std::array<const char*, 17> AimBoneNames = {
@@ -132,7 +132,7 @@ namespace Structs
         "右脚"
     };
 
-    inline constexpr int AimHeadBoneId = 6;
+    inline constexpr int AimHeadBoneId = 7;
     inline constexpr std::uint64_t AimAllBoneMask = (1ull << AimBoneIds.size()) - 1ull;
     inline constexpr std::uint64_t AimDefaultAimbotBoneMask =
         (1ull << 1) | // Spine
@@ -404,12 +404,9 @@ namespace Structs
         std::string Host = "127.0.0.1";
         int StaticPort = 36364;
         int IngestPort = 36365;
-        std::string AdminKey{};
-        std::string RoomNamePrefix = "dma-match";
         int PublishIntervalMs = 66;
         int HttpTimeoutMs = 3000;
         int ReconnectBaseMs = 500;
         int ReconnectMaxMs = 5000;
-        bool AutoDeleteRoomOnExit = true;
     };
 }

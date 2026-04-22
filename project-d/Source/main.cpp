@@ -33,8 +33,11 @@ int main()
         return 1;
     }
 
+    LOG_INFO("Config initialized, proceeding to KMBOX/DMA/SDK startup");
+
     if (config.Kmbox.Enabled)
     {
+        LOG_INFO("Initializing KMBOX");
         if (Kmbox.InitDevice(config.Kmbox.Ip, config.Kmbox.Port, config.Kmbox.Uuid) == 0)
         {
             ProcInfo::KmboxInitialized = true;
@@ -49,8 +52,10 @@ int main()
     else
     {
         ProcInfo::KmboxInitialized = false;
+        LOG_INFO("KMBOX disabled in config");
     }
 
+    LOG_INFO("Initializing DMA");
     if (!dma.Init())
     {
         LOG_ERROR("Failed to initialize DMA");
@@ -58,6 +63,7 @@ int main()
         return 1;
     }
 
+    LOG_INFO("Initializing SDK");
     if (!sdk.Init())
     {
         LOG_ERROR("Failed to initialize SDK");
@@ -65,6 +71,7 @@ int main()
         return 1;
     }
 
+	LOG_INFO("Initializing feature threads");
 	if (!features.Init())
     {
 		LOG_ERROR("Failed to initialize Features");
@@ -72,6 +79,7 @@ int main()
 		return 1;
 	}
 
+    LOG_INFO("Starting radar bridge");
     radarBridge.Start();
 
     PerfDebug::SetVisDebugTick([]()
@@ -79,6 +87,7 @@ int main()
         esp.UpdateVisCheckDebugOverlayFromDebugThread();
     });
 
+    LOG_INFO("Creating overlay and ImGui");
     if (!overlay.Create())
     {
 		LOG_ERROR("Failed to create Overlay");

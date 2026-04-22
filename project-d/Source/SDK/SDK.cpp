@@ -294,6 +294,8 @@ bool SDK::LoadOffsets()
     loadOptionalSchema("CCSPlayerController", "m_iCompTeammateColor", Offsets::Schema::m_iCompTeammateColor);
     loadOptionalSchema("CCSPlayerController", "m_bPawnHasDefuser", Offsets::Schema::m_bPawnHasDefuser);
     loadOptionalSchema("CCSPlayerController", "m_bPawnHasHelmet", Offsets::Schema::m_bPawnHasHelmet);
+    loadOptionalSchemaFromClasses({ "CCSPlayerController", "CBasePlayerController" }, "m_iConnected", Offsets::Schema::m_iConnected);
+    loadOptionalSchemaFromClasses({ "CCSPlayerController", "CBasePlayerController" }, "m_steamID", Offsets::Schema::m_steamID);
     loadSchema("CBasePlayerController", "m_iszPlayerName", Offsets::Schema::m_iszPlayerName);
     loadSchema("CCSPlayerController", "m_pInGameMoneyServices", Offsets::Schema::m_pInGameMoneyServices);
     loadSchema("CCSPlayerController_InGameMoneyServices", "m_iAccount", Offsets::Schema::m_iAccount);
@@ -316,18 +318,24 @@ bool SDK::LoadOffsets()
     loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashOverlayAlpha", Offsets::Schema::m_flFlashOverlayAlpha);
     loadSchema("C_CSPlayerPawn", "m_iIDEntIndex", Offsets::Schema::m_iIDEntIndex);
     loadSchema("C_CSPlayerPawn", "m_iShotsFired", Offsets::Schema::m_iShotsFired);
-    loadSchema("C_CSPlayerPawn", "m_aimPunchAngle", Offsets::Schema::m_aimPunchAngle);
+    loadSchema("C_CSPlayerPawn", "m_pAimPunchServices", Offsets::Schema::m_pAimPunchServices);
+    loadSchema("CCSPlayer_AimPunchServices", "m_predictableBaseAngle", Offsets::Schema::m_predictableBaseAngle);
+    loadSchema("CCSPlayer_AimPunchServices", "m_unpredictableBaseAngle", Offsets::Schema::m_unpredictableBaseAngle);
     loadSchema("CPlayer_ObserverServices", "m_iObserverMode", Offsets::Schema::m_iObserverMode);
     loadSchema("CPlayer_ObserverServices", "m_hObserverTarget", Offsets::Schema::m_hObserverTarget);
     loadSchema("CPlayer_WeaponServices", "m_hActiveWeapon", Offsets::Schema::m_hActiveWeapon);
+    loadOptionalSchema("CPlayer_WeaponServices", "m_hMyWeapons", Offsets::Schema::m_hMyWeapons);
     loadSchema("C_EconEntity", "m_AttributeManager", Offsets::Schema::m_AttributeManager);
     loadSchema("C_AttributeContainer", "m_Item", Offsets::Schema::m_Item);
     loadSchema("C_EconItemView", "m_iItemDefinitionIndex", Offsets::Schema::m_iItemDefinitionIndex);
     loadOptionalSchemaFromClasses({ "C_BasePlayerWeapon", "C_CSWeaponBase", "CWeaponBaseItem" }, "m_iClip1", Offsets::Schema::m_iClip1);
     loadSchema("C_CSWeaponBase", "m_bInReload", Offsets::Schema::m_bInReload);
     loadOptionalSchemaFromClasses({ "C_BaseEntity", "CBasePlayerWeapon", "C_CSWeaponBase" }, "m_hOwnerEntity", Offsets::Schema::m_hOwnerEntity);
+    loadOptionalSchema("C_CSPlayerPawn", "m_bInBuyZone", Offsets::Schema::m_bInBuyZone);
     loadOptionalSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
     loadOptionalSchema("C_CSPlayerPawn", "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
+    loadOptionalSchema("C_Team", "m_iScore", Offsets::Schema::m_iScore);
+    loadOptionalSchema("C_Team", "m_szTeamname", Offsets::Schema::m_szTeamname);
     loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
     loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);
     loadSchema("C_PlantedC4", "m_nBombSite", Offsets::Schema::m_nBombSite);
@@ -338,6 +346,9 @@ bool SDK::LoadOffsets()
     loadSchema("C_PlantedC4", "m_flDefuseCountDown", Offsets::Schema::m_flDefuseCountDown);
     loadOptionalSchema("C_PlantedC4", "m_hBombDefuser", Offsets::Schema::m_hBombDefuser);
     loadSchema("C_PlantedC4", "m_vecC4ExplodeSpectatePos", Offsets::Schema::m_vecC4ExplodeSpectatePos);
+    loadSchema("C_C4", "m_bStartedArming", Offsets::Schema::m_bStartedArming);
+    loadSchema("C_C4", "m_bIsPlantingViaUse", Offsets::Schema::m_bIsPlantingViaUse);
+    loadSchema("C_C4", "m_fArmedTime", Offsets::Schema::m_fArmedTime);
     loadSchema("C_CSGameRules", "m_bFreezePeriod", Offsets::Schema::m_bFreezePeriod);
     loadOptionalSchema("C_CSGameRules", "m_gamePhase", Offsets::Schema::m_gamePhase);
     loadOptionalSchema("C_CSGameRules", "m_timeUntilNextPhaseStarts", Offsets::Schema::m_timeUntilNextPhaseStarts);
@@ -514,10 +525,10 @@ uint64_t SDK::ResolveEntityFromHandle(uint32_t handle, uint64_t entityList) cons
     if (!entityList)
         return 0;
 
-    const uint32_t index = handle & Offsets::EntityList::HandleMask;
-    if (!index)
+    if (!Offsets::EntityList::IsHandleValid(handle))
         return 0;
 
+    const uint32_t index = Offsets::EntityList::HandleIndex(handle);
     const uint32_t hi = index >> Offsets::EntityList::HandleHighShift;
     const uint32_t lo = index & Offsets::EntityList::HandleLowMask;
 
@@ -528,6 +539,28 @@ uint64_t SDK::ResolveEntityFromHandle(uint32_t handle, uint64_t entityList) cons
         return 0;
 
     return mem.Read<uint64_t>(listEntry + static_cast<uint64_t>(lo) * Offsets::EntityList::EntryStride);
+}
+
+uint64_t SDK::ResolveActiveWeaponFromPawn(uint64_t pawn) const
+{
+    const auto cache = GetCoreCache();
+    return ResolveActiveWeaponFromPawn(pawn, cache.EntityList);
+}
+
+uint64_t SDK::ResolveActiveWeaponFromPawn(uint64_t pawn, uint64_t entityList) const
+{
+    if (!pawn || !entityList || !Offsets::Schema::m_pWeaponServices || !Offsets::Schema::m_hActiveWeapon)
+        return 0;
+
+    const std::uint64_t weaponServices = mem.Read<std::uint64_t>(pawn + Offsets::Schema::m_pWeaponServices);
+    if (!weaponServices)
+        return 0;
+
+    const std::uint32_t activeWeaponHandle = mem.Read<std::uint32_t>(weaponServices + Offsets::Schema::m_hActiveWeapon);
+    if (!Offsets::EntityList::IsHandleValid(activeWeaponHandle))
+        return 0;
+
+    return ResolveEntityFromHandle(activeWeaponHandle, entityList);
 }
 
 uint64_t SDK::ResolvePawnFromController(uint64_t controller) const

@@ -6,6 +6,10 @@
 //TODO: Restart winlogon.exe when it doesn't exist.
 bool c_keys::InitKeyboard()
 {
+	keyboardDmaAvailable = false;
+	gafAsyncKeyStateExport = 0;
+	win_logon_pid = 0;
+
 	std::string win = registry.QueryValue("HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\CurrentBuild", e_registry_type::sz);
 	int Winver = 0;
 	if (!win.empty())
@@ -45,7 +49,10 @@ bool c_keys::InitKeyboard()
 				break;
 		}
 		if (gafAsyncKeyStateExport > 0x7FFFFFFFFFFF)
+		{
+			keyboardDmaAvailable = true;
 			return true;
+		}
 		return false;
 	}
 	else
@@ -102,7 +109,10 @@ bool c_keys::InitKeyboard()
 			LOG("found gafAsyncKeyState at: 0x%p\n", gafAsyncKeyState);
 		}
 		if (gafAsyncKeyStateExport > 0x7FFFFFFFFFFF)
+		{
+			keyboardDmaAvailable = true;
 			return true;
+		}
 		return false;
 	}
 }
@@ -120,8 +130,8 @@ void c_keys::UpdateKeys()
 
 bool c_keys::IsKeyDown(uint32_t virtual_key_code)
 {
-	if (gafAsyncKeyStateExport < 0x7FFFFFFFFFFF)
-		return false;
+	if (!keyboardDmaAvailable || gafAsyncKeyStateExport < 0x7FFFFFFFFFFF)
+		return (GetAsyncKeyState(static_cast<int>(virtual_key_code)) & 0x8000) != 0;
 	if (std::chrono::system_clock::now() - start > std::chrono::milliseconds(1))
 	{
 		UpdateKeys();

@@ -132,8 +132,10 @@
     <ClInclude Include="Source\Features\Aimbot\AutowallEngine.hpp" />
     <ClInclude Include="Source\Config\Config.hpp" />
     <ClInclude Include="Source\Config\Structs.hpp" />
+    <ClInclude Include="Source\Features\ESP\C4CardModel.hpp" />
     <ClInclude Include="Source\Features\ESP\ESP.hpp" />
     <ClInclude Include="Source\Features\Features.hpp" />
+    <ClInclude Include="Source\Features\Radar\ObservRadarProtocol.hpp" />
     <ClInclude Include="Source\Misc\Animation\Animation.hpp" />
     <ClInclude Include="Source\Overlay\Fonts\IBMPlexMono_Medium.h" />
     <ClInclude Include="Source\Overlay\Localization.hpp" />
@@ -285,7 +287,9 @@
     <ClCompile Include="Source\Dma\DMA.cpp" />
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp" />
     <ClCompile Include="Source\Features\Aimbot\AutowallEngine.cpp" />
+    <ClCompile Include="Source\Features\ESP\C4CardModel.cpp" />
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
+    <ClCompile Include="Source\Features\Radar\ObservRadarProtocol.cpp" />
     <ClCompile Include="Source\Features\Radar\Radar.cpp" />
     <ClCompile Include="VisCheckCS2\Parser.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>

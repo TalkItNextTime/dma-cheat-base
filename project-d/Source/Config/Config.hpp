@@ -279,13 +279,10 @@ namespace Config
             j["Radar"]["Host"] = Radar.Host;
             j["Radar"]["StaticPort"] = Radar.StaticPort;
             j["Radar"]["IngestPort"] = Radar.IngestPort;
-            j["Radar"]["AdminKey"] = Radar.AdminKey;
-            j["Radar"]["RoomNamePrefix"] = Radar.RoomNamePrefix;
             j["Radar"]["PublishIntervalMs"] = Radar.PublishIntervalMs;
             j["Radar"]["HttpTimeoutMs"] = Radar.HttpTimeoutMs;
             j["Radar"]["ReconnectBaseMs"] = Radar.ReconnectBaseMs;
             j["Radar"]["ReconnectMaxMs"] = Radar.ReconnectMaxMs;
-            j["Radar"]["AutoDeleteRoomOnExit"] = Radar.AutoDeleteRoomOnExit;
 
             j["Info"]["Language"] = std::clamp(Language, 0, 1);
             j["Info"]["DebugEnabled"] = DebugEnabled;
@@ -734,13 +731,10 @@ namespace Config
                 j["Radar"]["Host"] = "127.0.0.1";
                 j["Radar"]["StaticPort"] = 36364;
                 j["Radar"]["IngestPort"] = 36365;
-                j["Radar"]["AdminKey"] = "";
-                j["Radar"]["RoomNamePrefix"] = "dma-match";
                 j["Radar"]["PublishIntervalMs"] = 66;
                 j["Radar"]["HttpTimeoutMs"] = 3000;
                 j["Radar"]["ReconnectBaseMs"] = 500;
                 j["Radar"]["ReconnectMaxMs"] = 5000;
-                j["Radar"]["AutoDeleteRoomOnExit"] = true;
 
                 j["Info"]["Language"] = 0;
                 j["Info"]["DebugEnabled"] = false;
@@ -1308,13 +1302,10 @@ namespace Config
                             else if (key == "Host") configSection.Host = value.get<std::string>();
                             else if (key == "StaticPort") configSection.StaticPort = value.get<int>();
                             else if (key == "IngestPort") configSection.IngestPort = value.get<int>();
-                            else if (key == "AdminKey") configSection.AdminKey = value.get<std::string>();
-                            else if (key == "RoomNamePrefix") configSection.RoomNamePrefix = value.get<std::string>();
                             else if (key == "PublishIntervalMs") configSection.PublishIntervalMs = value.get<int>();
                             else if (key == "HttpTimeoutMs") configSection.HttpTimeoutMs = value.get<int>();
                             else if (key == "ReconnectBaseMs") configSection.ReconnectBaseMs = value.get<int>();
                             else if (key == "ReconnectMaxMs") configSection.ReconnectMaxMs = value.get<int>();
-                            else if (key == "AutoDeleteRoomOnExit") configSection.AutoDeleteRoomOnExit = value.get<bool>();
                         }
                     }
                 }
