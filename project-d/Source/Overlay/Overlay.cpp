@@ -2649,30 +2649,30 @@ void Overlay::RenderMenu()
 						ImAdd::CheckBox(Localization::Pick("Enable Trigger Hitbox Debug", "启用扳机碰撞体调试"), &config.Aim.TriggerHitboxDebug);
 						ImAdd::CheckBox(Localization::Pick("Perf Debug Output", "性能调试输出"), &config.DebugPerf);
 						ImAdd::CheckBox(Localization::Pick("Trigger Debug Output", "扳机调试输出"), &config.DebugTrigger);
-						ImAdd::CheckBox(Localization::Pick("VisCheck Debug Overlay", "VisCheck调试叠加"), &config.DebugVisCheck);
+						ImAdd::CheckBox(Localization::Pick("Render World", "世界渲染"), &config.DebugVisCheck);
 						ImAdd::CheckBox(Localization::Pick("Autowall Debug Output", "穿墙调试输出"), &config.DebugAutowall);
 						ImAdd::CheckBox(Localization::Pick("Spectator Debug Text", "观战名单调试文本"), &config.DebugSpectatorList);
 
 						if (config.DebugVisCheck)
 						{
-							ImGui::TextDisabled("%s", Localization::Pick("VisCheck full-map overlay is always enabled while debug is on.", "VisCheck调试开启时始终全量覆盖地图信息。"));
+							ImGui::TextDisabled("%s", Localization::Pick("Render World uses full cached map triangles while debug is on.", "调试开启时世界渲染会使用完整缓存地图三角形。"));
 
 							config.Visuals.VisCheckDebugMaxDistance = std::clamp(config.Visuals.VisCheckDebugMaxDistance, 300.0f, 12000.0f);
 							ImAdd::SliderFloat(
-								Localization::Pick("VisCheck Debug Distance", "VisCheck调试距离"),
+								Localization::Pick("Render World Distance", "世界渲染距离"),
 								&config.Visuals.VisCheckDebugMaxDistance,
 								300.0f,
 								12000.0f);
 
 							config.Visuals.VisCheckDebugMaxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
 							ImAdd::SliderInt(
-								Localization::Pick("VisCheck Debug Max Items", "VisCheck调试最大数量"),
+								Localization::Pick("Render World Max Triangles", "世界渲染最大三角形数量"),
 								&config.Visuals.VisCheckDebugMaxItems,
 								32,
 								5000);
 
 							ImAdd::ColorEdit4(
-								Localization::Pick("VisCheck Debug Color", "VisCheck调试颜色"),
+								Localization::Pick("Render World Color", "世界渲染颜色"),
 								(float*)&config.Visuals.VisCheckDebugColor);
 						}
 					}

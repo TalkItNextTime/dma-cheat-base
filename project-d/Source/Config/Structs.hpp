@@ -333,7 +333,7 @@ namespace Structs
         bool TeamCheck = false;
         bool VisibleCheck = false;
         bool VisCheckDebug = false;
-        int VisCheckDebugMode = 1; // Deprecated legacy config key. Debug now always renders full map overlay.
+        int VisCheckDebugMode = 1; // Deprecated legacy config key. Render World now always renders full cached map triangles.
         float VisCheckDebugMaxDistance = 3200.0f;
         int VisCheckDebugMaxItems = 1400;
         ImVec4 VisCheckDebugColor = ImVec4(0.25f, 0.85f, 1.0f, 0.65f);

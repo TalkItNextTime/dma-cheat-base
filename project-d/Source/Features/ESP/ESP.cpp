@@ -3,6 +3,7 @@
 #include "C4CardModel.hpp"
 #include "ESP.hpp"
 #include "KeyIconsEmbedded.hpp"
+#include "VisWorldDebugRender.hpp"
 #include "WeaponIconsEmbedded.hpp"
 #include <Aimbot/TriggerHitboxSchema.hpp>
 #include <Aimbot/Aimbot.hpp>
@@ -2578,27 +2579,29 @@ void ESP::RenderVisCheckDebug(ImDrawList* drawList) const
     if (!drawList || !visDebugEnabled)
         return;
 
-    std::vector<VisDebugScreenLine> lineSnapshot{};
+    std::vector<VisDebugScreenTriangle> triangleSnapshot{};
     {
         std::lock_guard lock(m_VisDebugOverlayMutex);
-        lineSnapshot = m_VisDebugOverlayLines;
+        triangleSnapshot = m_VisDebugOverlayTriangles;
     }
 
-    for (const VisDebugScreenLine& line : lineSnapshot)
+    for (const VisDebugScreenTriangle& tri : triangleSnapshot)
     {
-        drawList->AddLine(
-            line.Start.ToImVec2(),
-            line.End.ToImVec2(),
-            line.Color,
-            line.Thickness
-        );
+        const ImVec2 points[3] = {
+            tri.P0.ToImVec2(),
+            tri.P1.ToImVec2(),
+            tri.P2.ToImVec2()
+        };
+
+        drawList->AddConvexPolyFilled(points, 3, tri.FillColor);
+        drawList->AddPolyline(points, 3, tri.EdgeColor, ImDrawFlags_Closed, 1.0f);
     }
 }
 
 void ESP::ClearVisCheckDebugOverlaySnapshot()
 {
     std::lock_guard lock(m_VisDebugOverlayMutex);
-    m_VisDebugOverlayLines.clear();
+    m_VisDebugOverlayTriangles.clear();
 }
 
 void ESP::BuildVisCheckDebugOverlaySnapshot()
@@ -2611,14 +2614,12 @@ void ESP::BuildVisCheckDebugOverlaySnapshot()
     }
 
     std::vector<MapDebugTriangle> triangleSnapshot{};
-    std::vector<MapDebugBox> boxSnapshot{};
     {
         std::lock_guard lock(m_MapDebugMutex);
         triangleSnapshot = m_MapDebugTriangles;
-        boxSnapshot = m_MapDebugBoxes;
     }
 
-    if (triangleSnapshot.empty() && boxSnapshot.empty())
+    if (triangleSnapshot.empty())
     {
         ClearVisCheckDebugOverlaySnapshot();
         return;
@@ -2646,23 +2647,13 @@ void ESP::BuildVisCheckDebugOverlaySnapshot()
     const float maxDistanceSqr = maxDistance * maxDistance;
     const int maxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
     const ImVec4 debugColor = config.Visuals.VisCheckDebugColor;
-    const auto triColorBySource = [&](const std::uint8_t sourceKind)
-    {
-        const float alpha = std::clamp(debugColor.w, 0.0f, 1.0f);
-        if (sourceKind == 2u)
-            return ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.20f, 0.20f, alpha));
-        if (sourceKind == 1u)
-            return ImGui::ColorConvertFloat4ToU32(ImVec4(0.20f, 0.55f, 1.0f, alpha));
-        return ImGui::ColorConvertFloat4ToU32(debugColor);
-    };
-
     auto withinDebugDistance = [&](const Vector3& point)
     {
         return !hasLocalEye || DistanceSquared3D(localEye, point) <= maxDistanceSqr;
     };
 
-    std::vector<VisDebugScreenLine> nextLines{};
-    nextLines.reserve(static_cast<std::size_t>(maxItems) * 15ull);
+    std::vector<VisDebugScreenTriangle> nextTriangles{};
+    nextTriangles.reserve(static_cast<std::size_t>(maxItems));
 
     if (!triangleSnapshot.empty())
     {
@@ -2703,6 +2694,10 @@ void ESP::BuildVisCheckDebugOverlaySnapshot()
         for (const Candidate& candidate : candidates)
         {
             const MapDebugTriangle& tri = triangleSnapshot[candidate.index];
+            const WorldDebugTriangle worldTri{ tri.V0, tri.V1, tri.V2 };
+            if (hasLocalEye && ShouldCullTriangleBackface(worldTri, localEye))
+                continue;
+
             Vector2 s0{};
             Vector2 s1{};
             Vector2 s2{};
@@ -2713,100 +2708,46 @@ void ESP::BuildVisCheckDebugOverlaySnapshot()
                 continue;
             }
 
-            const ImU32 triColor = triColorBySource(tri.SourceKind);
-            nextLines.push_back({ s0, s1, triColor, 1.0f });
-            nextLines.push_back({ s1, s2, triColor, 1.0f });
-            nextLines.push_back({ s2, s0, triColor, 1.0f });
-        }
-    }
+            const ImVec4 baseColor = [&]()
+            {
+                const float alpha = std::clamp(debugColor.w, 0.0f, 1.0f);
+                if (tri.SourceKind == 2u)
+                    return ImVec4(1.0f, 0.20f, 0.20f, alpha);
+                if (tri.SourceKind == 1u)
+                    return ImVec4(0.20f, 0.55f, 1.0f, alpha);
+                return debugColor;
+            }();
 
-    if (!boxSnapshot.empty())
-    {
-        static constexpr int kBoxEdges[12][2] = {
-            {0, 1}, {1, 2}, {2, 3}, {3, 0},
-            {4, 5}, {5, 6}, {6, 7}, {7, 4},
-            {0, 4}, {1, 5}, {2, 6}, {3, 7}
-        };
-
-        struct Candidate
-        {
-            std::size_t index = 0;
-            float distanceSqr = 0.0f;
-        };
-
-        std::vector<Candidate> candidates{};
-        candidates.reserve(boxSnapshot.size());
-        for (std::size_t i = 0; i < boxSnapshot.size(); ++i)
-        {
-            const MapDebugBox& box = boxSnapshot[i];
-            const Vector3 center = (box.Min + box.Max) * 0.5f;
-            if (!withinDebugDistance(center))
-                continue;
-
-            float distanceSqr = 0.0f;
-            if (hasLocalEye)
-                distanceSqr = DistanceSquared3D(localEye, center);
-            candidates.push_back({ i, distanceSqr });
-        }
-
-        if (static_cast<int>(candidates.size()) > maxItems)
-        {
-            std::nth_element(
-                candidates.begin(),
-                candidates.begin() + maxItems,
-                candidates.end(),
-                [](const Candidate& lhs, const Candidate& rhs)
-                {
-                    return lhs.distanceSqr < rhs.distanceSqr;
-                });
-            candidates.resize(static_cast<std::size_t>(maxItems));
-        }
-
-        const ImU32 cubeColor = ImGui::ColorConvertFloat4ToU32(
-            ImVec4(1.0f, 0.92f, 0.24f, std::clamp(debugColor.w, 0.0f, 1.0f)));
-
-        for (const Candidate& candidate : candidates)
-        {
-            const MapDebugBox& box = boxSnapshot[candidate.index];
-            const std::array<Vector3, 8> corners = {
-                Vector3{ box.Min.x, box.Min.y, box.Min.z },
-                Vector3{ box.Max.x, box.Min.y, box.Min.z },
-                Vector3{ box.Max.x, box.Max.y, box.Min.z },
-                Vector3{ box.Min.x, box.Max.y, box.Min.z },
-                Vector3{ box.Min.x, box.Min.y, box.Max.z },
-                Vector3{ box.Max.x, box.Min.y, box.Max.z },
-                Vector3{ box.Max.x, box.Max.y, box.Max.z },
-                Vector3{ box.Min.x, box.Max.y, box.Max.z }
+            const ImVec4 fillColor{
+                baseColor.x,
+                baseColor.y,
+                baseColor.z,
+                std::clamp(baseColor.w * 0.38f, 0.05f, 0.90f)
             };
 
-            std::array<Vector2, 8> projected{};
-            bool allProjected = true;
-            for (std::size_t corner = 0; corner < corners.size(); ++corner)
-            {
-                if (!sdk.WorldToScreen(corners[corner], projected[corner], viewMatrix))
-                {
-                    allProjected = false;
-                    break;
-                }
-            }
-            if (!allProjected)
-                continue;
+            const ImVec4 edgeColor{
+                baseColor.x,
+                baseColor.y,
+                baseColor.z,
+                std::clamp(baseColor.w * 0.90f, 0.10f, 1.00f)
+            };
 
-            for (const auto& edge : kBoxEdges)
-            {
-                nextLines.push_back({
-                    projected[edge[0]],
-                    projected[edge[1]],
-                    cubeColor,
-                    1.0f
-                    });
-            }
+            nextTriangles.push_back({
+                s0,
+                s1,
+                s2,
+                hasLocalEye ? ComputeTriangleDepthSqr(worldTri, localEye) : candidate.distanceSqr,
+                ImGui::ColorConvertFloat4ToU32(fillColor),
+                ImGui::ColorConvertFloat4ToU32(edgeColor)
+            });
         }
     }
+
+    SortWorldDebugTrianglesBackToFront(nextTriangles);
 
     {
         std::lock_guard lock(m_VisDebugOverlayMutex);
-        m_VisDebugOverlayLines = std::move(nextLines);
+        m_VisDebugOverlayTriangles = std::move(nextTriangles);
     }
 }
 
@@ -6149,20 +6090,17 @@ void ESP::Render(ImDrawList* drawList)
     if (renderVisDebug)
     {
         std::size_t triangleCount = 0;
-        std::size_t boxCount = 0;
         {
             std::lock_guard lock(m_MapDebugMutex);
             triangleCount = m_MapDebugTriangles.size();
-            boxCount = m_MapDebugBoxes.size();
         }
 
         char visDebugLine[160]{};
         std::snprintf(
             visDebugLine,
             sizeof(visDebugLine),
-            Localization::Pick("VisDbg: Full | tri=%zu box=%zu", "Vis调试: 全量 | 三角=%zu 盒体=%zu"),
-            triangleCount,
-            boxCount);
+            Localization::Pick("WorldRender: tri=%zu", "世界渲染: 三角=%zu"),
+            triangleCount);
         drawList->AddText(ImVec2(12.0f, leftHudY), IM_COL32(120, 220, 255, 255), visDebugLine);
         leftHudY += ImGui::GetFontSize() + 2.0f;
     }

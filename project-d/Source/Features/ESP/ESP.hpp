@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../../../VisCheckCS2/VisCheck.h"
+#include "VisWorldDebugRender.hpp"
 
 struct BonePoint
 {
@@ -271,13 +272,7 @@ private:
         std::chrono::steady_clock::time_point LastInventoryRead{};
     };
 
-    struct VisDebugScreenLine
-    {
-        Vector2 Start{};
-        Vector2 End{};
-        ImU32 Color = 0;
-        float Thickness = 1.0f;
-    };
+    using VisDebugScreenTriangle = WorldDebugScreenTriangle;
 
     void Render(ImDrawList* drawList);
     void RenderWatermark(ImDrawList* drawList) const;
@@ -363,7 +358,7 @@ private:
     std::vector<MapDebugTriangle> m_MapDebugTriangles{};
     std::vector<MapDebugBox> m_MapDebugBoxes{};
     mutable std::mutex m_VisDebugOverlayMutex{};
-    std::vector<VisDebugScreenLine> m_VisDebugOverlayLines{};
+    std::vector<VisDebugScreenTriangle> m_VisDebugOverlayTriangles{};
     std::string m_GrenadeStatus{};
     std::atomic<bool> m_GrenadeHelperOnlyMode{ false };
     std::atomic<bool> m_GrenadeHelperHoldingUtility{ false };
