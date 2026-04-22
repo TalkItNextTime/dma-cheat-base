@@ -1,5 +1,6 @@
 #pragma once
 #include "../pch.h"
+#include "InputManagerAddressResolver.h"
 #include "Registry.h"
 
 class c_keys
@@ -10,6 +11,7 @@ private:
 	uint8_t previous_state_bitmap[256 / 8] { };
 	uint64_t win32kbase = 0;
 	bool keyboardDmaAvailable = false;
+	dma_keyboard::KeyboardInitFailure lastInitFailure = dma_keyboard::KeyboardInitFailure::None;
 
 	int win_logon_pid = 0;
 
@@ -23,6 +25,7 @@ public:
 
 	bool InitKeyboard();
 	bool IsDmaKeyboardAvailable() const { return keyboardDmaAvailable; }
+	const char* GetLastInitFailure() const { return dma_keyboard::KeyboardInitFailureMessage(lastInitFailure); }
 
 	void UpdateKeys();
 	bool IsKeyDown(uint32_t virtual_key_code);

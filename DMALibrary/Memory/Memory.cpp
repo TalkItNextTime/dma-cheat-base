@@ -1,15 +1,110 @@
 #include "pch.h"
 #include "Memory.h"
+#include "VmmInitArgs.h"
 
 #include <thread>
 #include <iostream>
 
+namespace
+{
+	std::filesystem::path GetExecutableDirectory()
+	{
+		char module_path[MAX_PATH]{};
+		GetModuleFileNameA(nullptr, module_path, static_cast<DWORD>(std::size(module_path)));
+		return std::filesystem::path(module_path).parent_path();
+	}
+
+	bool HasDmaRuntime(const std::filesystem::path& directory)
+	{
+		return std::filesystem::exists(directory / "vmm.dll") &&
+			std::filesystem::exists(directory / "leechcore.dll") &&
+			std::filesystem::exists(directory / "FTD3XX.dll");
+	}
+
+	std::filesystem::path FindDmaRuntimeDirectory()
+	{
+		const auto exe_dir = GetExecutableDirectory();
+		const std::vector<std::filesystem::path> candidates{
+			exe_dir
+		};
+
+		for (const auto& candidate : candidates)
+			if (HasDmaRuntime(candidate))
+				return candidate;
+
+		return {};
+	}
+
+	std::filesystem::path FindInfoDbSource()
+	{
+		const auto exe_dir = GetExecutableDirectory();
+		const auto cwd = std::filesystem::current_path();
+		const std::vector<std::filesystem::path> candidates{
+			cwd / "DMALibrary" / "info.db",
+			cwd / "DMALibrary" / "libs" / "info.db",
+			exe_dir.parent_path().parent_path() / "DMALibrary" / "info.db",
+			exe_dir.parent_path().parent_path() / "DMALibrary" / "libs" / "info.db"
+		};
+
+		for (const auto& candidate : candidates)
+			if (std::filesystem::exists(candidate))
+				return candidate;
+
+		return {};
+	}
+
+	std::filesystem::path FindSupportDllSource(const std::string& file_name)
+	{
+		const std::vector<std::filesystem::path> candidates{
+			std::filesystem::path("C:\\Program Files (x86)\\Windows Kits\\10\\Debuggers\\x64") / file_name,
+			std::filesystem::path("C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE") / file_name,
+			std::filesystem::path("C:\\Program Files (x86)\\Windows Kits\\10\\App Certification Kit") / file_name,
+			std::filesystem::path("C:\\Windows\\System32") / file_name
+		};
+
+		for (const auto& candidate : candidates)
+			if (std::filesystem::exists(candidate))
+				return candidate;
+
+		return {};
+	}
+
+	void CopyIfMissing(const std::filesystem::path& source, const std::filesystem::path& target_directory)
+	{
+		if (source.empty() || !std::filesystem::exists(source) || target_directory.empty() || !std::filesystem::exists(target_directory))
+			return;
+
+		const auto destination = target_directory / source.filename();
+		if (!std::filesystem::exists(destination))
+			std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing);
+	}
+
+	void PrepareDmaRuntimeDirectory(const std::filesystem::path& runtime_directory)
+	{
+		CopyIfMissing(FindInfoDbSource(), runtime_directory);
+		CopyIfMissing(FindSupportDllSource("dbghelp.dll"), runtime_directory);
+		CopyIfMissing(FindSupportDllSource("symsrv.dll"), runtime_directory);
+	}
+}
+
 Memory::Memory()
 {
 	LOG("loading libraries...\n");
-	modules.VMM = LoadLibraryA("vmm.dll");
-	modules.FTD3XX = LoadLibraryA("FTD3XX.dll");
-	modules.LEECHCORE = LoadLibraryA("leechcore.dll");
+	const auto runtime_directory = FindDmaRuntimeDirectory();
+	if (!runtime_directory.empty())
+	{
+		PrepareDmaRuntimeDirectory(runtime_directory);
+		SetDllDirectoryW(runtime_directory.c_str());
+		modules.VMM = LoadLibraryW((runtime_directory / "vmm.dll").c_str());
+		modules.FTD3XX = LoadLibraryW((runtime_directory / "FTD3XX.dll").c_str());
+		modules.LEECHCORE = LoadLibraryW((runtime_directory / "leechcore.dll").c_str());
+	}
+	else
+	{
+		modules.VMM = LoadLibraryA("vmm.dll");
+		modules.FTD3XX = LoadLibraryA("FTD3XX.dll");
+		modules.LEECHCORE = LoadLibraryA("leechcore.dll");
+	}
 
 	if (!modules.VMM || !modules.FTD3XX || !modules.LEECHCORE)
 	{
@@ -33,15 +128,8 @@ Memory::~Memory()
 
 bool Memory::DumpMemoryMap(bool debug)
 {
-	LPCSTR args[] = {const_cast<LPCSTR>(""), const_cast<LPCSTR>("-device"), const_cast<LPCSTR>("fpga://algo=0"), const_cast<LPCSTR>(""), const_cast<LPCSTR>("")};
-	int argc = 3;
-	if (debug)
-	{
-		args[argc++] = const_cast<LPCSTR>("-v");
-		args[argc++] = const_cast<LPCSTR>("-printf");
-	}
-
-	VMM_HANDLE handle = VMMDLL_Initialize(argc, args);
+	auto init_args = dma_vmm::BuildInitializationArgs(debug);
+	VMM_HANDLE handle = VMMDLL_Initialize(static_cast<DWORD>(init_args.size()), init_args.data());
 	if (!handle)
 	{
 		LOG("[!] Failed to open a VMM Handle\n");
@@ -131,13 +219,7 @@ bool Memory::Init(std::string process_name, bool memMap, bool debug)
 	{
 		LOG("inizializing...\n");
 	reinit:
-		LPCSTR args[] = {const_cast<LPCSTR>(""), const_cast<LPCSTR>("-device"), const_cast<LPCSTR>("fpga://algo=0"), const_cast<LPCSTR>(""), const_cast<LPCSTR>(""), const_cast<LPCSTR>(""), const_cast<LPCSTR>("")};
-		DWORD argc = 3;
-		if (debug)
-		{
-			args[argc++] = const_cast<LPCSTR>("-v");
-			args[argc++] = const_cast<LPCSTR>("-printf");
-		}
+		auto init_args = dma_vmm::BuildInitializationArgs(debug);
 
 		std::string path = "";
 		if (memMap)
@@ -160,11 +242,11 @@ bool Memory::Init(std::string process_name, bool memMap, bool debug)
 				LOG("Dumped memory map!\n");
 
 				//Add the memory map to the arguments and increase arg count.
-				args[argc++] = const_cast<LPSTR>("-memmap");
-				args[argc++] = const_cast<LPSTR>(path.c_str());
+				init_args.push_back("-memmap");
+				init_args.push_back(path.c_str());
 			}
 		}
-		this->vHandle = VMMDLL_Initialize(argc, args);
+		this->vHandle = VMMDLL_Initialize(static_cast<DWORD>(init_args.size()), init_args.data());
 		if (!this->vHandle)
 		{
 			if (memMap)

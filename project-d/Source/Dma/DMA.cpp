@@ -24,7 +24,9 @@ bool DMA::Init()
 
     if (!mem.GetKeyboard()->InitKeyboard())
     {
-        LOG_WARN("Failed to initialize DMA Keyboard, falling back to host GetAsyncKeyState");
+        LOG_WARN(
+            "Failed to initialize DMA Keyboard (reason: {}), falling back to host GetAsyncKeyState",
+            mem.GetKeyboard()->GetLastInitFailure());
     }
 
     if (!mem.FixCr3())
