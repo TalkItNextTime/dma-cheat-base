@@ -257,6 +257,8 @@
     <ClInclude Include="Source\Kmbox\Manager.hpp" />
     <ClInclude Include="Source\Misc\Exception.hpp" />
     <ClInclude Include="Source\Pch\Pch.hpp" />
+    <ClInclude Include="Source\SDK\OffsetInitializationPolicy.hpp" />
+    <ClInclude Include="Source\SDK\RuntimeOffsetResolver.hpp" />
     <ClInclude Include="Source\SDK\SDK.hpp" />
     <ClInclude Include="Source\Socket\Socket.hpp" />
   </ItemGroup>
@@ -307,6 +309,7 @@
     <ClCompile Include="Source\Kmbox\Manager.cpp" />
     <ClCompile Include="Source\main.cpp" />
     <ClCompile Include="Source\Pch\Pch.cpp" />
+    <ClCompile Include="Source\SDK\RuntimeOffsetResolver.cpp" />
     <ClCompile Include="Source\SDK\SDK.cpp" />
   </ItemGroup>
   <ItemGroup>

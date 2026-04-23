@@ -3,6 +3,7 @@
 #include <Features.hpp>
 #include <Overlay.hpp>
 #include <Radar/Radar.hpp>
+#include <Kmbox/StartupPolicy.hpp>
 
 int main()
 {
@@ -38,15 +39,14 @@ int main()
     if (config.Kmbox.Enabled)
     {
         LOG_INFO("Initializing KMBOX");
-        if (Kmbox.InitDevice(config.Kmbox.Ip, config.Kmbox.Port, config.Kmbox.Uuid) == 0)
+        const auto kmboxDecision = StartupPolicy::EvaluateKmboxInitialization(
+            true,
+            Kmbox.InitDevice(config.Kmbox.Ip, config.Kmbox.Port, config.Kmbox.Uuid));
+        ProcInfo::KmboxInitialized = kmboxDecision.KmboxInitialized;
+
+        if (kmboxDecision.EmitWarning)
         {
-            ProcInfo::KmboxInitialized = true;
-        }
-        else
-        {
-            LOG_ERROR("Failed to initialize KMBOX");
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            return 1;
+            LOG_WARN("Failed to initialize KMBOX, continuing startup without KMBOX support");
         }
     }
     else

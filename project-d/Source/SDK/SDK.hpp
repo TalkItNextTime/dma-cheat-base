@@ -1,5 +1,6 @@
 #pragma once
 #include <Overlay/Overlay.hpp>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -20,7 +21,7 @@ public:
 
 	bool Init();
 	void InitUpdateSdk();
-	bool LoadOffsets();
+	bool LoadOffsets(bool suppressFailureLog = false);
 
 	bool RefreshCoreCache();
 	CoreCache GetCoreCache() const;
@@ -45,6 +46,7 @@ private:
 	mutable std::mutex m_CoreMutex;
 	CoreCache m_CoreCache;
 	bool m_LoggedMissingOffsets = false;
+	std::atomic_bool m_SchemaInitialized = false;
 };
 
 inline SDK& sdk = SDK::Get();

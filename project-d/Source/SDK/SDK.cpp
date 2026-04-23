@@ -1,71 +1,11 @@
 ﻿#include <Pch.hpp>
 #include <SDK.hpp>
+#include "OffsetInitializationPolicy.hpp"
+#include "RuntimeOffsetResolver.hpp"
 #include <cstring>
 
 namespace
 {
-    std::string ResolveOffsetFilePath(const std::string& fileName)
-    {
-        const std::vector<std::string> candidates = {
-            "Offsets/" + fileName,
-            "project-d/Offsets/" + fileName,
-            "../project-d/Offsets/" + fileName,
-            "../../project-d/Offsets/" + fileName,
-            "../../../project-d/Offsets/" + fileName
-        };
-
-        for (const auto& candidate : candidates)
-        {
-            if (std::filesystem::exists(candidate))
-                return candidate;
-        }
-
-        return {};
-    }
-
-    bool ReadJsonFile(const std::string& path, json& out)
-    {
-        std::ifstream file(path);
-        if (!file.is_open())
-            return false;
-
-        try
-        {
-            file >> out;
-            return true;
-        }
-        catch (const std::exception& ex)
-        {
-            LOG_ERROR("Failed to parse JSON '{}': {}", path, ex.what());
-            return false;
-        }
-    }
-
-    bool TryGetClientField(const json& clientDllJson, const char* className, const char* fieldName, uint32_t& out)
-    {
-        if (!clientDllJson.contains("client.dll"))
-            return false;
-
-        const auto& client = clientDllJson["client.dll"];
-        if (!client.contains("classes"))
-            return false;
-
-        const auto& classes = client["classes"];
-        if (!classes.contains(className))
-            return false;
-
-        const auto& cls = classes[className];
-        if (!cls.contains("fields"))
-            return false;
-
-        const auto& fields = cls["fields"];
-        if (!fields.contains(fieldName))
-            return false;
-
-        out = fields[fieldName].get<uint32_t>();
-        return true;
-    }
-
     std::string ToLowerAscii(std::string value)
     {
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
@@ -213,164 +153,46 @@ namespace
     }
 }
 
-bool SDK::LoadOffsets()
+bool SDK::LoadOffsets(const bool suppressFailureLog)
 {
-    const std::string offsetsPath = ResolveOffsetFilePath("offsets.json");
-    const std::string clientDllPath = ResolveOffsetFilePath("client_dll.json");
+    RuntimeOffsetResolver::ResolveReport report;
+    std::string errorMessage;
 
-    if (offsetsPath.empty() || clientDllPath.empty())
+    if (!RuntimeOffsetResolver::Resolve(mem, report, errorMessage))
     {
-        LOG_ERROR("Offsets files not found. Expected 'Offsets/offsets.json' and 'Offsets/client_dll.json'.");
-        return false;
-    }
-
-    json offsetsJson;
-    json clientDllJson;
-
-    if (!ReadJsonFile(offsetsPath, offsetsJson) || !ReadJsonFile(clientDllPath, clientDllJson))
-        return false;
-
-    if (!offsetsJson.contains("client.dll"))
-    {
-        LOG_ERROR("Invalid offsets.json format: missing 'client.dll' section.");
-        return false;
-    }
-
-    const auto& client = offsetsJson["client.dll"];
-    Offsets::Client::dwLocalPlayerController = client.value("dwLocalPlayerController", 0ULL);
-    Offsets::Client::dwLocalPlayerPawn = client.value("dwLocalPlayerPawn", 0ULL);
-    Offsets::Client::dwEntityList = client.value("dwEntityList", 0ULL);
-    Offsets::Client::dwGameEntitySystem = client.value("dwGameEntitySystem", 0ULL);
-    Offsets::Client::dwGameEntitySystem_highestEntityIndex = client.value("dwGameEntitySystem_highestEntityIndex", 0ULL);
-    Offsets::Client::dwGameRules = client.value("dwGameRules", 0ULL);
-    Offsets::Client::dwPlantedC4 = client.value("dwPlantedC4", 0ULL);
-    Offsets::Client::dwWeaponC4 = client.value("dwWeaponC4", 0ULL);
-    Offsets::Client::dwGlobalVars = client.value("dwGlobalVars", 0ULL);
-    Offsets::Client::dwViewAngles = client.value("dwViewAngles", 0ULL);
-    Offsets::Client::dwViewMatrix = client.value("dwViewMatrix", 0ULL);
-
-    if (offsetsJson.contains("engine2.dll"))
-    {
-        const auto& engine = offsetsJson["engine2.dll"];
-        Offsets::Engine2::dwNetworkGameClient = engine.value("dwNetworkGameClient", 0ULL);
-        Offsets::Engine2::dwNetworkGameClient_localPlayer = engine.value("dwNetworkGameClient_localPlayer", 0ULL);
-        Offsets::Engine2::dwNetworkGameClient_signOnState = engine.value("dwNetworkGameClient_signOnState", 0ULL);
-        Offsets::Engine2::dwNetworkGameClient_maxClients = engine.value("dwNetworkGameClient_maxClients", 0ULL);
-    }
-    else
-    {
-        LOG_WARN("offsets.json missing 'engine2.dll' section. Current map auto-detection may be unavailable.");
-    }
-
-    bool schemaComplete = true;
-
-    auto loadSchema = [&](const char* className, const char* fieldName, uint32_t& target)
-    {
-        const bool ok = TryGetClientField(clientDllJson, className, fieldName, target);
-        schemaComplete = schemaComplete && ok;
-
-        if (!ok)
-            LOG_WARN("Missing schema field {}::{} in client_dll.json", className, fieldName);
-    };
-
-    auto loadOptionalSchema = [&](const char* className, const char* fieldName, uint32_t& target)
-    {
-        target = 0;
-        (void)TryGetClientField(clientDllJson, className, fieldName, target);
-    };
-
-    auto loadOptionalSchemaFromClasses = [&](std::initializer_list<const char*> classNames, const char* fieldName, uint32_t& target)
-    {
-        target = 0;
-        for (const char* className : classNames)
-        {
-            if (TryGetClientField(clientDllJson, className, fieldName, target))
-                return;
-        }
-    };
-
-    loadSchema("CBasePlayerController", "m_hPawn", Offsets::Schema::m_hPawn);
-    loadSchema("CCSPlayerController", "m_hPlayerPawn", Offsets::Schema::m_hPlayerPawn);
-    loadOptionalSchema("CCSPlayerController", "m_iCompTeammateColor", Offsets::Schema::m_iCompTeammateColor);
-    loadOptionalSchema("CCSPlayerController", "m_bPawnHasDefuser", Offsets::Schema::m_bPawnHasDefuser);
-    loadOptionalSchema("CCSPlayerController", "m_bPawnHasHelmet", Offsets::Schema::m_bPawnHasHelmet);
-    loadOptionalSchemaFromClasses({ "CCSPlayerController", "CBasePlayerController" }, "m_iConnected", Offsets::Schema::m_iConnected);
-    loadOptionalSchemaFromClasses({ "CCSPlayerController", "CBasePlayerController" }, "m_steamID", Offsets::Schema::m_steamID);
-    loadSchema("CBasePlayerController", "m_iszPlayerName", Offsets::Schema::m_iszPlayerName);
-    loadSchema("CCSPlayerController", "m_pInGameMoneyServices", Offsets::Schema::m_pInGameMoneyServices);
-    loadSchema("CCSPlayerController_InGameMoneyServices", "m_iAccount", Offsets::Schema::m_iAccount);
-    loadSchema("C_BaseEntity", "m_iHealth", Offsets::Schema::m_iHealth);
-    loadSchema("C_BaseEntity", "m_iMaxHealth", Offsets::Schema::m_iMaxHealth);
-    loadSchema("C_BaseEntity", "m_iTeamNum", Offsets::Schema::m_iTeamNum);
-    loadSchema("C_BaseEntity", "m_lifeState", Offsets::Schema::m_lifeState);
-    loadSchema("C_BaseEntity", "m_pGameSceneNode", Offsets::Schema::m_pGameSceneNode);
-    loadSchema("CGameSceneNode", "m_vecAbsOrigin", Offsets::Schema::m_vecAbsOrigin);
-    loadSchema("C_BasePlayerPawn", "m_pWeaponServices", Offsets::Schema::m_pWeaponServices);
-    loadSchema("C_BasePlayerPawn", "m_pObserverServices", Offsets::Schema::m_pObserverServices);
-    loadSchema("C_BasePlayerPawn", "m_vOldOrigin", Offsets::Schema::m_vOldOrigin);
-    loadSchema("C_BaseModelEntity", "m_vecViewOffset", Offsets::Schema::m_vecViewOffset);
-    loadOptionalSchemaFromClasses({ "C_CSPlayerPawnBase", "C_CSPlayerPawn" }, "m_angEyeAngles", Offsets::Schema::m_angEyeAngles);
-    loadSchema("CSkeletonInstance", "m_modelState", Offsets::Schema::m_modelState);
-    loadSchema("C_CSPlayerPawn", "m_ArmorValue", Offsets::Schema::m_ArmorValue);
-    loadSchema("C_CSPlayerPawn", "m_bIsScoped", Offsets::Schema::m_bIsScoped);
-    loadSchema("C_CSPlayerPawnBase", "m_flFlashDuration", Offsets::Schema::m_flFlashDuration);
-    loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashMaxAlpha", Offsets::Schema::m_flFlashMaxAlpha);
-    loadOptionalSchema("C_CSPlayerPawnBase", "m_flFlashOverlayAlpha", Offsets::Schema::m_flFlashOverlayAlpha);
-    loadSchema("C_CSPlayerPawn", "m_iIDEntIndex", Offsets::Schema::m_iIDEntIndex);
-    loadSchema("C_CSPlayerPawn", "m_iShotsFired", Offsets::Schema::m_iShotsFired);
-    loadSchema("C_CSPlayerPawn", "m_pAimPunchServices", Offsets::Schema::m_pAimPunchServices);
-    loadSchema("CCSPlayer_AimPunchServices", "m_predictableBaseAngle", Offsets::Schema::m_predictableBaseAngle);
-    loadSchema("CCSPlayer_AimPunchServices", "m_unpredictableBaseAngle", Offsets::Schema::m_unpredictableBaseAngle);
-    loadSchema("CPlayer_ObserverServices", "m_iObserverMode", Offsets::Schema::m_iObserverMode);
-    loadSchema("CPlayer_ObserverServices", "m_hObserverTarget", Offsets::Schema::m_hObserverTarget);
-    loadSchema("CPlayer_WeaponServices", "m_hActiveWeapon", Offsets::Schema::m_hActiveWeapon);
-    loadOptionalSchema("CPlayer_WeaponServices", "m_hMyWeapons", Offsets::Schema::m_hMyWeapons);
-    loadSchema("C_EconEntity", "m_AttributeManager", Offsets::Schema::m_AttributeManager);
-    loadSchema("C_AttributeContainer", "m_Item", Offsets::Schema::m_Item);
-    loadSchema("C_EconItemView", "m_iItemDefinitionIndex", Offsets::Schema::m_iItemDefinitionIndex);
-    loadOptionalSchemaFromClasses({ "C_BasePlayerWeapon", "C_CSWeaponBase", "CWeaponBaseItem" }, "m_iClip1", Offsets::Schema::m_iClip1);
-    loadSchema("C_CSWeaponBase", "m_bInReload", Offsets::Schema::m_bInReload);
-    loadOptionalSchemaFromClasses({ "C_BaseEntity", "CBasePlayerWeapon", "C_CSWeaponBase" }, "m_hOwnerEntity", Offsets::Schema::m_hOwnerEntity);
-    loadOptionalSchema("C_CSPlayerPawn", "m_bInBuyZone", Offsets::Schema::m_bInBuyZone);
-    loadOptionalSchema("C_CSPlayerPawn", "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
-    loadOptionalSchema("C_CSPlayerPawn", "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
-    loadOptionalSchema("C_Team", "m_iScore", Offsets::Schema::m_iScore);
-    loadOptionalSchema("C_Team", "m_szTeamname", Offsets::Schema::m_szTeamname);
-    loadSchema("C_PlantedC4", "m_bBombTicking", Offsets::Schema::m_bBombTicking);
-    loadSchema("C_PlantedC4", "m_bBombDefused", Offsets::Schema::m_bBombDefused);
-    loadSchema("C_PlantedC4", "m_nBombSite", Offsets::Schema::m_nBombSite);
-    loadSchema("C_PlantedC4", "m_flC4Blow", Offsets::Schema::m_flC4Blow);
-    loadSchema("C_PlantedC4", "m_flTimerLength", Offsets::Schema::m_flTimerLength);
-    loadSchema("C_PlantedC4", "m_flDefuseLength", Offsets::Schema::m_flDefuseLength);
-    loadSchema("C_PlantedC4", "m_bBeingDefused", Offsets::Schema::m_bBeingDefused);
-    loadSchema("C_PlantedC4", "m_flDefuseCountDown", Offsets::Schema::m_flDefuseCountDown);
-    loadOptionalSchema("C_PlantedC4", "m_hBombDefuser", Offsets::Schema::m_hBombDefuser);
-    loadSchema("C_PlantedC4", "m_vecC4ExplodeSpectatePos", Offsets::Schema::m_vecC4ExplodeSpectatePos);
-    loadSchema("C_C4", "m_bStartedArming", Offsets::Schema::m_bStartedArming);
-    loadSchema("C_C4", "m_bIsPlantingViaUse", Offsets::Schema::m_bIsPlantingViaUse);
-    loadSchema("C_C4", "m_fArmedTime", Offsets::Schema::m_fArmedTime);
-    loadSchema("C_CSGameRules", "m_bFreezePeriod", Offsets::Schema::m_bFreezePeriod);
-    loadOptionalSchema("C_CSGameRules", "m_gamePhase", Offsets::Schema::m_gamePhase);
-    loadOptionalSchema("C_CSGameRules", "m_timeUntilNextPhaseStarts", Offsets::Schema::m_timeUntilNextPhaseStarts);
-
-    if (!Offsets::HasCore())
-    {
-        LOG_ERROR("Core offsets are incomplete after JSON load.");
+        if (!suppressFailureLog)
+            LOG_ERROR("Automatic runtime offset dump failed: {}", errorMessage);
         return false;
     }
 
     LOG_INFO(
-        "Loaded core offsets from JSON: controller=0x{:X}, pawn=0x{:X}, entity=0x{:X}, view=0x{:X}",
+        "Loaded runtime offsets: controller=0x{:X}, pawn=0x{:X}, entity=0x{:X}, view=0x{:X}",
         Offsets::Client::dwLocalPlayerController,
         Offsets::Client::dwLocalPlayerPawn,
         Offsets::Client::dwEntityList,
-        Offsets::Client::dwViewMatrix
-    );
+        Offsets::Client::dwViewMatrix);
 
-    if (!schemaComplete)
-        LOG_WARN("Schema offsets partially loaded. Core layer remains available.");
+    m_SchemaInitialized = report.SchemaInitialized;
 
-    return true;
+    if (!report.SchemaInitialized)
+    {
+        if (!suppressFailureLog)
+            LOG_WARN("Runtime schema discovery is not ready yet: {}", report.SchemaErrorMessage);
+
+        return Offsets::HasCore();
+    }
+
+    if (!report.SchemaComplete)
+    {
+        LOG_WARN(
+            "Schema offsets partially loaded. Missing {} required field(s).",
+            report.MissingRequiredSchemaFields.size());
+
+        for (const auto& field : report.MissingRequiredSchemaFields)
+            LOG_WARN("Missing runtime schema field {}", field);
+    }
+
+    return Offsets::HasCore();
 }
 
 bool SDK::Init()
@@ -384,7 +206,7 @@ bool SDK::Init()
 
     if (!Offsets::HasCore())
     {
-        LOG_WARN("Core offsets are not configured. Check Offsets/offsets.json before using feature logic.");
+        LOG_WARN("Core offsets are not configured. Automatic runtime dump did not produce a usable core set.");
         m_LoggedMissingOffsets = true;
     }
     else
@@ -401,22 +223,50 @@ void SDK::InitUpdateSdk()
 {
     thread([this]()
     {
+        auto lastOffsetRetry = chrono::steady_clock::now() - chrono::milliseconds(500);
+
         while (Globals::Running)
         {
-            if (!Offsets::HasCore())
+            const int millisecondsSinceLastRetry = static_cast<int>(
+                chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - lastOffsetRetry).count());
+            const auto decision = OffsetInitializationPolicy::EvaluateUpdateLoop(
+                Offsets::HasCore(),
+                m_SchemaInitialized.load(),
+                millisecondsSinceLastRetry);
+
+            if (decision.AttemptReload)
             {
-                if (!m_LoggedMissingOffsets)
+                const bool hadCoreBefore = Offsets::HasCore();
+                const bool hadSchemaBefore = m_SchemaInitialized.load();
+                lastOffsetRetry = chrono::steady_clock::now();
+
+                if (!LoadOffsets(true))
                 {
-                    LOG_WARN("Core offsets missing, SDK update loop paused.");
-                    m_LoggedMissingOffsets = true;
+                    if (!m_LoggedMissingOffsets && decision.EmitPausedWarning)
+                    {
+                        LOG_WARN("Core offsets missing, SDK update loop is retrying automatic runtime dump.");
+                        m_LoggedMissingOffsets = true;
+                    }
+
+                    this_thread::sleep_for(chrono::milliseconds(decision.SleepMilliseconds));
+                    continue;
                 }
 
-                this_thread::sleep_for(chrono::milliseconds(500));
+                if (!hadCoreBefore && Offsets::HasCore())
+                    LOG_INFO("Runtime core offsets recovered in SDK update loop.");
+                else if (!hadSchemaBefore && m_SchemaInitialized.load())
+                    LOG_INFO("Runtime schema discovery recovered in SDK update loop.");
+
+                m_LoggedMissingOffsets = false;
+                RefreshCoreCache();
+                this_thread::sleep_for(chrono::milliseconds(2));
                 continue;
             }
 
-            RefreshCoreCache();
-            this_thread::sleep_for(chrono::milliseconds(2));
+            if (decision.RefreshCoreCache)
+                RefreshCoreCache();
+
+            this_thread::sleep_for(chrono::milliseconds(decision.SleepMilliseconds));
         }
     }).detach();
 }

@@ -6,7 +6,7 @@ namespace Offsets
 {
     namespace Client
     {
-        // Loaded at runtime from Offsets/offsets.json.
+        // Loaded at runtime from the in-process dumper.
         inline std::uint64_t dwLocalPlayerController = 0x0;
         inline std::uint64_t dwLocalPlayerPawn = 0x0;
         inline std::uint64_t dwEntityList = 0x0;
@@ -22,7 +22,7 @@ namespace Offsets
 
     namespace Engine2
     {
-        // Loaded at runtime from Offsets/offsets.json.
+        // Loaded at runtime from the in-process dumper.
         inline std::uint64_t dwNetworkGameClient = 0x0;
         inline std::uint64_t dwNetworkGameClient_localPlayer = 0x0;
         inline std::uint64_t dwNetworkGameClient_signOnState = 0x0;
@@ -61,7 +61,7 @@ namespace Offsets
 
     namespace Schema
     {
-        // Base fields loaded from client_dll.json.
+        // Base fields loaded from the runtime SchemaSystem reader.
         inline std::uint32_t m_hPawn = 0;
         inline std::uint32_t m_hPlayerPawn = 0;
         inline std::uint32_t m_iCompTeammateColor = 0;
