@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "KeyAuth": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "apidog-mcp-server@latest",
+        "--site-id=447751"
+      ]
+    }
+  }
+}

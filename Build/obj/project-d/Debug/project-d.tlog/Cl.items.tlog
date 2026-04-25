@@ -22,4 +22,7 @@ C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Overlay\Overlay.cpp;
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Kmbox\Manager.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Manager.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\main.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\main.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Pch\Pch.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Pch.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Security\AuthManager.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AuthManager.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Security\AuthScreen.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AuthScreen.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\SDK\RuntimeOffsetResolver.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\RuntimeOffsetResolver.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\SDK\SDK.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\SDK.obj

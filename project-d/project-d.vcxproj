@@ -20,7 +20,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
+    <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -60,11 +60,11 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_HAS_ITERATOR_DEBUGGING=0;_ITERATOR_DEBUG_LEVEL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\auth;$(SolutionDir)$(ProjectName)\auth\lib;$(SolutionDir)$(ProjectName)\auth\lib\libsodium;$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.hpp</PrecompiledHeaderFile>
@@ -77,7 +77,8 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalDependencies>d3d11.lib;winhttp.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)auth;$(ProjectDir)auth\lib\curl;$(ProjectDir)auth\lib\libsodium;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d11.lib;winhttp.lib;library_x64.lib;libcurl.lib;zlib.lib;libsodium.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <AssemblyDebug>true</AssemblyDebug>
@@ -94,7 +95,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)$(ProjectName)\auth;$(SolutionDir)$(ProjectName)\auth\lib;$(SolutionDir)$(ProjectName)\auth\lib\libsodium;$(SolutionDir)$(ProjectName)\External;$(SolutionDir)$(ProjectName)\Source\Config;$(SolutionDir)$(ProjectName)\Source\Dma;$(SolutionDir)DMALibrary\;$(SolutionDir)$(ProjectName)\Source\Features;$(SolutionDir)$(ProjectName)\Source\Kmbox;$(SolutionDir)$(ProjectName)\Source\Math;$(SolutionDir)$(ProjectName)\Source\Misc;$(SolutionDir)$(ProjectName)\Source\Overlay;$(SolutionDir)$(ProjectName)\Source\Pch;$(SolutionDir)$(ProjectName)\Source\SDK;$(SolutionDir)$(ProjectName)\Source\</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.hpp</PrecompiledHeaderFile>
@@ -106,7 +107,8 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalDependencies>d3d11.lib;winhttp.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)auth;$(ProjectDir)auth\lib\curl;$(ProjectDir)auth\lib\libsodium;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d11.lib;winhttp.lib;library_x64.lib;libcurl.lib;zlib.lib;libsodium.lib;$(SolutionDir)DMALibrary\libs\vmm.lib;$(SolutionDir)DMALibrary\libs\leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LargeAddressAware>true</LargeAddressAware>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>

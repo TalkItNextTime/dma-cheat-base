@@ -10,6 +10,7 @@
 #include "BonesShowcaseEmbedded.hpp"
 #include "Fonts/IBMPlexMono_Medium.h"
 #include "Localization.hpp"
+#include "StartupStatus.hpp"
 
 #pragma comment(lib, "Crypt32.lib")
 
@@ -1096,14 +1097,14 @@ bool Overlay::CreateOverlay()
 	wc.style = CS_CLASSDC;
 	wc.lpfnWndProc = window_procedure;
 	wc.hInstance = GetModuleHandleA(0);
-	wc.lpszClassName = L"Awhare";
+	wc.lpszClassName = L"CCS2";
 
 	RegisterClassEx(&wc);
 
 	overlay = CreateWindowEx(
 		WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW,
 		wc.lpszClassName,
-		L"Awhare",
+		L"CCS2",
 		WS_POPUP,
 		0,
 		0,
@@ -1450,7 +1451,7 @@ void Overlay::RenderMenu()
 
 	ImGui::SetNextWindowSize(ImVec2(570, 500), ImGuiCond_Always);
 	ImGui::Begin(
-		"Awhare",
+		"CCS2",
 		&shouldRenderMenu,
 		ImGuiWindowFlags_NoSavedSettings |
 		ImGuiWindowFlags_AlwaysAutoResize |
@@ -1463,8 +1464,8 @@ void Overlay::RenderMenu()
 
 	OverlayFps = ImGui::GetIO().Framerate;
 
-	ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize("Awhare").x / 2);
-	ImGui::Text("Awhare");
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - ImGui::CalcTextSize("CCS2").x / 2);
+	ImGui::Text("CCS2");
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_FrameBg]);
@@ -2730,8 +2731,8 @@ void Overlay::RenderMenu()
 		{
 			ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetWindowPos(), ImGui::GetWindowPos() + ImGui::GetWindowSize(), ImGui::GetColorU32(ImGuiCol_ChildBg), style.WindowRounding, ImDrawFlags_RoundCornersBottom);
 			ImGui::GetWindowDrawList()->AddLine(ImGui::GetWindowPos() + ImVec2(style.WindowBorderSize, 0), ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - style.WindowBorderSize, 0), ImGui::GetColorU32(ImGuiCol_Border), style.WindowBorderSize);
-			const char* buildText = Localization::Pick("Build: Developer", "版本: 开发版");
-			const char* expiryText = Localization::Pick("Expires: Never", "到期: 永不");
+			const char* buildText = StartupStatus::GetBuildText(Localization::IsChinese());
+			const char* expiryText = StartupStatus::GetExpiryText(Localization::IsChinese());
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + style.FramePadding, ImGui::GetColorU32(ImGuiCol_Text), buildText);
 			ImGui::GetWindowDrawList()->AddText(ImGui::GetWindowPos() + ImVec2(ImGui::GetWindowWidth() - ImGui::CalcTextSize(expiryText).x - style.FramePadding.x, style.FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), expiryText);
 		}
