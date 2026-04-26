@@ -136,6 +136,8 @@
     <ClInclude Include="Source\Config\Structs.hpp" />
     <ClInclude Include="Source\Features\ESP\C4CardModel.hpp" />
     <ClInclude Include="Source\Features\ESP\ESP.hpp" />
+    <ClInclude Include="Source\Features\ESP\SoundEsp.hpp" />
+    <ClInclude Include="Source\Features\ESP\SoundEspModel.hpp" />
     <ClInclude Include="Source\Features\ESP\VisWorldDebugRender.hpp" />
     <ClInclude Include="Source\Features\Features.hpp" />
     <ClInclude Include="Source\Features\Radar\ObservRadarProtocol.hpp" />
@@ -292,8 +294,11 @@
     <ClCompile Include="Source\Dma\DMA.cpp" />
     <ClCompile Include="Source\Features\Aimbot\Aimbot.cpp" />
     <ClCompile Include="Source\Features\Aimbot\AutowallEngine.cpp" />
-    <ClCompile Include="Source\Features\ESP\C4CardModel.cpp" />
+    <ClCompile Include="Source\Features\ESP\C4CardModel.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
+    <ClCompile Include="Source\Features\ESP\SoundEsp.cpp" />
     <ClCompile Include="Source\Features\ESP\VisWorldDebugRender.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

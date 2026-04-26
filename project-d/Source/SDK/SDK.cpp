@@ -221,12 +221,20 @@ bool SDK::Init()
 
 void SDK::InitUpdateSdk()
 {
-    thread([this]()
+    m_UpdateThread = thread([this]()
     {
         auto lastOffsetRetry = chrono::steady_clock::now() - chrono::milliseconds(500);
+        auto lastBaseRefresh = chrono::steady_clock::now() - chrono::seconds(5);
 
         while (Globals::Running)
         {
+            const auto now = chrono::steady_clock::now();
+            if (now - lastBaseRefresh >= chrono::seconds(2))
+            {
+                lastBaseRefresh = now;
+                RefreshGameBases(false);
+            }
+
             const int millisecondsSinceLastRetry = static_cast<int>(
                 chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - lastOffsetRetry).count());
             const auto decision = OffsetInitializationPolicy::EvaluateUpdateLoop(
@@ -268,11 +276,20 @@ void SDK::InitUpdateSdk()
 
             this_thread::sleep_for(chrono::milliseconds(decision.SleepMilliseconds));
         }
-    }).detach();
+    });
+}
+
+void SDK::Shutdown()
+{
+    if (m_UpdateThread.joinable())
+        m_UpdateThread.join();
 }
 
 bool SDK::RefreshCoreCache()
 {
+    if (!RefreshGameBases(false))
+        return false;
+
     if (!Offsets::HasCore() || !Globals::ClientBase)
         return false;
 
@@ -284,7 +301,10 @@ bool SDK::RefreshCoreCache()
 
     Matrix viewMatrix{};
     if (!mem.Read(Globals::ClientBase + Offsets::Client::dwViewMatrix, &viewMatrix, sizeof(viewMatrix)))
+    {
+        RefreshGameBases(true);
         return false;
+    }
 
     updated.ViewMatrix = viewMatrix;
     updated.IsValid = updated.EntityList != 0;
@@ -296,6 +316,40 @@ bool SDK::RefreshCoreCache()
 
     Globals::ViewMatrix = updated.ViewMatrix;
     return updated.IsValid;
+}
+
+bool SDK::RefreshGameBases(const bool forceReinitialize)
+{
+    const auto now = chrono::steady_clock::now();
+    if (!forceReinitialize &&
+        m_LastBaseRefresh.time_since_epoch().count() != 0 &&
+        now - m_LastBaseRefresh < chrono::milliseconds(750))
+    {
+        return Globals::ClientBase != 0;
+    }
+    m_LastBaseRefresh = now;
+
+    const uint64_t oldClientBase = Globals::ClientBase;
+    if (!dma.RefreshGameBases(forceReinitialize))
+    {
+        lock_guard lock(m_CoreMutex);
+        m_CoreCache = {};
+        return false;
+    }
+
+    if (oldClientBase && oldClientBase != Globals::ClientBase)
+    {
+        LOG_INFO(
+            "Detected game module base change: client.dll 0x{:X} -> 0x{:X}",
+            static_cast<unsigned long long>(oldClientBase),
+            static_cast<unsigned long long>(Globals::ClientBase));
+        LoadOffsets(true);
+
+        lock_guard lock(m_CoreMutex);
+        m_CoreCache = {};
+    }
+
+    return true;
 }
 
 SDK::CoreCache SDK::GetCoreCache() const

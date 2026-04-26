@@ -333,6 +333,7 @@ namespace Structs
         bool TeamCheck = false;
         bool VisibleCheck = false;
         bool VisCheckDebug = false;
+        bool Legit = false;
         int VisCheckDebugMode = 1; // Deprecated legacy config key. Render World now always renders full cached map triangles.
         float VisCheckDebugMaxDistance = 3200.0f;
         int VisCheckDebugMaxItems = 1400;
@@ -365,6 +366,7 @@ namespace Structs
         bool Bones = false;
         ImVec4 BonesColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         ImVec4 BonesColorVisible = ImVec4(0.45f, 1.0f, 0.55f, 1.0f);
+        bool SoundEsp = false;
 
         bool C4 = true;
         ImVec4 C4Color = ImVec4(1.0f, 0.55f, 0.35f, 1.0f);

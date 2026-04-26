@@ -1,6 +1,7 @@
 ﻿#include <Pch.hpp>
 
 #include <Features.hpp>
+#include <ESP/SoundEsp.hpp>
 #include <Overlay.hpp>
 #include <Radar/Radar.hpp>
 #include <Kmbox/StartupPolicy.hpp>
@@ -65,6 +66,120 @@ namespace
         return value;
     }
 
+    std::filesystem::path GetExecutableDirectory()
+    {
+        std::array<char, MAX_PATH> modulePath{};
+        const DWORD size = GetModuleFileNameA(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+        if (size == 0 || size >= modulePath.size())
+            return std::filesystem::current_path();
+
+        return std::filesystem::path(modulePath.data()).parent_path();
+    }
+
+    std::filesystem::path LicenseCachePath()
+    {
+        return GetExecutableDirectory() / "keyauth_license.txt";
+    }
+
+    std::string LoadCachedLicenseKey()
+    {
+        std::ifstream input(LicenseCachePath(), std::ios::in | std::ios::binary);
+        if (!input)
+            return {};
+
+        std::string value;
+        std::getline(input, value);
+        return TrimWhitespace(std::move(value));
+    }
+
+    void SaveCachedLicenseKey(const std::string& licenseKey)
+    {
+        std::ofstream output(LicenseCachePath(), std::ios::out | std::ios::binary | std::ios::trunc);
+        if (output)
+            output << licenseKey << '\n';
+    }
+
+    void DeleteCachedLicenseKey()
+    {
+        std::error_code ignored{};
+        std::filesystem::remove(LicenseCachePath(), ignored);
+    }
+
+    std::string ReadMaskedLine()
+    {
+        std::string value{};
+        while (true)
+        {
+            const int ch = _getch();
+            if (ch == '\r' || ch == '\n')
+            {
+                cout << '\n';
+                break;
+            }
+
+            if (ch == 3)
+            {
+                value.clear();
+                cout << '\n';
+                break;
+            }
+
+            if (ch == '\b')
+            {
+                if (!value.empty())
+                {
+                    value.pop_back();
+                    cout << "\b \b";
+                }
+                continue;
+            }
+
+            if (ch == 0 || ch == 0xE0)
+            {
+                (void)_getch();
+                continue;
+            }
+
+            if (std::isprint(static_cast<unsigned char>(ch)) && value.size() < 255)
+            {
+                value.push_back(static_cast<char>(ch));
+                cout << '*';
+            }
+        }
+
+        return TrimWhitespace(std::move(value));
+    }
+
+    int ConsoleWidth()
+    {
+        CONSOLE_SCREEN_BUFFER_INFO info{};
+        if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info))
+            return 80;
+
+        const int width = info.srWindow.Right - info.srWindow.Left + 1;
+        return width > 0 ? width : 80;
+    }
+
+    void PrintCenteredLine(const std::string& text, const int width, const int displayWidth = -1)
+    {
+        const int effectiveWidth = displayWidth >= 0 ? displayWidth : static_cast<int>(text.size());
+        const int padding = (std::max)(0, (width - effectiveWidth) / 2);
+        cout << std::string(static_cast<std::size_t>(padding), ' ') << text << '\n';
+    }
+
+    void ShowFarewellConsole()
+    {
+        system("cls");
+
+        const int width = ConsoleWidth();
+        cout << "\n\n\n\n";
+        PrintCenteredLine("期待下次相遇", width, 12);
+        cout << '\n';
+        PrintCenteredLine("UNTIL WE MEET AGAIN", width);
+        cout << "\n\n";
+        this_thread::sleep_for(chrono::milliseconds(2500));
+    }
+
     KeyAuthCredentials LoadKeyAuthCredentials()
     {
         return {
@@ -127,23 +242,21 @@ namespace
         ZeroString(credentials.Url);
         ZeroString(credentials.Path);
 
+        std::string cachedLicenseKey = LoadCachedLicenseKey();
         while (true)
         {
-            std::array<char, 256> licenseBuffer{};
             cout << "[KeyAuth] Enter license key: ";
-            cin.getline(licenseBuffer.data(), static_cast<std::streamsize>(licenseBuffer.size()));
-
-            if (cin.fail())
+            std::string licenseKey{};
+            if (!cachedLicenseKey.empty())
             {
-                cin.clear();
-                cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                SecureZeroMemory(licenseBuffer.data(), licenseBuffer.size());
-                cout << "[KeyAuth] Input too long, please try again." << '\n';
-                continue;
+                licenseKey = cachedLicenseKey;
+                cout << std::string(licenseKey.size(), '*') << '\n';
+                ZeroString(cachedLicenseKey);
             }
-
-            std::string licenseKey = TrimWhitespace(std::string(licenseBuffer.data()));
-            SecureZeroMemory(licenseBuffer.data(), licenseBuffer.size());
+            else
+            {
+                licenseKey = ReadMaskedLine();
+            }
 
             if (licenseKey.empty())
             {
@@ -152,10 +265,11 @@ namespace
             }
 
             g_ConsoleAuthSession.Api->license(licenseKey, "");
-            ZeroString(licenseKey);
 
             if (g_ConsoleAuthSession.Api->response.success)
             {
+                SaveCachedLicenseKey(licenseKey);
+                ZeroString(licenseKey);
                 const std::string expiryTimestamp = FirstSubscriptionExpiry(g_ConsoleAuthSession.Api->user_data);
                 const std::string expiryDisplay = expiryTimestamp.empty() ? "Unknown" : KeyAuth::api::expiry_remaining(expiryTimestamp);
                 UpdateStartupStatusForAuth(g_ConsoleAuthSession.Version, expiryDisplay);
@@ -168,6 +282,8 @@ namespace
             }
 
             const std::string failureMessage = g_ConsoleAuthSession.Api->response.message.empty() ? "License authentication failed." : g_ConsoleAuthSession.Api->response.message;
+            ZeroString(licenseKey);
+            DeleteCachedLicenseKey();
             UpdateStartupStatusForAuth(g_ConsoleAuthSession.Version, "Authentication failed");
             cout << "[KeyAuth] " << failureMessage << '\n';
         }
@@ -199,6 +315,7 @@ namespace
             return { false, "Failed to initialize DMA." };
 
         LOG_INFO("Initializing SDK");
+        cout << "[Startup] Initializing SDK..." << '\n';
         if (!sdk.Init())
             return { false, "Failed to initialize SDK." };
 
@@ -288,11 +405,15 @@ int main()
     }
 
 	Globals::Running = false;
+    sdk.Shutdown();
+    esp.Shutdown();
+    soundEsp.Shutdown();
+    features.Shutdown();
     radarBridge.Stop();
     PerfDebug::SetVisDebugTick({});
     PerfDebug::ShutdownDebugThread();
 	overlay.Destroy();
 
-    system("pause");
+    ShowFarewellConsole();
     return 0;
 }

@@ -341,6 +341,8 @@ private:
 
     std::atomic<bool> m_SamplerStarted{ false };
     std::atomic<bool> m_RadarPublisherStarted{ false };
+    std::thread m_SamplerThread{};
+    std::thread m_RadarPublisherThread{};
     mutable std::mutex m_RenderFrameMutex{};
     RenderFrame m_RenderFrame{};
     mutable std::mutex m_GrenadeMutex{};
@@ -380,6 +382,7 @@ private:
     int m_RadarTScore = 0;
 
 public:
+    void Shutdown();
     bool QueryPenetrationSegments(const Vector3& src, const Vector3& dst, std::vector<VisCheck::PenetrationSegment>& outSegments) const;
     bool IsPawnVisibleCached(uint64_t pawn) const;
     std::unordered_set<uint64_t> GetVisiblePawnSetSnapshot() const;

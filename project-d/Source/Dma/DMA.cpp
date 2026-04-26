@@ -39,3 +39,28 @@ bool DMA::Init()
 
     return true;
 }
+
+bool DMA::RefreshGameBases(const bool reinitializeProcess)
+{
+    if (reinitializeProcess && !mem.Init(GAME_NAME))
+    {
+        Globals::ClientBase = 0;
+        Globals::Engine2Base = 0;
+        ProcInfo::DmaInitialized = false;
+        return false;
+    }
+
+    const uint64_t clientBase = mem.GetBaseDaddy(CLIENT_DLL);
+    if (!clientBase)
+    {
+        Globals::ClientBase = 0;
+        Globals::Engine2Base = 0;
+        ProcInfo::DmaInitialized = false;
+        return false;
+    }
+
+    Globals::ClientBase = clientBase;
+    Globals::Engine2Base = mem.GetBaseDaddy(ENGINE2_DLL);
+    ProcInfo::DmaInitialized = true;
+    return true;
+}

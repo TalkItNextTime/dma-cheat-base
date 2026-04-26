@@ -1,9 +1,11 @@
 #pragma once
 #include <Overlay/Overlay.hpp>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <thread>
 
 #include "Offsets.hpp"
 
@@ -21,9 +23,11 @@ public:
 
 	bool Init();
 	void InitUpdateSdk();
+	void Shutdown();
 	bool LoadOffsets(bool suppressFailureLog = false);
 
 	bool RefreshCoreCache();
+	bool RefreshGameBases(bool forceReinitialize = false);
 	CoreCache GetCoreCache() const;
 	std::string GetCurrentMapName() const;
 
@@ -47,6 +51,8 @@ private:
 	CoreCache m_CoreCache;
 	bool m_LoggedMissingOffsets = false;
 	std::atomic_bool m_SchemaInitialized = false;
+	std::thread m_UpdateThread{};
+	std::chrono::steady_clock::time_point m_LastBaseRefresh{};
 };
 
 inline SDK& sdk = SDK::Get();

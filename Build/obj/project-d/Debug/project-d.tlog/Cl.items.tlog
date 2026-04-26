@@ -11,6 +11,7 @@ C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Aimbot\Aimb
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Aimbot\AutowallEngine.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AutowallEngine.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\C4CardModel.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\C4CardModel.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\ESP.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\ESP.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\SoundEsp.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\SoundEsp.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\VisWorldDebugRender.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\VisWorldDebugRender.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Radar\ObservRadarProtocol.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\ObservRadarProtocol.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Radar\Radar.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Radar.obj
@@ -22,7 +23,5 @@ C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Overlay\Overlay.cpp;
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Kmbox\Manager.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Manager.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\main.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\main.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Pch\Pch.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Pch.obj
-C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Security\AuthManager.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AuthManager.obj
-C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Security\AuthScreen.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AuthScreen.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\SDK\RuntimeOffsetResolver.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\RuntimeOffsetResolver.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\SDK\SDK.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\SDK.obj

@@ -214,6 +214,7 @@ namespace Config
             j["Visuals"]["TeamCheck"] = Visuals.TeamCheck;
             j["Visuals"]["VisibleCheck"] = Visuals.VisibleCheck;
             j["Visuals"]["VisCheckDebug"] = Visuals.VisCheckDebug;
+            j["Visuals"]["Legit"] = Visuals.Legit;
             j["Visuals"]["VisCheckDebugMode"] = Visuals.VisCheckDebugMode;
             j["Visuals"]["VisCheckDebugMaxDistance"] = Visuals.VisCheckDebugMaxDistance;
             j["Visuals"]["VisCheckDebugMaxItems"] = Visuals.VisCheckDebugMaxItems;
@@ -245,6 +246,7 @@ namespace Config
             j["Visuals"]["Bones"] = Visuals.Bones;
             j["Visuals"]["BonesColor"] = { Visuals.BonesColor.x, Visuals.BonesColor.y, Visuals.BonesColor.z, Visuals.BonesColor.w };
             j["Visuals"]["BonesColorVisible"] = { Visuals.BonesColorVisible.x, Visuals.BonesColorVisible.y, Visuals.BonesColorVisible.z, Visuals.BonesColorVisible.w };
+            j["Visuals"]["SoundEsp"] = Visuals.SoundEsp;
             j["Visuals"]["C4"] = Visuals.C4;
             j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
             j["Visuals"]["C4PanelPosX"] = Visuals.C4PanelPosX;
@@ -671,6 +673,7 @@ namespace Config
                 j["Visuals"]["TeamCheck"] = false;
                 j["Visuals"]["VisibleCheck"] = false;
                 j["Visuals"]["VisCheckDebug"] = false;
+                j["Visuals"]["Legit"] = false;
                 j["Visuals"]["VisCheckDebugMode"] = 1;
                 j["Visuals"]["VisCheckDebugMaxDistance"] = 3200.0f;
                 j["Visuals"]["VisCheckDebugMaxItems"] = 1400;
@@ -697,6 +700,7 @@ namespace Config
                 j["Visuals"]["Bones"] = false;
                 j["Visuals"]["BonesColor"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["BonesColorVisible"] = { 0.45f, 1.0f, 0.55f, 1.0f };
+                j["Visuals"]["SoundEsp"] = false;
                 j["Visuals"]["C4"] = true;
                 j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
                 j["Visuals"]["C4PanelPosX"] = 0.02f;
@@ -1239,6 +1243,7 @@ namespace Config
                             else if (key == "TeamCheck") configSection.TeamCheck = value.get<bool>();
                             else if (key == "VisibleCheck") configSection.VisibleCheck = value.get<bool>();
                             else if (key == "VisCheckDebug") configSection.VisCheckDebug = value.get<bool>();
+                            else if (key == "Legit") configSection.Legit = value.get<bool>();
                             else if (key == "VisCheckDebugMode") configSection.VisCheckDebugMode = value.get<int>();
                             else if (key == "VisCheckDebugMaxDistance") configSection.VisCheckDebugMaxDistance = value.get<float>();
                             else if (key == "VisCheckDebugMaxItems") configSection.VisCheckDebugMaxItems = value.get<int>();
@@ -1256,6 +1261,7 @@ namespace Config
                             else if (key == "Money") configSection.Money = value.get<bool>();
                             else if (key == "Weapon") configSection.Weapon = value.get<bool>();
                             else if (key == "Bones") configSection.Bones = value.get<bool>();
+                            else if (key == "SoundEsp") configSection.SoundEsp = value.get<bool>();
                             else if (key == "C4") configSection.C4 = value.get<bool>();
                             else if (key == "C4PanelPosX") configSection.C4PanelPosX = value.get<float>();
                             else if (key == "C4PanelPosY") configSection.C4PanelPosY = value.get<float>();

@@ -1,8 +1,20 @@
-#include <Pch.hpp>
-
 #include "C4CardModel.hpp"
 
 #include <algorithm>
+#include <cmath>
+
+namespace
+{
+    bool IsLegalCountdownSeconds(const float value)
+    {
+        return std::isfinite(value) && value >= 0.0f && value <= 100.0f;
+    }
+
+    bool IsActivePlantCountdownSeconds(const float value)
+    {
+        return std::isfinite(value) && value > 0.0f && value <= 100.0f;
+    }
+}
 
 C4CardModel BuildC4CardModel(const C4CardInput& input)
 {
@@ -11,6 +23,12 @@ C4CardModel BuildC4CardModel(const C4CardInput& input)
 
     if (input.Planted)
     {
+        if (!IsLegalCountdownSeconds(input.TimeRemaining))
+            return {};
+
+        if (input.BeingDefused && !IsLegalCountdownSeconds(input.DefuseCountDown))
+            return {};
+
         return {
             .Mode = C4CardMode::Planted,
             .BombSite = input.BombSite,
@@ -24,6 +42,9 @@ C4CardModel BuildC4CardModel(const C4CardInput& input)
 
     if (input.StartedArming || input.PlantingViaUse)
     {
+        if (!IsActivePlantCountdownSeconds(input.PlantCountdown))
+            return {};
+
         return {
             .Mode = C4CardMode::Planting,
             .BombSite = -1,

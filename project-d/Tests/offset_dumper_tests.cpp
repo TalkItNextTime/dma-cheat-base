@@ -115,6 +115,41 @@ int main()
     ok &= ExpectTrue(recoveredBytes == sourceBytes, "chunked range reader should rebuild the original bytes exactly");
     ok &= ExpectTrue(readFailureDetail.empty(), "successful chunked range reads should not report an error");
 
+    std::vector<std::uint8_t> sparseRecoveredBytes;
+    std::string sparseReadDetail;
+    const bool recoveredSparseModule = RuntimeOffsetResolver::ReadMemoryRangeWithFallback(
+        0x9000,
+        sourceBytes.size(),
+        sparseRecoveredBytes,
+        [&](const std::uint64_t address, void* buffer, const size_t size)
+        {
+            const auto offset = static_cast<size_t>(address - 0x9000);
+            if (offset >= 0x1000 && offset < 0x2000)
+                return false;
+
+            std::memcpy(buffer, sourceBytes.data() + offset, size);
+            return true;
+        },
+        sparseReadDetail,
+        0x1000,
+        0x1000,
+        true);
+
+    ok &= ExpectTrue(recoveredSparseModule, "range reader should tolerate unreadable pages when sparse reads are enabled");
+    ok &= ExpectEqual(sparseRecoveredBytes.size(), sourceBytes.size(), "sparse range reader should preserve the full module size");
+    ok &= ExpectTrue(
+        std::equal(sparseRecoveredBytes.begin(), sparseRecoveredBytes.begin() + 0x1000, sourceBytes.begin()),
+        "sparse range reader should preserve bytes before the unreadable page");
+    ok &= ExpectTrue(
+        std::all_of(sparseRecoveredBytes.begin() + 0x1000, sparseRecoveredBytes.begin() + 0x2000, [](const std::uint8_t value) { return value == 0; }),
+        "sparse range reader should zero-fill unreadable pages");
+    ok &= ExpectTrue(
+        std::equal(sparseRecoveredBytes.begin() + 0x2000, sparseRecoveredBytes.end(), sourceBytes.begin() + 0x2000),
+        "sparse range reader should preserve bytes after the unreadable page");
+    ok &= ExpectTrue(
+        sparseReadDetail.find("zero-filled unreadable module page") != std::string::npos,
+        "sparse range reader should report that unreadable pages were zero-filled");
+
     if (!ok)
         return 1;
 

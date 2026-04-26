@@ -12,41 +12,50 @@ public:
 
 	void InitAimbotThread()
 	{
-		thread([this]()
+		m_AimbotThread = thread([this]()
 		{
 			while (Globals::Running)
 			{
 				this_thread::sleep_for(kAimbotInterval);
 
+				if (!Globals::Running)
+					break;
+
 				aim.UpdateAimbot();
 			}
-		}).detach();
+		});
 	}
 
 	void InitTriggerbotThread()
 	{
-		thread([this]()
+		m_TriggerThread = thread([this]()
 		{
 			while (Globals::Running)
 			{
 				this_thread::sleep_for(kTriggerInterval);
 
+				if (!Globals::Running)
+					break;
+
 				aim.UpdateTriggerbot();
 			}
-		}).detach();
+		});
 	}
 
 	void InitFlickThread()
 	{
-		thread([this]()
+		m_FlickThread = thread([this]()
 		{
 			while (Globals::Running)
 			{
 				this_thread::sleep_for(kFlickInterval);
 
+				if (!Globals::Running)
+					break;
+
 				aim.UpdateFlickbot();
 			}
-		}).detach();
+		});
 	}
 
 	static Features& Get()
@@ -63,6 +72,21 @@ public:
 
 		return true;
 	}
+
+	void Shutdown()
+	{
+		if (m_AimbotThread.joinable())
+			m_AimbotThread.join();
+		if (m_TriggerThread.joinable())
+			m_TriggerThread.join();
+		if (m_FlickThread.joinable())
+			m_FlickThread.join();
+	}
+
+private:
+	thread m_AimbotThread{};
+	thread m_TriggerThread{};
+	thread m_FlickThread{};
 };
 
 inline Features& features = Features::Get();

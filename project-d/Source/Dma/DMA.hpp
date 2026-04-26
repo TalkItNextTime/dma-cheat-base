@@ -8,6 +8,7 @@ private:
 public:
 
 	bool Init();
+	bool RefreshGameBases(bool reinitializeProcess);
 
 	static DMA& Get()
 	{

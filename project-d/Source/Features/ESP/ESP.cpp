@@ -1,8 +1,9 @@
-﻿#include <Pch.hpp>
+#include <Pch.hpp>
 #include <SDK.hpp>
 #include "C4CardModel.hpp"
 #include "ESP.hpp"
 #include "KeyIconsEmbedded.hpp"
+#include "SoundEsp.hpp"
 #include "VisWorldDebugRender.hpp"
 #include "WeaponIconsEmbedded.hpp"
 #include <Aimbot/TriggerHitboxSchema.hpp>
@@ -140,6 +141,11 @@ namespace
     constexpr auto& kDebugBoneLinks = TriggerHitboxSchema::Links;
 
     constexpr std::uint64_t kAllBonesMask = Structs::AimAllBoneMask;
+
+    bool IsLegalC4CountdownSeconds(const float value)
+    {
+        return std::isfinite(value) && value >= 0.0f && value <= 100.0f;
+    }
 
     std::string WeaponIdToName(const int weaponId)
     {
@@ -1820,9 +1826,9 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     float topAnchorY = player.BoxMin.y;
     const bool ctTopDefuserExpected = player.Team == 3 && config.Visuals.Defuser && player.HasDefuser;
-    const bool ctTopArmorExpected = player.Team == 3 && config.Visuals.Armor && player.Armor > 0;
+    const bool topArmorExpected = config.Visuals.Armor && player.Armor > 0;
     bool ctTopDefuserDrawn = false;
-    bool ctTopArmorDrawn = false;
+    bool topArmorDrawn = false;
 
     if (config.Visuals.Name)
     {
@@ -1838,7 +1844,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         topAnchorY = textPos.y;
     }
 
-    if ((ctTopDefuserExpected || ctTopArmorExpected) && Overlay::device)
+    if ((ctTopDefuserExpected || topArmorExpected) && Overlay::device)
     {
         struct TopIconItem
         {
@@ -1872,7 +1878,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         if (ctTopDefuserExpected)
             appendTopIcon("defuser", true, false);
 
-        if (ctTopArmorExpected)
+        if (topArmorExpected)
             appendTopIcon(player.HasHelmet ? "armor_helmet" : "armor", false, true);
 
         if (!topIcons.empty())
@@ -1906,7 +1912,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
                 if (item.IsDefuser)
                     ctTopDefuserDrawn = true;
                 if (item.IsArmor)
-                    ctTopArmorDrawn = true;
+                    topArmorDrawn = true;
 
                 cursorX += item.Size.x + iconSpacing;
             }
@@ -1970,32 +1976,50 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
     struct StatusLine
     {
         std::string Text{};
+        std::string IconToken{};
         ImU32 Color = IM_COL32(220, 220, 220, 255);
     };
 
     std::vector<StatusLine> statusLines{};
-    statusLines.reserve(5);
+    statusLines.reserve(4);
 
     if (player.IsScoped)
-        statusLines.push_back({ Localization::Pick("Scoped", "开镜"), IM_COL32(220, 220, 220, 255) });
+        statusLines.push_back({ {}, "scoped", IM_COL32(255, 255, 255, 255) });
 
     if (IsFlashedForStatus(player.FlashDuration, player.FlashOverlayAlpha, player.FlashMaxAlpha))
-        statusLines.push_back({ Localization::Pick("Flashed", "致盲"), IM_COL32(255, 214, 120, 255) });
-
-    if (config.Visuals.Armor && (!ctTopArmorExpected || !ctTopArmorDrawn))
-        statusLines.push_back({ std::string(Localization::Pick("AR:", "甲:")) + std::to_string(player.Armor), ToImColor(config.Visuals.ArmorColor) });
+        statusLines.push_back({ {}, "blind", IM_COL32(255, 255, 255, 255) });
 
     if (config.Visuals.Money && player.ShowMoney)
-        statusLines.push_back({ "$" + std::to_string(player.Money), ToImColor(config.Visuals.MoneyColor) });
+        statusLines.push_back({ "$" + std::to_string(player.Money), {}, ToImColor(config.Visuals.MoneyColor) });
 
     if (config.Visuals.Defuser && player.HasDefuser && (!ctTopDefuserExpected || !ctTopDefuserDrawn))
-        statusLines.push_back({ Localization::Pick("Kit", "拆弹钳"), ToImColor(config.Visuals.DefuserColor) });
+        statusLines.push_back({ {}, "defuser", IM_COL32(255, 255, 255, 255) });
 
     float lineOffset = 0.0f;
     for (const StatusLine& line : statusLines)
     {
-        const ImVec2 textPos(player.BoxMax.x + 4.0f, player.BoxMin.y + lineOffset);
-        drawList->AddText(textPos, line.Color, line.Text.c_str());
+        const ImVec2 pos(player.BoxMax.x + 4.0f, player.BoxMin.y + lineOffset);
+        if (!line.IconToken.empty() && Overlay::device)
+        {
+            const KeyIconTexture* icon = GetWeaponEspIconTexture(line.IconToken, Overlay::device);
+            if (icon && icon->Srv && icon->Width > 0 && icon->Height > 0)
+            {
+                const float iconHeight = ImGui::GetFontSize();
+                const float iconWidth = iconHeight * static_cast<float>(icon->Width) / static_cast<float>(icon->Height);
+                drawList->AddImage(
+                    reinterpret_cast<ImTextureID>(icon->Srv),
+                    pos,
+                    ImVec2(pos.x + iconWidth, pos.y + iconHeight),
+                    ImVec2(0.0f, 0.0f),
+                    ImVec2(1.0f, 1.0f),
+                    line.Color
+                );
+            }
+        }
+        else
+        {
+            drawList->AddText(pos, line.Color, line.Text.c_str());
+        }
         lineOffset += ImGui::GetFontSize() + 1.0f;
     }
 }
@@ -2850,6 +2874,8 @@ C4Snapshot ESP::ReadC4Snapshot() const
     );
 
     static std::uint64_t bombPlantStartMs = 0;
+    static std::uint64_t bombArmingStartMs = 0;
+    static std::uint64_t bombArmingEntity = 0;
     static std::uint64_t bombDefuseStartMs = 0;
     static bool wasDefusing = false;
     static bool canDefuseLatched = false;
@@ -2952,6 +2978,8 @@ C4Snapshot ESP::ReadC4Snapshot() const
         snapshot.PlantingViaUse = false;
         snapshot.ArmedTime = 0.0f;
         snapshot.PlantCountdown = 0.0f;
+        bombArmingStartMs = 0;
+        bombArmingEntity = 0;
 
         if (Offsets::Schema::m_nBombSite)
         {
@@ -3040,6 +3068,8 @@ C4Snapshot ESP::ReadC4Snapshot() const
         if (snapshot.BombDefused)
         {
             bombPlantStartMs = 0;
+            bombArmingStartMs = 0;
+            bombArmingEntity = 0;
             bombDefuseStartMs = 0;
             wasDefusing = false;
             canDefuseLatched = false;
@@ -3051,6 +3081,11 @@ C4Snapshot ESP::ReadC4Snapshot() const
     {
         bombPlantStartMs = 0;
         bombDefuseStartMs = 0;
+        if (!Offsets::Client::dwWeaponC4)
+        {
+            bombArmingStartMs = 0;
+            bombArmingEntity = 0;
+        }
         wasDefusing = false;
         canDefuseLatched = false;
 
@@ -3058,7 +3093,12 @@ C4Snapshot ESP::ReadC4Snapshot() const
         {
             const std::uint64_t weaponHolder = mem.Read<std::uint64_t>(clientBase + Offsets::Client::dwWeaponC4);
             const std::uint64_t weaponEntity = resolveBombEntityFromHolder(weaponHolder);
-            if (IsLikelyUserAddress(weaponEntity))
+            if (!IsLikelyUserAddress(weaponEntity))
+            {
+                bombArmingStartMs = 0;
+                bombArmingEntity = 0;
+            }
+            else
             {
                 snapshot.Valid = true;
                 snapshot.Planted = false;
@@ -3078,17 +3118,75 @@ C4Snapshot ESP::ReadC4Snapshot() const
                         snapshot.BombOwnerPawn = sdk.ResolveEntityFromHandle(ownerHandle);
                 }
 
-                if ((snapshot.StartedArming || snapshot.PlantingViaUse) &&
-                    snapshot.ArmedTime > 0.001f &&
-                    gameTime > 0.001f)
+                if (snapshot.StartedArming || snapshot.PlantingViaUse)
                 {
-                    snapshot.PlantCountdown = std::clamp(
-                        snapshot.ArmedTime - gameTime,
-                        0.0f,
-                        snapshot.PlantLength);
+                    if (bombArmingEntity != weaponEntity)
+                    {
+                        bombArmingEntity = weaponEntity;
+                        bombArmingStartMs = 0;
+                    }
+
+                    if (snapshot.ArmedTime > 0.001f && gameTime > 0.001f)
+                    {
+                        snapshot.PlantCountdown = std::clamp(
+                            snapshot.ArmedTime - gameTime,
+                            0.0f,
+                            snapshot.PlantLength);
+                        bombArmingStartMs = 0;
+                    }
+                    else
+                    {
+                        if (bombArmingStartMs == 0)
+                            bombArmingStartMs = nowMs;
+
+                        const float elapsed = static_cast<float>(nowMs - bombArmingStartMs) / 1000.0f;
+                        if (elapsed > snapshot.PlantLength + 0.25f)
+                        {
+                            bombArmingStartMs = 0;
+                            bombArmingEntity = 0;
+                            return {};
+                        }
+                        snapshot.PlantCountdown = std::clamp(snapshot.PlantLength - elapsed, 0.0f, snapshot.PlantLength);
+                    }
+
+                    if (snapshot.PlantCountdown <= 0.0f)
+                    {
+                        bombArmingStartMs = 0;
+                        bombArmingEntity = 0;
+                        return {};
+                    }
+                }
+                else
+                {
+                    bombArmingStartMs = 0;
+                    bombArmingEntity = 0;
                 }
             }
         }
+    }
+
+    if (snapshot.Planted)
+    {
+        if (!IsLegalC4CountdownSeconds(snapshot.TimeRemaining))
+            return {};
+
+        if (snapshot.BeingDefused && !IsLegalC4CountdownSeconds(snapshot.DefuseCountDown))
+        {
+            snapshot.BeingDefused = false;
+            snapshot.DefuseCountDown = 0.0f;
+            snapshot.DefuseProgress = 0.0f;
+            snapshot.CanDefuse = false;
+            bombDefuseStartMs = 0;
+            wasDefusing = false;
+            canDefuseLatched = false;
+        }
+    }
+    else if ((snapshot.StartedArming || snapshot.PlantingViaUse) &&
+        (!IsLegalC4CountdownSeconds(snapshot.PlantCountdown) || snapshot.PlantCountdown <= 0.0f))
+    {
+        bombArmingStartMs = 0;
+        bombArmingEntity = 0;
+        return {};
     }
 
     if (IsNonZeroPosition(snapshot.Position))
@@ -4458,10 +4556,10 @@ void ESP::EnsureSamplerStarted()
     if (!m_SamplerStarted.compare_exchange_strong(expected, true))
         return;
 
-    std::thread([this]()
+    m_SamplerThread = std::thread([this]()
     {
         SamplerLoop();
-    }).detach();
+    });
 }
 
 void ESP::EnsureRadarPublisherStarted()
@@ -4470,10 +4568,21 @@ void ESP::EnsureRadarPublisherStarted()
     if (!m_RadarPublisherStarted.compare_exchange_strong(expected, true))
         return;
 
-    std::thread([this]()
+    m_RadarPublisherThread = std::thread([this]()
     {
         RadarPublisherLoop();
-    }).detach();
+    });
+}
+
+void ESP::Shutdown()
+{
+    if (m_SamplerThread.joinable())
+        m_SamplerThread.join();
+    if (m_RadarPublisherThread.joinable())
+        m_RadarPublisherThread.join();
+
+    m_SamplerStarted.store(false);
+    m_RadarPublisherStarted.store(false);
 }
 
 bool ESP::BuildRadarPublishFrameFromMemory(RadarPublishFrame& outFrame)
@@ -6219,7 +6328,11 @@ void ESP::Render(ImDrawList* drawList)
     }
 
         for (const PlayerEspSnapshot& player : frame.Players)
+        {
+            if (!SoundEspModel::ShouldRenderPlayerInfo(config.Visuals.Legit, soundEsp.HasRecentSound(player.Pawn), player.IsVisible))
+                continue;
             RenderPlayer(drawList, player);
+        }
 
         if (config.Visuals.C4)
             RenderC4(drawList, frame.C4);
@@ -6230,6 +6343,9 @@ void ESP::Render(ImDrawList* drawList)
 
     if (renderVisDebug)
         RenderVisCheckDebug(drawList);
+
+    soundEsp.EnsureStarted();
+    soundEsp.RenderRipples(drawList, soundEsp.GetRipplesSnapshot());
 
     if (renderGrenadeHelper)
         RenderGrenadeHelper(drawList, frame.GrenadeHelper);

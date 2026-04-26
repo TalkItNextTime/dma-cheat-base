@@ -61,7 +61,8 @@ namespace RuntimeOffsetResolver
         ReadFn&& readBlock,
         std::string& errorDetail,
         const size_t initialChunkSize = 0x100000,
-        const size_t minimumChunkSize = 0x1000)
+        const size_t minimumChunkSize = 0x1000,
+        const bool zeroFillUnreadablePages = false)
     {
         errorDetail.clear();
         buffer.clear();
@@ -100,6 +101,25 @@ namespace RuntimeOffsetResolver
             if (chunkRead)
                 continue;
 
+            if (zeroFillUnreadablePages && remaining >= minimumChunkSize)
+            {
+                const size_t fillSize = (std::min)(minimumChunkSize, remaining);
+                std::fill(buffer.begin() + static_cast<std::ptrdiff_t>(offset),
+                    buffer.begin() + static_cast<std::ptrdiff_t>(offset + fillSize),
+                    0);
+
+                if (!errorDetail.empty())
+                    errorDetail += "; ";
+
+                std::ostringstream stream;
+                stream << "zero-filled unreadable module page at offset +0x" << std::hex << offset
+                       << " (address 0x" << (baseAddress + offset) << ")";
+                errorDetail += stream.str();
+
+                offset += fillSize;
+                continue;
+            }
+
             std::ostringstream stream;
             stream << "read failed at module offset +0x" << std::hex << offset
                    << " (address 0x" << (baseAddress + offset)
@@ -126,7 +146,10 @@ namespace RuntimeOffsetResolver
         return it != offsets.end() ? it->second : 0ull;
     }
 
-    inline void ApplyResolvedOffsets(const OffsetValueMap& clientOffsets, const OffsetValueMap& engineOffsets)
+    inline void ApplyResolvedOffsets(
+        const OffsetValueMap& clientOffsets,
+        const OffsetValueMap& engineOffsets,
+        const OffsetValueMap& soundSystemOffsets = {})
     {
         Offsets::Client::dwLocalPlayerController = ReadResolvedOffset(clientOffsets, "dwLocalPlayerController");
         Offsets::Client::dwLocalPlayerPawn = ReadResolvedOffset(clientOffsets, "dwLocalPlayerPawn");
@@ -144,6 +167,9 @@ namespace RuntimeOffsetResolver
         Offsets::Engine2::dwNetworkGameClient_localPlayer = ReadResolvedOffset(engineOffsets, "dwNetworkGameClient_localPlayer");
         Offsets::Engine2::dwNetworkGameClient_signOnState = ReadResolvedOffset(engineOffsets, "dwNetworkGameClient_signOnState");
         Offsets::Engine2::dwNetworkGameClient_maxClients = ReadResolvedOffset(engineOffsets, "dwNetworkGameClient_maxClients");
+
+        Offsets::SoundSystem::dwSoundSystem = ReadResolvedOffset(soundSystemOffsets, "dwSoundSystem");
+        Offsets::SoundSystem::dwSoundSystem_engineViewData = ReadResolvedOffset(soundSystemOffsets, "dwSoundSystem_engineViewData");
     }
 
     inline std::optional<std::uint32_t> FindSchemaField(
@@ -287,6 +313,11 @@ namespace RuntimeOffsetResolver
         AssignRequiredSchemaField(classes, report, { "C_CSGameRules" }, "m_bFreezePeriod", Offsets::Schema::m_bFreezePeriod);
         AssignOptionalSchemaField(classes, { "C_CSGameRules" }, "m_gamePhase", Offsets::Schema::m_gamePhase);
         AssignOptionalSchemaField(classes, { "C_CSGameRules" }, "m_timeUntilNextPhaseStarts", Offsets::Schema::m_timeUntilNextPhaseStarts);
+        AssignOptionalSchemaField(classes, { "CCSPlayerController" }, "m_recentKillQueue", Offsets::Schema::m_recentKillQueue);
+        AssignOptionalSchemaField(classes, { "C_SoundEventEntity" }, "m_onSoundFinished", Offsets::Schema::m_onSoundFinished);
+        AssignOptionalSchemaField(classes, { "C_SoundEventEntity" }, "m_iszSoundName", Offsets::Schema::m_iszSoundName);
+        AssignOptionalSchemaField(classes, { "C_CSPlayerPawn" }, "m_flEmitSoundTime", Offsets::Schema::m_flEmitSoundTime);
+        AssignOptionalSchemaField(classes, { "C_CSWeaponBase" }, "m_nLastEmptySoundCmdNum", Offsets::Schema::m_nLastEmptySoundCmdNum);
 
         return report.SchemaComplete;
     }

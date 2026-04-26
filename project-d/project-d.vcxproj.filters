@@ -369,6 +369,12 @@
     <ClInclude Include="Source\Features\ESP\ESP.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Features\ESP\SoundEsp.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Features\ESP\SoundEspModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Features\Radar\ObservRadarProtocol.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -462,6 +468,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Features\ESP\ESP.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Features\ESP\SoundEsp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Features\Radar\ObservRadarProtocol.cpp">

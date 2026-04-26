@@ -2,6 +2,7 @@
 #include "RuntimeOffsetResolver.hpp"
 
 #include <array>
+#include <fstream>
 #include <limits>
 #include <unordered_set>
 
@@ -257,13 +258,19 @@ namespace RuntimeOffsetResolver
                 {
                     return memory.Read(address, buffer, size);
                 },
-                readFailureDetail))
+                readFailureDetail,
+                0x100000,
+                0x1000,
+                true))
             {
                 errorMessage = std::string("failed to read module bytes: ") + moduleName;
                 if (!readFailureDetail.empty())
                     errorMessage += " (" + readFailureDetail + ")";
                 return false;
             }
+
+            if (!readFailureDetail.empty())
+                LOG_WARN("Module {} snapshot contains unreadable page(s): {}", moduleName, readFailureDetail);
 
             return true;
         }
@@ -345,6 +352,7 @@ namespace RuntimeOffsetResolver
             Memory& memory,
             OffsetValueMap& clientOffsets,
             OffsetValueMap& engineOffsets,
+            OffsetValueMap& soundSystemOffsets,
             std::string& errorMessage)
         {
             std::uint64_t clientBase = 0;
@@ -416,7 +424,39 @@ namespace RuntimeOffsetResolver
                     engineOffsets.emplace(definition.Name, *value);
             }
 
-            ApplyResolvedOffsets(clientOffsets, engineOffsets);
+            const std::filesystem::path dumpCandidates[] = {
+                std::filesystem::current_path() / "project-d" / "Offsets" / "offsets.json",
+                std::filesystem::current_path() / "Offsets" / "offsets.json",
+                std::filesystem::current_path().parent_path() / "project-d" / "Offsets" / "offsets.json"
+            };
+
+            for (const auto& dumpPath : dumpCandidates)
+            {
+                std::ifstream stream(dumpPath);
+                if (!stream.good())
+                    continue;
+
+                try
+                {
+                    const json offsetsJson = json::parse(stream);
+                    if (offsetsJson.contains("soundsystem.dll") && offsetsJson["soundsystem.dll"].is_object())
+                    {
+                        const auto& soundJson = offsetsJson["soundsystem.dll"];
+                        if (soundJson.contains("dwSoundSystem"))
+                            soundSystemOffsets["dwSoundSystem"] = soundJson["dwSoundSystem"].get<std::uint64_t>();
+                        if (soundJson.contains("dwSoundSystem_engineViewData"))
+                            soundSystemOffsets["dwSoundSystem_engineViewData"] = soundJson["dwSoundSystem_engineViewData"].get<std::uint64_t>();
+                    }
+                }
+                catch (...)
+                {
+                    soundSystemOffsets.clear();
+                }
+
+                break;
+            }
+
+            ApplyResolvedOffsets(clientOffsets, engineOffsets, soundSystemOffsets);
 
             if (!Offsets::HasCore())
             {
@@ -503,12 +543,13 @@ namespace RuntimeOffsetResolver
     {
         OffsetValueMap clientOffsets;
         OffsetValueMap engineOffsets;
+        OffsetValueMap soundSystemOffsets;
         report.SchemaInitialized = false;
         report.SchemaComplete = false;
         report.SchemaErrorMessage.clear();
         report.MissingRequiredSchemaFields.clear();
 
-        if (!ResolveCoreOffsets(memory, clientOffsets, engineOffsets, errorMessage))
+        if (!ResolveCoreOffsets(memory, clientOffsets, engineOffsets, soundSystemOffsets, errorMessage))
         {
             ApplyResolvedOffsets({}, {});
             ResolveReport resetReport;

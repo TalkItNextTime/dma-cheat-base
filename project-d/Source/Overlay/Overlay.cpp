@@ -1894,6 +1894,8 @@ void Overlay::RenderMenu()
 							ImAdd::CheckBox("VSync", &config.Visuals.VSync);
 							ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
 							ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
+							ImAdd::CheckBox(Localization::Pick("Legit Mode", "合法模式"), &config.Visuals.Legit);
+							ImAdd::CheckBox(Localization::Pick("Sound ESP", "声音ESP"), &config.Visuals.SoundEsp);
 
 							// ImGui::BeginGroup();
 							// {

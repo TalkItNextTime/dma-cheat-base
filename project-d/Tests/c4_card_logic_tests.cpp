@@ -106,6 +106,60 @@ int main()
         static_cast<int>(C4CardMode::Hidden),
         "carried or dropped bomb should not reuse the timer card");
 
+    const C4CardModel invalidPlantedTimer = BuildC4CardModel({
+        .Valid = true,
+        .Planted = true,
+        .StartedArming = false,
+        .PlantingViaUse = false,
+        .BombSite = 0,
+        .BeingDefused = true,
+        .TimeRemaining = 45000.0f,
+        .DefuseCountDown = 45000.0f,
+        .CanDefuse = true,
+        .PlantCountdown = 0.0f,
+    });
+
+    ok &= ExpectEqual(
+        static_cast<int>(invalidPlantedTimer.Mode),
+        static_cast<int>(C4CardMode::Hidden),
+        "planted card should hide impossible countdown values outside 0-100 seconds");
+
+    const C4CardModel invalidPlantTimer = BuildC4CardModel({
+        .Valid = true,
+        .Planted = false,
+        .StartedArming = true,
+        .PlantingViaUse = false,
+        .BombSite = -1,
+        .BeingDefused = false,
+        .TimeRemaining = 0.0f,
+        .DefuseCountDown = 0.0f,
+        .CanDefuse = false,
+        .PlantCountdown = 45000.0f,
+    });
+
+    ok &= ExpectEqual(
+        static_cast<int>(invalidPlantTimer.Mode),
+        static_cast<int>(C4CardMode::Hidden),
+        "planting card should hide impossible planting countdown values outside 0-100 seconds");
+
+    const C4CardModel expiredPlantTimer = BuildC4CardModel({
+        .Valid = true,
+        .Planted = false,
+        .StartedArming = true,
+        .PlantingViaUse = false,
+        .BombSite = -1,
+        .BeingDefused = false,
+        .TimeRemaining = 0.0f,
+        .DefuseCountDown = 0.0f,
+        .CanDefuse = false,
+        .PlantCountdown = 0.0f,
+    });
+
+    ok &= ExpectEqual(
+        static_cast<int>(expiredPlantTimer.Mode),
+        static_cast<int>(C4CardMode::Hidden),
+        "planting card should hide when planting countdown has expired");
+
     if (!ok)
         return 1;
 

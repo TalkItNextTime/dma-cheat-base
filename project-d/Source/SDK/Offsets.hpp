@@ -59,6 +59,13 @@ namespace Offsets
         }
     }
 
+    namespace SoundSystem
+    {
+        // Loaded from the current cs2-dumper output for soundsystem.dll.
+        inline std::uint64_t dwSoundSystem = 0x0;
+        inline std::uint64_t dwSoundSystem_engineViewData = 0x0;
+    }
+
     namespace Schema
     {
         // Base fields loaded from the runtime SchemaSystem reader.
@@ -125,6 +132,11 @@ namespace Offsets
         inline std::uint32_t m_bFreezePeriod = 0;
         inline std::uint32_t m_gamePhase = 0;
         inline std::uint32_t m_timeUntilNextPhaseStarts = 0;
+        inline std::uint32_t m_recentKillQueue = 0;
+        inline std::uint32_t m_onSoundFinished = 0;
+        inline std::uint32_t m_iszSoundName = 0;
+        inline std::uint32_t m_flEmitSoundTime = 0;
+        inline std::uint32_t m_nLastEmptySoundCmdNum = 0;
     }
 
     namespace Layout
