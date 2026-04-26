@@ -356,7 +356,6 @@ namespace Structs
 
         bool Health = false;
         bool Armor = true;
-        ImVec4 ArmorColor = ImVec4(0.65f, 0.85f, 1.0f, 1.0f);
         bool Money = true;
         ImVec4 MoneyColor = ImVec4(0.65f, 1.0f, 0.65f, 1.0f);
 
@@ -377,7 +376,6 @@ namespace Structs
         float SpectatorListPanelPosX = 0.02f;
         float SpectatorListPanelPosY = 0.16f;
         bool Defuser = true;
-        ImVec4 DefuserColor = ImVec4(1.0f, 0.82f, 0.2f, 1.0f);
 
         bool GrenadeHelper = false;
         bool GrenadeHelperFilterByWeapon = true;

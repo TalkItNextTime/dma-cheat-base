@@ -315,7 +315,6 @@ namespace
             return { false, "Failed to initialize DMA." };
 
         LOG_INFO("Initializing SDK");
-        cout << "[Startup] Initializing SDK..." << '\n';
         if (!sdk.Init())
             return { false, "Failed to initialize SDK." };
 

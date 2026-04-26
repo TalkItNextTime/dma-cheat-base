@@ -149,8 +149,8 @@ void SoundEsp::PollPawnEmitSoundTimes()
     int localHealth = 0;
     int localTeam = 0;
     int localLifeState = 0;
-    if (!sdk.ReadBasicEntityState(core.LocalPawn, localHealth, localTeam, localLifeState) ||
-        !IsAlive(localHealth, localLifeState))
+    const bool localStateReadOk = sdk.ReadBasicEntityState(core.LocalPawn, localHealth, localTeam, localLifeState);
+    if (!SoundEspModel::ShouldPollPawnSoundsFromLocalState(localStateReadOk, localHealth, localLifeState))
     {
         return;
     }

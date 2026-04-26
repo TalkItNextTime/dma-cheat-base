@@ -95,4 +95,9 @@ namespace SoundEspModel
     {
         return !legitMode || pawnHasActiveSoundRipple || pawnIsVisible;
     }
+
+    inline bool ShouldPollPawnSoundsFromLocalState(const bool localStateReadOk, const int, const int)
+    {
+        return localStateReadOk;
+    }
 }

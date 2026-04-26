@@ -47,6 +47,8 @@ int main()
     ok &= Expect(SoundEspModel::ShouldRenderPlayerInfo(true, true, false), "legit mode should render player info while sound ripple is active");
     ok &= Expect(SoundEspModel::ShouldRenderPlayerInfo(true, false, true), "legit mode should render visible player info without active sound ripple");
     ok &= Expect(!SoundEspModel::ShouldRenderPlayerInfo(true, false, false), "legit mode should hide player info without active sound ripple");
+    ok &= Expect(SoundEspModel::ShouldPollPawnSoundsFromLocalState(true, 0, 1), "dead local player should not stop enemy sound polling");
+    ok &= Expect(!SoundEspModel::ShouldPollPawnSoundsFromLocalState(false, 100, 0), "failed local state read should stop sound polling");
 
     return ok ? 0 : 1;
 }

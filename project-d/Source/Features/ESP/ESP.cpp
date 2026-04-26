@@ -2284,7 +2284,7 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
     drawList->AddText(ImVec2(panelX + 10.0f, panelY + 8.0f), ToImColor(config.Visuals.C4Color), line1.c_str());
     drawList->AddText(
         ImVec2(panelX + 10.0f, panelY + 28.0f),
-        card.BeingDefused ? ToImColor(config.Visuals.DefuserColor) : IM_COL32(225, 225, 225, 255),
+        card.BeingDefused ? IM_COL32(255, 210, 70, 255) : IM_COL32(225, 225, 225, 255),
         line2.c_str()
     );
     drawList->AddText(

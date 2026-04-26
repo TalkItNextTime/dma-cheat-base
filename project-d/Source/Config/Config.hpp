@@ -238,7 +238,6 @@ namespace Config
             j["Visuals"]["BoxColorVisible"] = { Visuals.BoxColorVisible.x, Visuals.BoxColorVisible.y, Visuals.BoxColorVisible.z, Visuals.BoxColorVisible.w };
             j["Visuals"]["Health"] = Visuals.Health;
             j["Visuals"]["Armor"] = Visuals.Armor;
-            j["Visuals"]["ArmorColor"] = { Visuals.ArmorColor.x, Visuals.ArmorColor.y, Visuals.ArmorColor.z, Visuals.ArmorColor.w };
             j["Visuals"]["Money"] = Visuals.Money;
             j["Visuals"]["MoneyColor"] = { Visuals.MoneyColor.x, Visuals.MoneyColor.y, Visuals.MoneyColor.z, Visuals.MoneyColor.w };
             j["Visuals"]["Weapon"] = Visuals.Weapon;
@@ -256,7 +255,6 @@ namespace Config
             j["Visuals"]["SpectatorListPanelPosX"] = Visuals.SpectatorListPanelPosX;
             j["Visuals"]["SpectatorListPanelPosY"] = Visuals.SpectatorListPanelPosY;
             j["Visuals"]["Defuser"] = Visuals.Defuser;
-            j["Visuals"]["DefuserColor"] = { Visuals.DefuserColor.x, Visuals.DefuserColor.y, Visuals.DefuserColor.z, Visuals.DefuserColor.w };
             j["Visuals"]["GrenadeHelper"] = Visuals.GrenadeHelper;
             j["Visuals"]["GrenadeHelperFilterByWeapon"] = Visuals.GrenadeHelperFilterByWeapon;
             j["Visuals"]["GrenadeHelperDrawStand"] = Visuals.GrenadeHelperDrawStand;
@@ -692,7 +690,6 @@ namespace Config
                 j["Visuals"]["BoxColorVisible"] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 j["Visuals"]["Health"] = false;
                 j["Visuals"]["Armor"] = true;
-                j["Visuals"]["ArmorColor"] = { 0.65f, 0.85f, 1.0f, 1.0f };
                 j["Visuals"]["Money"] = true;
                 j["Visuals"]["MoneyColor"] = { 0.65f, 1.0f, 0.65f, 1.0f };
                 j["Visuals"]["Weapon"] = false;
@@ -710,7 +707,6 @@ namespace Config
                 j["Visuals"]["SpectatorListPanelPosX"] = 0.02f;
                 j["Visuals"]["SpectatorListPanelPosY"] = 0.16f;
                 j["Visuals"]["Defuser"] = true;
-                j["Visuals"]["DefuserColor"] = { 1.0f, 0.82f, 0.2f, 1.0f };
                 j["Visuals"]["GrenadeHelper"] = false;
                 j["Visuals"]["GrenadeHelperFilterByWeapon"] = true;
                 j["Visuals"]["GrenadeHelperDrawStand"] = true;
@@ -1293,14 +1289,12 @@ namespace Config
                             else if (key == "NameColor") configSection.NameColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BoxColor") configSection.BoxColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BoxColorVisible") configSection.BoxColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
-                            else if (key == "ArmorColor") configSection.ArmorColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "MoneyColor") configSection.MoneyColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "WeaponColor") configSection.WeaponColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColor") configSection.BonesColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColorVisible") configSection.BonesColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "SpectatorListColor") configSection.SpectatorListColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
-                            else if (key == "DefuserColor") configSection.DefuserColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                         }
                         else if constexpr (std::is_same_v<T, Structs::RadarConfig>)
                         {

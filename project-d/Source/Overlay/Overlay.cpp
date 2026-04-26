@@ -1924,11 +1924,6 @@ void Overlay::RenderMenu()
 							ImGui::BeginGroup();
 							{
 								ImAdd::CheckBox("Armor", &config.Visuals.Armor);
-								if (config.Visuals.Armor)
-								{
-									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-									ImAdd::ColorEdit4("##ArmorColor", (float*)&config.Visuals.ArmorColor);
-								}
 							}
 
 							ImGui::BeginGroup();
@@ -1944,11 +1939,6 @@ void Overlay::RenderMenu()
 							ImGui::BeginGroup();
 							{
 								ImAdd::CheckBox("Defuser", &config.Visuals.Defuser);
-								if (config.Visuals.Defuser)
-								{
-									ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
-									ImAdd::ColorEdit4("##DefuserColor", (float*)&config.Visuals.DefuserColor);
-								}
 							}
 
 							ImGui::BeginGroup();
