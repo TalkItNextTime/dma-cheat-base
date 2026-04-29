@@ -136,6 +136,7 @@
     <ClInclude Include="Source\Config\Structs.hpp" />
     <ClInclude Include="Source\Features\ESP\C4CardModel.hpp" />
     <ClInclude Include="Source\Features\ESP\ESP.hpp" />
+    <ClInclude Include="Source\Features\ESP\GrenadeEntityEspModel.hpp" />
     <ClInclude Include="Source\Features\ESP\SoundEsp.hpp" />
     <ClInclude Include="Source\Features\ESP\SoundEspModel.hpp" />
     <ClInclude Include="Source\Features\ESP\VisWorldDebugRender.hpp" />

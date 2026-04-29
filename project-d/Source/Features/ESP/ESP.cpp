@@ -2,6 +2,7 @@
 #include <SDK.hpp>
 #include "C4CardModel.hpp"
 #include "ESP.hpp"
+#include "GrenadeEntityEspModel.hpp"
 #include "KeyIconsEmbedded.hpp"
 #include "SoundEsp.hpp"
 #include "VisWorldDebugRender.hpp"
@@ -1685,6 +1686,90 @@ namespace
         return true;
     }
 
+    GrenadeEntityEspModel::TypeToggles GetGrenadeEntityEspToggles()
+    {
+        return {
+            .HE = config.Visuals.GrenadeEntityEspHE,
+            .Molotov = config.Visuals.GrenadeEntityEspMolotov,
+            .Smoke = config.Visuals.GrenadeEntityEspSmoke,
+            .Flash = config.Visuals.GrenadeEntityEspFlash,
+            .Decoy = config.Visuals.GrenadeEntityEspDecoy,
+        };
+    }
+
+    ImVec4 GetGrenadeEntityEspColor(const GrenadeEntityEspModel::Type type)
+    {
+        switch (type)
+        {
+        case GrenadeEntityEspModel::Type::HE:
+            return config.Visuals.GrenadeEntityEspHEColor;
+        case GrenadeEntityEspModel::Type::Molotov:
+            return config.Visuals.GrenadeEntityEspMolotovColor;
+        case GrenadeEntityEspModel::Type::Smoke:
+            return config.Visuals.GrenadeEntityEspSmokeColor;
+        case GrenadeEntityEspModel::Type::Flash:
+            return config.Visuals.GrenadeEntityEspFlashColor;
+        case GrenadeEntityEspModel::Type::Decoy:
+            return config.Visuals.GrenadeEntityEspDecoyColor;
+        default:
+            return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+    }
+
+    bool ReadEntityWorldPos(const std::uint64_t entity, Vector3& outPos)
+    {
+        outPos = {};
+        if (!IsLikelyUserAddress(entity))
+            return false;
+
+        if (Offsets::Schema::m_pGameSceneNode && Offsets::Schema::m_vecAbsOrigin)
+        {
+            const std::uint64_t sceneNode = mem.Read<std::uint64_t>(entity + Offsets::Schema::m_pGameSceneNode);
+            if (IsLikelyUserAddress(sceneNode))
+            {
+                const Vector3 absOrigin = mem.Read<Vector3>(sceneNode + Offsets::Schema::m_vecAbsOrigin);
+                if (IsNonZeroPosition(absOrigin))
+                {
+                    outPos = absOrigin;
+                    return true;
+                }
+            }
+        }
+
+        if (Offsets::Schema::m_vOldOrigin)
+        {
+            const Vector3 oldOrigin = mem.Read<Vector3>(entity + Offsets::Schema::m_vOldOrigin);
+            if (IsNonZeroPosition(oldOrigin))
+            {
+                outPos = oldOrigin;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    std::string ReadEntityDesignerName(const std::uint64_t entity)
+    {
+        if (!IsLikelyUserAddress(entity) || !Offsets::Schema::m_pEntity || !Offsets::Schema::m_designerName)
+            return {};
+
+        const std::uint64_t identity = mem.Read<std::uint64_t>(entity + Offsets::Schema::m_pEntity);
+        if (!IsLikelyUserAddress(identity))
+            return {};
+
+        const std::uint64_t designerName = mem.Read<std::uint64_t>(identity + Offsets::Schema::m_designerName);
+        if (!IsLikelyUserAddress(designerName))
+            return {};
+
+        char buffer[96]{};
+        if (!mem.Read(designerName, buffer, sizeof(buffer)))
+            return {};
+
+        buffer[sizeof(buffer) - 1] = '\0';
+        return ToLowerAscii(buffer);
+    }
+
     std::uint64_t ResolveEntityIndexPointer(const std::uint64_t entityList, const std::uint32_t index)
     {
         if (!IsLikelyUserAddress(entityList) || index == 0)
@@ -1746,8 +1831,7 @@ namespace
         int Team = 0;
         int LifeState = 0;
         int MaxHealth = 100;
-        bool PawnHasDefuser = false;
-        bool PawnHasHelmet = false;
+        uint64_t ItemServices = 0;
 
         uint64_t SceneNode = 0;
         Vector3 OldOrigin{};
@@ -2291,6 +2375,61 @@ void ESP::RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const
         ImVec2(panelX + 10.0f, panelY + 48.0f),
         card.BeingDefused ? (card.CanDefuse ? IM_COL32(120, 235, 120, 255) : IM_COL32(255, 110, 110, 255)) : IM_COL32(225, 225, 225, 255),
         line3.c_str()
+    );
+}
+
+void ESP::RenderGrenadeEntityEsp(ImDrawList* drawList, const GrenadeEntitySnapshot& grenade) const
+{
+    if (!drawList || !config.Visuals.GrenadeEntityEsp || !grenade.Valid || !grenade.OnScreen)
+        return;
+
+    const auto toggles = GetGrenadeEntityEspToggles();
+    if (!GrenadeEntityEspModel::ShouldShowType(grenade.Type, toggles))
+        return;
+
+    const ImVec4 baseColor = GetGrenadeEntityEspColor(grenade.Type);
+    const ImU32 color = ToImColor(GrenadeEntityEspModel::CountdownColor(grenade.Type, grenade.Countdown, baseColor));
+    const ImVec2 center = grenade.Screen.ToImVec2();
+
+    const char* iconToken = GrenadeEntityEspModel::IconToken(grenade.Type);
+    const KeyIconTexture* icon = GetWeaponEspIconTexture(iconToken, Overlay::device);
+    if (icon && icon->Srv && icon->Width > 0 && icon->Height > 0)
+    {
+        constexpr float iconHeight = 18.0f;
+        const float iconWidth = iconHeight * static_cast<float>(icon->Width) / static_cast<float>(icon->Height);
+        drawList->AddImage(
+            reinterpret_cast<ImTextureID>(icon->Srv),
+            ImVec2(center.x - iconWidth * 0.5f, center.y - iconHeight * 0.5f),
+            ImVec2(center.x + iconWidth * 0.5f, center.y + iconHeight * 0.5f),
+            ImVec2(0.0f, 0.0f),
+            ImVec2(1.0f, 1.0f),
+            color
+        );
+    }
+    else
+    {
+        drawList->AddCircleFilled(center, 4.0f, color, 12);
+    }
+
+    std::string label = GrenadeEntityEspModel::DisplayName(grenade.Type);
+    if (grenade.Countdown >= 0.0f)
+    {
+        char countdown[32]{};
+        std::snprintf(countdown, sizeof(countdown), " %.1fs", (std::max)(0.0f, grenade.Countdown));
+        label += countdown;
+    }
+    if (grenade.DistanceMeters > 0.1f)
+    {
+        char distance[32]{};
+        std::snprintf(distance, sizeof(distance), " %.0fm", grenade.DistanceMeters);
+        label += distance;
+    }
+
+    const ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+    drawList->AddText(
+        ImVec2(center.x - textSize.x * 0.5f, center.y + 11.0f),
+        color,
+        label.c_str()
     );
 }
 
@@ -2876,6 +3015,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
     static std::uint64_t bombPlantStartMs = 0;
     static std::uint64_t bombArmingStartMs = 0;
     static std::uint64_t bombArmingEntity = 0;
+    static std::uint64_t suppressedArmingEntity = 0;
     static std::uint64_t bombDefuseStartMs = 0;
     static bool wasDefusing = false;
     static bool canDefuseLatched = false;
@@ -2980,6 +3120,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
         snapshot.PlantCountdown = 0.0f;
         bombArmingStartMs = 0;
         bombArmingEntity = 0;
+        suppressedArmingEntity = 0;
 
         if (Offsets::Schema::m_nBombSite)
         {
@@ -3085,6 +3226,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
         {
             bombArmingStartMs = 0;
             bombArmingEntity = 0;
+            suppressedArmingEntity = 0;
         }
         wasDefusing = false;
         canDefuseLatched = false;
@@ -3097,6 +3239,7 @@ C4Snapshot ESP::ReadC4Snapshot() const
             {
                 bombArmingStartMs = 0;
                 bombArmingEntity = 0;
+                suppressedArmingEntity = 0;
             }
             else
             {
@@ -3120,46 +3263,31 @@ C4Snapshot ESP::ReadC4Snapshot() const
 
                 if (snapshot.StartedArming || snapshot.PlantingViaUse)
                 {
-                    if (bombArmingEntity != weaponEntity)
-                    {
-                        bombArmingEntity = weaponEntity;
-                        bombArmingStartMs = 0;
-                    }
+                    const float authoritativePlantRemaining =
+                        (snapshot.ArmedTime > 0.001f && gameTime > 0.001f)
+                        ? (snapshot.ArmedTime - gameTime)
+                        : -1.0f;
 
-                    if (snapshot.ArmedTime > 0.001f && gameTime > 0.001f)
-                    {
-                        snapshot.PlantCountdown = std::clamp(
-                            snapshot.ArmedTime - gameTime,
-                            0.0f,
-                            snapshot.PlantLength);
-                        bombArmingStartMs = 0;
-                    }
-                    else
-                    {
-                        if (bombArmingStartMs == 0)
-                            bombArmingStartMs = nowMs;
-
-                        const float elapsed = static_cast<float>(nowMs - bombArmingStartMs) / 1000.0f;
-                        if (elapsed > snapshot.PlantLength + 0.25f)
-                        {
-                            bombArmingStartMs = 0;
-                            bombArmingEntity = 0;
-                            return {};
-                        }
-                        snapshot.PlantCountdown = std::clamp(snapshot.PlantLength - elapsed, 0.0f, snapshot.PlantLength);
-                    }
-
-                    if (snapshot.PlantCountdown <= 0.0f)
+                    if (authoritativePlantRemaining <= 0.0f ||
+                        authoritativePlantRemaining > snapshot.PlantLength + 0.25f)
                     {
                         bombArmingStartMs = 0;
                         bombArmingEntity = 0;
+                        suppressedArmingEntity = weaponEntity;
                         return {};
                     }
+
+                    suppressedArmingEntity = 0;
+                    bombArmingEntity = weaponEntity;
+                    bombArmingStartMs = 0;
+                    snapshot.PlantCountdown = std::clamp(authoritativePlantRemaining, 0.0f, snapshot.PlantLength);
                 }
                 else
                 {
                     bombArmingStartMs = 0;
                     bombArmingEntity = 0;
+                    if (suppressedArmingEntity == weaponEntity)
+                        suppressedArmingEntity = 0;
                 }
             }
         }
@@ -3193,6 +3321,249 @@ C4Snapshot ESP::ReadC4Snapshot() const
         snapshot.OnScreen = sdk.WorldToScreen(snapshot.Position, snapshot.Screen);
 
     return snapshot;
+}
+
+void ESP::BuildGrenadeEntitySnapshots(RenderFrame& outFrame, const Vector3& localOrigin)
+{
+    outFrame.GrenadeEntities.clear();
+
+    const bool needed = config.Visuals.GrenadeEntityEsp || config.Radar.Enabled;
+    if (!needed)
+    {
+        m_GrenadeEntityCache.clear();
+        m_LastGrenadeEntitySample = {};
+        m_LastGrenadeEntityDiscovery = {};
+        m_NextGrenadeEntityScanIndex = 65;
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    constexpr auto kRefreshInterval = std::chrono::milliseconds(16);
+    constexpr auto kDiscoveryInterval = std::chrono::milliseconds(120);
+    const bool refreshCached =
+        m_LastGrenadeEntitySample.time_since_epoch().count() == 0 ||
+        now - m_LastGrenadeEntitySample >= kRefreshInterval;
+    const bool discoverNew =
+        m_LastGrenadeEntityDiscovery.time_since_epoch().count() == 0 ||
+        now - m_LastGrenadeEntityDiscovery >= kDiscoveryInterval;
+
+    if (!refreshCached && !discoverNew)
+    {
+        outFrame.GrenadeEntities = m_GrenadeEntityCache;
+        outFrame.Radar.GrenadeEntities = outFrame.GrenadeEntities;
+        return;
+    }
+
+    if (m_GrenadeEntityCache.empty() && !discoverNew)
+    {
+        outFrame.GrenadeEntities = m_GrenadeEntityCache;
+        outFrame.Radar.GrenadeEntities = outFrame.GrenadeEntities;
+        return;
+    }
+
+    const SDK::CoreCache core = sdk.GetCoreCache();
+    if (!core.IsValid || !core.EntityList)
+        return;
+
+    int highestEntityIndex = 512;
+    if (discoverNew)
+    {
+        if (!Globals::ClientBase || !Offsets::Client::dwGameEntitySystem)
+            return;
+
+        const std::uint64_t gameEntitySystem = mem.Read<std::uint64_t>(Globals::ClientBase + Offsets::Client::dwGameEntitySystem);
+        if (!IsLikelyUserAddress(gameEntitySystem))
+            return;
+
+        if (Offsets::Client::dwGameEntitySystem_highestEntityIndex)
+            highestEntityIndex = mem.Read<int>(gameEntitySystem + Offsets::Client::dwGameEntitySystem_highestEntityIndex);
+        highestEntityIndex = std::clamp(highestEntityIndex, 65, 512);
+    }
+
+    const float gameTime = ReadGlobalCurrentTime();
+    const auto toggles = GetGrenadeEntityEspToggles();
+    const bool projectToScreen = config.Visuals.Enabled && config.Visuals.GrenadeEntityEsp;
+    constexpr std::size_t kMaxTrackedGrenadeEntities = 20;
+    std::vector<GrenadeEntitySnapshot> next{};
+    next.reserve(kMaxTrackedGrenadeEntities);
+    std::unordered_set<std::uint64_t> knownEntities{};
+
+    auto readSnapshot = [&](const std::uint64_t entity,
+        const GrenadeEntityEspModel::Type type,
+        const bool isInferno,
+        const std::string& id,
+        const std::string& team,
+        GrenadeEntitySnapshot& snapshot) -> bool
+    {
+        if (!IsLikelyUserAddress(entity))
+            return false;
+
+        snapshot = {};
+        snapshot.Valid = true;
+        snapshot.Entity = entity;
+        snapshot.Type = type;
+        snapshot.Id = id;
+        snapshot.Team = team;
+        snapshot.IsInferno = isInferno;
+
+        ReadEntityWorldPos(entity, snapshot.Position);
+
+        if (type == GrenadeEntityEspModel::Type::Smoke)
+        {
+            bool didSmoke = false;
+            if (Offsets::Schema::m_bDidSmokeEffect)
+                didSmoke = mem.Read<std::uint8_t>(entity + Offsets::Schema::m_bDidSmokeEffect) != 0;
+            snapshot.Exploded = didSmoke;
+            if (didSmoke)
+                return false;
+        }
+        else if (type == GrenadeEntityEspModel::Type::Molotov && isInferno)
+        {
+            snapshot.Exploded = true;
+            int fireCount = 0;
+            if (Offsets::Schema::m_fireCount)
+                fireCount = std::clamp(mem.Read<int>(entity + Offsets::Schema::m_fireCount), 0, 64);
+
+            if (fireCount <= 0)
+                return false;
+
+            std::array<Vector3, 64> firePositions{};
+            std::array<std::uint8_t, 64> burning{};
+            if (Offsets::Schema::m_firePositions)
+                mem.Read(entity + Offsets::Schema::m_firePositions, firePositions.data(), sizeof(firePositions));
+            if (Offsets::Schema::m_bFireIsBurning)
+                mem.Read(entity + Offsets::Schema::m_bFireIsBurning, burning.data(), sizeof(burning));
+
+            for (int fireIndex = 0; fireIndex < fireCount; ++fireIndex)
+            {
+                if (Offsets::Schema::m_bFireIsBurning && burning[fireIndex] == 0)
+                    continue;
+                if (!IsNonZeroPosition(firePositions[fireIndex]))
+                    continue;
+                snapshot.FlamePositions.push_back(snapshot.Position + firePositions[fireIndex]);
+            }
+        }
+        else
+        {
+            bool explodeEffectBegan = false;
+            if (Offsets::Schema::m_bExplodeEffectBegan)
+                explodeEffectBegan = mem.Read<std::uint8_t>(entity + Offsets::Schema::m_bExplodeEffectBegan) != 0;
+            snapshot.Exploded = explodeEffectBegan;
+            if (explodeEffectBegan)
+                return false;
+
+            if (!explodeEffectBegan && gameTime > 0.001f)
+            {
+                float detonateTime = 0.0f;
+                if (Offsets::Schema::m_flDetonateTime)
+                    detonateTime = mem.Read<float>(entity + Offsets::Schema::m_flDetonateTime);
+
+                if ((!std::isfinite(detonateTime) || detonateTime <= gameTime) && Offsets::Schema::m_flSpawnTime)
+                {
+                    const float spawnTime = mem.Read<float>(entity + Offsets::Schema::m_flSpawnTime);
+                    float fuseSeconds = 0.0f;
+                    if (type == GrenadeEntityEspModel::Type::Flash || type == GrenadeEntityEspModel::Type::HE)
+                        fuseSeconds = 1.5f;
+                    if (fuseSeconds > 0.0f && std::isfinite(spawnTime) && spawnTime > 0.001f)
+                        detonateTime = spawnTime + fuseSeconds;
+                }
+
+                if (std::isfinite(detonateTime) && detonateTime > gameTime && detonateTime - gameTime <= 10.0f)
+                    snapshot.Countdown = detonateTime - gameTime;
+            }
+        }
+
+        if (!IsNonZeroPosition(snapshot.Position))
+            return false;
+
+        if (IsNonZeroPosition(localOrigin))
+            snapshot.DistanceMeters = std::sqrt(DistanceSquared3D(localOrigin, snapshot.Position)) * 0.0254f;
+        if (projectToScreen)
+            snapshot.OnScreen = sdk.WorldToScreen(snapshot.Position, snapshot.Screen, core.ViewMatrix);
+
+        return true;
+    };
+
+    if (refreshCached)
+    {
+        for (const GrenadeEntitySnapshot& cached : m_GrenadeEntityCache)
+        {
+            if (next.size() >= kMaxTrackedGrenadeEntities)
+                break;
+            if (!cached.Valid || knownEntities.contains(cached.Entity))
+                continue;
+            if (!GrenadeEntityEspModel::ShouldShowType(cached.Type, toggles) && !config.Radar.Enabled)
+                continue;
+
+            GrenadeEntitySnapshot refreshed{};
+            if (!readSnapshot(cached.Entity, cached.Type, cached.IsInferno, cached.Id, cached.Team, refreshed))
+                continue;
+
+            knownEntities.insert(refreshed.Entity);
+            next.push_back(std::move(refreshed));
+        }
+    }
+    else
+    {
+        next = m_GrenadeEntityCache;
+        if (next.size() > kMaxTrackedGrenadeEntities)
+            next.resize(kMaxTrackedGrenadeEntities);
+        for (const GrenadeEntitySnapshot& cached : next)
+        {
+            if (cached.Valid)
+                knownEntities.insert(cached.Entity);
+        }
+    }
+
+    if (m_NextGrenadeEntityScanIndex < 65 || m_NextGrenadeEntityScanIndex > highestEntityIndex)
+        m_NextGrenadeEntityScanIndex = 65;
+
+    if (discoverNew && next.size() < kMaxTrackedGrenadeEntities)
+    {
+        constexpr int kDiscoveryScanBudget = 32;
+        for (int scanned = 0; scanned < kDiscoveryScanBudget; ++scanned)
+        {
+            if (next.size() >= kMaxTrackedGrenadeEntities)
+                break;
+
+            const int index = m_NextGrenadeEntityScanIndex++;
+            if (m_NextGrenadeEntityScanIndex > highestEntityIndex)
+                m_NextGrenadeEntityScanIndex = 65;
+
+            const std::uint64_t entity = ResolveEntityIndexPointer(core.EntityList, static_cast<std::uint32_t>(index));
+            if (!IsLikelyUserAddress(entity) || knownEntities.contains(entity))
+                continue;
+
+            const std::string designerName = ReadEntityDesignerName(entity);
+            const GrenadeEntityEspModel::Type type = GrenadeEntityEspModel::ClassifyDesignerName(designerName);
+            if (!GrenadeEntityEspModel::ShouldShowType(type, toggles) && !config.Radar.Enabled)
+                continue;
+            if (type == GrenadeEntityEspModel::Type::Unknown)
+                continue;
+
+            char idBuffer[32]{};
+            std::snprintf(idBuffer, sizeof(idBuffer), "ent-%d", index);
+
+            std::string team{};
+            if (Offsets::Schema::m_iTeamNum)
+                team = TeamToGsi(mem.Read<int>(entity + Offsets::Schema::m_iTeamNum));
+
+            GrenadeEntitySnapshot snapshot{};
+            if (!readSnapshot(entity, type, designerName.find("inferno") != std::string::npos, idBuffer, team, snapshot))
+                continue;
+
+            knownEntities.insert(snapshot.Entity);
+            next.push_back(std::move(snapshot));
+        }
+
+        m_LastGrenadeEntityDiscovery = now;
+    }
+
+    m_GrenadeEntityCache = next;
+    if (refreshCached)
+        m_LastGrenadeEntitySample = now;
+    outFrame.GrenadeEntities = m_GrenadeEntityCache;
+    outFrame.Radar.GrenadeEntities = outFrame.GrenadeEntities;
 }
 
 bool ESP::IsAlive(const int health, const int lifeState) const
@@ -4780,6 +5151,42 @@ std::string ESP::BuildRadarPayload(const RadarPublishFrame& frame)
     payload.Bomb.HasDefuseKit = bombHasDefuseKit;
     payload.Bomb.Position = bombPosition;
 
+    for (const GrenadeEntitySnapshot& grenade : frame.GrenadeEntities)
+    {
+        if (!grenade.Valid)
+            continue;
+
+        switch (grenade.Type)
+        {
+        case GrenadeEntityEspModel::Type::Smoke:
+            if (grenade.Exploded)
+                payload.Smokes.push_back({ grenade.Id, 0.0f, grenade.Team, grenade.Position });
+            else
+                payload.Projectiles.push_back({ grenade.Id, "smoke", grenade.Team, grenade.Position });
+            break;
+        case GrenadeEntityEspModel::Type::Flash:
+            if (grenade.Exploded)
+                payload.Flashbangs.push_back({ grenade.Id, grenade.Position });
+            else
+                payload.Projectiles.push_back({ grenade.Id, "flashbang", grenade.Team, grenade.Position });
+            break;
+        case GrenadeEntityEspModel::Type::Molotov:
+            if (!grenade.FlamePositions.empty())
+                payload.Infernos.push_back({ grenade.Id, grenade.FlamePositions });
+            else
+                payload.Projectiles.push_back({ grenade.Id, "molotov", grenade.Team, grenade.Position });
+            break;
+        case GrenadeEntityEspModel::Type::HE:
+            payload.Projectiles.push_back({ grenade.Id, "hegrenade", grenade.Team, grenade.Position });
+            break;
+        case GrenadeEntityEspModel::Type::Decoy:
+            payload.Projectiles.push_back({ grenade.Id, "decoy", grenade.Team, grenade.Position });
+            break;
+        default:
+            break;
+        }
+    }
+
     return BuildObservRadarPayload(payload);
 }
 
@@ -4864,7 +5271,7 @@ void ESP::SamplerLoop()
     constexpr auto kSampleIntervalHot = std::chrono::microseconds(2000);    // 500Hz for trigger-hot path
     constexpr auto kHelperIdleInterval = std::chrono::microseconds(17000);  // ~60Hz
     constexpr auto kHelperHotInterval = std::chrono::microseconds(7000);    // ~144Hz
-    constexpr auto kSampleBackpressureCap = std::chrono::microseconds(33000); // ~30Hz minimum under overload
+    constexpr auto kSampleBackpressureCap = std::chrono::microseconds(17000); // ~60Hz minimum under overload
     constexpr auto kOverrunYield = std::chrono::microseconds(1000);
 
     while (Globals::Running)
@@ -4934,12 +5341,13 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         (triggerBoneModeConfigured && triggerHotkeyActive) ||
         flickSamplingEnabled;
     const bool needRadarSampling = config.Radar.Enabled;
+    const bool needGrenadeEntitySampling = needRadarSampling || (config.Visuals.Enabled && config.Visuals.GrenadeEntityEsp);
     const bool needEspSampling = config.Visuals.Enabled || needVisibilityChecks || needTriggerBoneSampling;
     const bool needGrenadeHelperSampling = config.Visuals.GrenadeHelper;
     m_GrenadeHelperOnlyMode.store(needGrenadeHelperSampling && !needEspSampling && !needRadarSampling, std::memory_order_relaxed);
     if (!needGrenadeHelperSampling)
         m_GrenadeHelperHoldingUtility.store(false, std::memory_order_relaxed);
-    if (!needEspSampling && !needGrenadeHelperSampling && !needRadarSampling)
+    if (!needEspSampling && !needGrenadeHelperSampling && !needRadarSampling && !needGrenadeEntitySampling)
         return true;
 
     const SDK::CoreCache core = sdk.GetCoreCache();
@@ -4957,7 +5365,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     {
         outFrame.GrenadeHelper = {};
         m_LastGrenadeSelectedSpotId = 0;
-        if (!needEspSampling && !needRadarSampling)
+        if (!needEspSampling && !needRadarSampling && !needGrenadeEntitySampling)
             return true;
     }
 
@@ -4974,6 +5382,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         float FlashOverlayAlpha = 0.0f;
         float FlashMaxAlpha = 255.0f;
         std::uint64_t SteamId = 0;
+        uint64_t ItemServices = 0;
         bool HasDefuser = false;
         bool HasHelmet = false;
         bool InBuyZone = false;
@@ -4993,14 +5402,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_lifeState, &local.LifeState, sizeof(local.LifeState));
     if (Offsets::Schema::m_ArmorValue)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_ArmorValue, &local.Armor, sizeof(local.Armor));
-    if (Offsets::Schema::m_bPawnHasDefuser)
-        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_bPawnHasDefuser, &local.HasDefuser, sizeof(local.HasDefuser));
-    else if (Offsets::Schema::m_bHasDefuser)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bHasDefuser, &local.HasDefuser, sizeof(local.HasDefuser));
-    if (Offsets::Schema::m_bPawnHasHelmet)
-        mem.AddScatterReadRequest(localScatter, core.LocalController + Offsets::Schema::m_bPawnHasHelmet, &local.HasHelmet, sizeof(local.HasHelmet));
-    else if (Offsets::Schema::m_bHasHelmet)
-        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bHasHelmet, &local.HasHelmet, sizeof(local.HasHelmet));
+    if (Offsets::Schema::m_pItemServices)
+        mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_pItemServices, &local.ItemServices, sizeof(local.ItemServices));
     if (Offsets::Schema::m_bInBuyZone)
         mem.AddScatterReadRequest(localScatter, core.LocalPawn + Offsets::Schema::m_bInBuyZone, &local.InBuyZone, sizeof(local.InBuyZone));
     if (Offsets::Schema::m_flFlashDuration)
@@ -5022,6 +5425,13 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     mem.ExecuteReadScatter(localScatter);
     mem.CloseScatterHandle(localScatter);
+    if (IsLikelyUserAddress(local.ItemServices))
+    {
+        if (Offsets::Schema::m_bHasDefuser)
+            local.HasDefuser = mem.Read<bool>(local.ItemServices + Offsets::Schema::m_bHasDefuser);
+        if (Offsets::Schema::m_bHasHelmet)
+            local.HasHelmet = mem.Read<bool>(local.ItemServices + Offsets::Schema::m_bHasHelmet);
+    }
     local.Money = ReadMoney(core.LocalController);
 
     Vector3 localViewOffset = { 0.0f, 0.0f, 64.0f };
@@ -5051,7 +5461,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         m_LastGrenadeSelectedSpotId = 0;
     }
 
-    if (!needEspSampling && !needRadarSampling)
+    if (!needEspSampling && !needRadarSampling && !needGrenadeEntitySampling)
         return true;
 
     UpdateRoundEpoch(core.LocalPawn, IsAlive(local.Health, local.LifeState));
@@ -5150,24 +5560,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 &entities[i].PawnHandle,
                 sizeof(uint32_t)
             );
-            if (Offsets::Schema::m_bPawnHasDefuser)
-            {
-                mem.AddScatterReadRequest(
-                    pawnHandleScatter,
-                    entities[i].Controller + Offsets::Schema::m_bPawnHasDefuser,
-                    &entities[i].PawnHasDefuser,
-                    sizeof(entities[i].PawnHasDefuser)
-                );
-            }
-            if (Offsets::Schema::m_bPawnHasHelmet)
-            {
-                mem.AddScatterReadRequest(
-                    pawnHandleScatter,
-                    entities[i].Controller + Offsets::Schema::m_bPawnHasHelmet,
-                    &entities[i].PawnHasHelmet,
-                    sizeof(entities[i].PawnHasHelmet)
-                );
-            }
             if (Offsets::Schema::m_iCompTeammateColor)
             {
                 mem.AddScatterReadRequest(
@@ -5361,7 +5753,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         activeEntities.push_back(&entity);
     }
 
-    if (activeEntities.empty() && !needRadarSampling)
+    if (activeEntities.empty() && !needRadarSampling && !needGrenadeEntitySampling)
         return true;
 
     if (!activeEntities.empty())
@@ -5386,6 +5778,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_vecViewOffset, &entity->ViewOffset, sizeof(entity->ViewOffset));
                 if (Offsets::Schema::m_angEyeAngles)
                     mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_angEyeAngles, &entity->EyeAngles, sizeof(entity->EyeAngles));
+                if (Offsets::Schema::m_pItemServices)
+                    mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_pItemServices, &entity->ItemServices, sizeof(entity->ItemServices));
 
                 PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
                 entity->RefreshStatus = runtimeCache.LastStatusRead.time_since_epoch().count() == 0 ||
@@ -5408,22 +5802,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                         mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_ArmorValue, &entity->Armor, sizeof(entity->Armor));
                     if (Offsets::Schema::m_bIsScoped)
                         mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bIsScoped, &entity->IsScoped, sizeof(entity->IsScoped));
-                    if (Offsets::Schema::m_bPawnHasDefuser)
-                    {
-                        entity->HasDefuser = entity->PawnHasDefuser;
-                    }
-                    else if (Offsets::Schema::m_bHasDefuser)
-                    {
-                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
-                    }
-                    if (Offsets::Schema::m_bPawnHasHelmet)
-                    {
-                        entity->HasHelmet = entity->PawnHasHelmet;
-                    }
-                    else if (Offsets::Schema::m_bHasHelmet)
-                    {
-                        mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bHasHelmet, &entity->HasHelmet, sizeof(entity->HasHelmet));
-                    }
                     if (Offsets::Schema::m_bInBuyZone)
                         mem.AddScatterReadRequest(pawnFieldScatter, entity->Pawn + Offsets::Schema::m_bInBuyZone, &entity->InBuyZone, sizeof(entity->InBuyZone));
                     if (Offsets::Schema::m_flFlashDuration)
@@ -5441,6 +5819,30 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         else
         {
             return false;
+        }
+
+        if (Offsets::Schema::m_pItemServices && (Offsets::Schema::m_bHasDefuser || Offsets::Schema::m_bHasHelmet))
+        {
+            if (const auto itemServicesScatter = mem.CreateScatterHandle())
+            {
+                for (SampledEntityData* entity : activeEntities)
+                {
+                    if (!entity->RefreshStatus || !IsLikelyUserAddress(entity->ItemServices))
+                        continue;
+
+                    if (Offsets::Schema::m_bHasDefuser)
+                        mem.AddScatterReadRequest(itemServicesScatter, entity->ItemServices + Offsets::Schema::m_bHasDefuser, &entity->HasDefuser, sizeof(entity->HasDefuser));
+                    if (Offsets::Schema::m_bHasHelmet)
+                        mem.AddScatterReadRequest(itemServicesScatter, entity->ItemServices + Offsets::Schema::m_bHasHelmet, &entity->HasHelmet, sizeof(entity->HasHelmet));
+                }
+
+                mem.ExecuteReadScatter(itemServicesScatter);
+                mem.CloseScatterHandle(itemServicesScatter);
+            }
+            else
+            {
+                return false;
+            }
         }
 
         for (SampledEntityData* entity : activeEntities)
@@ -5734,6 +6136,9 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         outFrame.Radar.CtScore = m_RadarCtScore;
         outFrame.Radar.TScore = m_RadarTScore;
     }
+
+    if (needGrenadeEntitySampling)
+        BuildGrenadeEntitySnapshots(outFrame, local.Origin);
 
     ControllerIdentityCache& localIdentityCache = m_ControllerIdentityCache[core.LocalController];
     if (needPlayerNames && localIdentityCache.RoundEpoch != m_RoundEpoch)
@@ -6336,6 +6741,12 @@ void ESP::Render(ImDrawList* drawList)
 
         if (config.Visuals.C4)
             RenderC4(drawList, frame.C4);
+
+        if (config.Visuals.GrenadeEntityEsp)
+        {
+            for (const GrenadeEntitySnapshot& grenade : frame.GrenadeEntities)
+                RenderGrenadeEntityEsp(drawList, grenade);
+        }
 
         if (config.Visuals.SpectatorList)
             RenderSpectatorList(drawList, frame.SpectatorList);

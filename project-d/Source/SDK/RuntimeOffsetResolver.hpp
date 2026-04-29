@@ -267,6 +267,7 @@ namespace RuntimeOffsetResolver
         AssignRequiredSchemaField(classes, report, { "C_BaseEntity" }, "m_pGameSceneNode", Offsets::Schema::m_pGameSceneNode);
         AssignRequiredSchemaField(classes, report, { "CGameSceneNode" }, "m_vecAbsOrigin", Offsets::Schema::m_vecAbsOrigin);
         AssignRequiredSchemaField(classes, report, { "C_BasePlayerPawn" }, "m_pWeaponServices", Offsets::Schema::m_pWeaponServices);
+        AssignOptionalSchemaField(classes, { "C_BasePlayerPawn" }, "m_pItemServices", Offsets::Schema::m_pItemServices);
         AssignRequiredSchemaField(classes, report, { "C_BasePlayerPawn" }, "m_pObserverServices", Offsets::Schema::m_pObserverServices);
         AssignRequiredSchemaField(classes, report, { "C_BasePlayerPawn" }, "m_vOldOrigin", Offsets::Schema::m_vOldOrigin);
         AssignRequiredSchemaField(classes, report, { "C_BaseModelEntity" }, "m_vecViewOffset", Offsets::Schema::m_vecViewOffset);
@@ -293,8 +294,8 @@ namespace RuntimeOffsetResolver
         AssignRequiredSchemaField(classes, report, { "C_CSWeaponBase" }, "m_bInReload", Offsets::Schema::m_bInReload);
         AssignOptionalSchemaField(classes, { "C_BaseEntity", "CBasePlayerWeapon", "C_CSWeaponBase" }, "m_hOwnerEntity", Offsets::Schema::m_hOwnerEntity);
         AssignOptionalSchemaField(classes, { "C_CSPlayerPawn" }, "m_bInBuyZone", Offsets::Schema::m_bInBuyZone);
-        AssignOptionalSchemaField(classes, { "C_CSPlayerPawn" }, "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
-        AssignOptionalSchemaField(classes, { "C_CSPlayerPawn" }, "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
+        AssignOptionalSchemaField(classes, { "CCSPlayer_ItemServices" }, "m_bHasDefuser", Offsets::Schema::m_bHasDefuser);
+        AssignOptionalSchemaField(classes, { "CCSPlayer_ItemServices" }, "m_bHasHelmet", Offsets::Schema::m_bHasHelmet);
         AssignOptionalSchemaField(classes, { "C_Team" }, "m_iScore", Offsets::Schema::m_iScore);
         AssignOptionalSchemaField(classes, { "C_Team" }, "m_szTeamname", Offsets::Schema::m_szTeamname);
         AssignRequiredSchemaField(classes, report, { "C_PlantedC4" }, "m_bBombTicking", Offsets::Schema::m_bBombTicking);
@@ -318,6 +319,19 @@ namespace RuntimeOffsetResolver
         AssignOptionalSchemaField(classes, { "C_SoundEventEntity" }, "m_iszSoundName", Offsets::Schema::m_iszSoundName);
         AssignOptionalSchemaField(classes, { "C_CSPlayerPawn" }, "m_flEmitSoundTime", Offsets::Schema::m_flEmitSoundTime);
         AssignOptionalSchemaField(classes, { "C_CSWeaponBase" }, "m_nLastEmptySoundCmdNum", Offsets::Schema::m_nLastEmptySoundCmdNum);
+        AssignOptionalSchemaField(classes, { "CEntityInstance" }, "m_pEntity", Offsets::Schema::m_pEntity);
+        AssignOptionalSchemaField(classes, { "CEntityIdentity" }, "m_designerName", Offsets::Schema::m_designerName);
+        AssignOptionalSchemaField(classes, { "C_BaseGrenade" }, "m_flDetonateTime", Offsets::Schema::m_flDetonateTime);
+        AssignOptionalSchemaField(classes, { "C_BaseCSGrenadeProjectile" }, "m_flSpawnTime", Offsets::Schema::m_flSpawnTime);
+        AssignOptionalSchemaField(classes, { "C_BaseCSGrenadeProjectile" }, "m_bExplodeEffectBegan", Offsets::Schema::m_bExplodeEffectBegan);
+        AssignOptionalSchemaField(classes, { "C_BaseCSGrenadeProjectile" }, "m_nExplodeEffectTickBegin", Offsets::Schema::m_nExplodeEffectTickBegin);
+        AssignOptionalSchemaField(classes, { "C_BaseCSGrenadeProjectile" }, "m_vecExplodeEffectOrigin", Offsets::Schema::m_vecExplodeEffectOrigin);
+        AssignOptionalSchemaField(classes, { "C_SmokeGrenadeProjectile" }, "m_bDidSmokeEffect", Offsets::Schema::m_bDidSmokeEffect);
+        AssignOptionalSchemaField(classes, { "C_SmokeGrenadeProjectile" }, "m_nSmokeEffectTickBegin", Offsets::Schema::m_nSmokeEffectTickBegin);
+        AssignOptionalSchemaField(classes, { "C_SmokeGrenadeProjectile" }, "m_vSmokeDetonationPos", Offsets::Schema::m_vSmokeDetonationPos);
+        AssignOptionalSchemaField(classes, { "C_Inferno" }, "m_bFireIsBurning", Offsets::Schema::m_bFireIsBurning);
+        AssignOptionalSchemaField(classes, { "C_Inferno" }, "m_fireCount", Offsets::Schema::m_fireCount);
+        AssignOptionalSchemaField(classes, { "C_Inferno" }, "m_firePositions", Offsets::Schema::m_firePositions);
 
         return report.SchemaComplete;
     }

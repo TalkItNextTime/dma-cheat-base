@@ -371,6 +371,17 @@ namespace Structs
         ImVec4 C4Color = ImVec4(1.0f, 0.55f, 0.35f, 1.0f);
         float C4PanelPosX = 0.02f;
         float C4PanelPosY = 0.06f;
+        bool GrenadeEntityEsp = false;
+        bool GrenadeEntityEspHE = true;
+        bool GrenadeEntityEspMolotov = true;
+        bool GrenadeEntityEspSmoke = true;
+        bool GrenadeEntityEspFlash = true;
+        bool GrenadeEntityEspDecoy = true;
+        ImVec4 GrenadeEntityEspHEColor = ImVec4(1.0f, 0.68f, 0.18f, 1.0f);
+        ImVec4 GrenadeEntityEspMolotovColor = ImVec4(1.0f, 0.34f, 0.12f, 1.0f);
+        ImVec4 GrenadeEntityEspSmokeColor = ImVec4(0.72f, 0.78f, 0.84f, 1.0f);
+        ImVec4 GrenadeEntityEspFlashColor = ImVec4(1.0f, 0.95f, 0.46f, 1.0f);
+        ImVec4 GrenadeEntityEspDecoyColor = ImVec4(0.48f, 0.72f, 1.0f, 1.0f);
         bool SpectatorList = false;
         ImVec4 SpectatorListColor = ImVec4(0.65f, 0.85f, 1.0f, 1.0f);
         float SpectatorListPanelPosX = 0.02f;

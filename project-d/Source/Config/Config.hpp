@@ -250,6 +250,17 @@ namespace Config
             j["Visuals"]["C4Color"] = { Visuals.C4Color.x, Visuals.C4Color.y, Visuals.C4Color.z, Visuals.C4Color.w };
             j["Visuals"]["C4PanelPosX"] = Visuals.C4PanelPosX;
             j["Visuals"]["C4PanelPosY"] = Visuals.C4PanelPosY;
+            j["Visuals"]["GrenadeEntityEsp"] = Visuals.GrenadeEntityEsp;
+            j["Visuals"]["GrenadeEntityEspHE"] = Visuals.GrenadeEntityEspHE;
+            j["Visuals"]["GrenadeEntityEspMolotov"] = Visuals.GrenadeEntityEspMolotov;
+            j["Visuals"]["GrenadeEntityEspSmoke"] = Visuals.GrenadeEntityEspSmoke;
+            j["Visuals"]["GrenadeEntityEspFlash"] = Visuals.GrenadeEntityEspFlash;
+            j["Visuals"]["GrenadeEntityEspDecoy"] = Visuals.GrenadeEntityEspDecoy;
+            j["Visuals"]["GrenadeEntityEspHEColor"] = { Visuals.GrenadeEntityEspHEColor.x, Visuals.GrenadeEntityEspHEColor.y, Visuals.GrenadeEntityEspHEColor.z, Visuals.GrenadeEntityEspHEColor.w };
+            j["Visuals"]["GrenadeEntityEspMolotovColor"] = { Visuals.GrenadeEntityEspMolotovColor.x, Visuals.GrenadeEntityEspMolotovColor.y, Visuals.GrenadeEntityEspMolotovColor.z, Visuals.GrenadeEntityEspMolotovColor.w };
+            j["Visuals"]["GrenadeEntityEspSmokeColor"] = { Visuals.GrenadeEntityEspSmokeColor.x, Visuals.GrenadeEntityEspSmokeColor.y, Visuals.GrenadeEntityEspSmokeColor.z, Visuals.GrenadeEntityEspSmokeColor.w };
+            j["Visuals"]["GrenadeEntityEspFlashColor"] = { Visuals.GrenadeEntityEspFlashColor.x, Visuals.GrenadeEntityEspFlashColor.y, Visuals.GrenadeEntityEspFlashColor.z, Visuals.GrenadeEntityEspFlashColor.w };
+            j["Visuals"]["GrenadeEntityEspDecoyColor"] = { Visuals.GrenadeEntityEspDecoyColor.x, Visuals.GrenadeEntityEspDecoyColor.y, Visuals.GrenadeEntityEspDecoyColor.z, Visuals.GrenadeEntityEspDecoyColor.w };
             j["Visuals"]["SpectatorList"] = Visuals.SpectatorList;
             j["Visuals"]["SpectatorListColor"] = { Visuals.SpectatorListColor.x, Visuals.SpectatorListColor.y, Visuals.SpectatorListColor.z, Visuals.SpectatorListColor.w };
             j["Visuals"]["SpectatorListPanelPosX"] = Visuals.SpectatorListPanelPosX;
@@ -702,6 +713,17 @@ namespace Config
                 j["Visuals"]["C4Color"] = { 1.0f, 0.55f, 0.35f, 1.0f };
                 j["Visuals"]["C4PanelPosX"] = 0.02f;
                 j["Visuals"]["C4PanelPosY"] = 0.06f;
+                j["Visuals"]["GrenadeEntityEsp"] = false;
+                j["Visuals"]["GrenadeEntityEspHE"] = true;
+                j["Visuals"]["GrenadeEntityEspMolotov"] = true;
+                j["Visuals"]["GrenadeEntityEspSmoke"] = true;
+                j["Visuals"]["GrenadeEntityEspFlash"] = true;
+                j["Visuals"]["GrenadeEntityEspDecoy"] = true;
+                j["Visuals"]["GrenadeEntityEspHEColor"] = { 1.0f, 0.68f, 0.18f, 1.0f };
+                j["Visuals"]["GrenadeEntityEspMolotovColor"] = { 1.0f, 0.34f, 0.12f, 1.0f };
+                j["Visuals"]["GrenadeEntityEspSmokeColor"] = { 0.72f, 0.78f, 0.84f, 1.0f };
+                j["Visuals"]["GrenadeEntityEspFlashColor"] = { 1.0f, 0.95f, 0.46f, 1.0f };
+                j["Visuals"]["GrenadeEntityEspDecoyColor"] = { 0.48f, 0.72f, 1.0f, 1.0f };
                 j["Visuals"]["SpectatorList"] = false;
                 j["Visuals"]["SpectatorListColor"] = { 0.65f, 0.85f, 1.0f, 1.0f };
                 j["Visuals"]["SpectatorListPanelPosX"] = 0.02f;
@@ -1261,6 +1283,12 @@ namespace Config
                             else if (key == "C4") configSection.C4 = value.get<bool>();
                             else if (key == "C4PanelPosX") configSection.C4PanelPosX = value.get<float>();
                             else if (key == "C4PanelPosY") configSection.C4PanelPosY = value.get<float>();
+                            else if (key == "GrenadeEntityEsp") configSection.GrenadeEntityEsp = value.get<bool>();
+                            else if (key == "GrenadeEntityEspHE") configSection.GrenadeEntityEspHE = value.get<bool>();
+                            else if (key == "GrenadeEntityEspMolotov") configSection.GrenadeEntityEspMolotov = value.get<bool>();
+                            else if (key == "GrenadeEntityEspSmoke") configSection.GrenadeEntityEspSmoke = value.get<bool>();
+                            else if (key == "GrenadeEntityEspFlash") configSection.GrenadeEntityEspFlash = value.get<bool>();
+                            else if (key == "GrenadeEntityEspDecoy") configSection.GrenadeEntityEspDecoy = value.get<bool>();
                             else if (key == "SpectatorList") configSection.SpectatorList = value.get<bool>();
                             else if (key == "SpectatorListPanelPosX") configSection.SpectatorListPanelPosX = value.get<float>();
                             else if (key == "SpectatorListPanelPosY") configSection.SpectatorListPanelPosY = value.get<float>();
@@ -1294,6 +1322,11 @@ namespace Config
                             else if (key == "BonesColor") configSection.BonesColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "BonesColorVisible") configSection.BonesColorVisible = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "C4Color") configSection.C4Color = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeEntityEspHEColor") configSection.GrenadeEntityEspHEColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeEntityEspMolotovColor") configSection.GrenadeEntityEspMolotovColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeEntityEspSmokeColor") configSection.GrenadeEntityEspSmokeColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeEntityEspFlashColor") configSection.GrenadeEntityEspFlashColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
+                            else if (key == "GrenadeEntityEspDecoyColor") configSection.GrenadeEntityEspDecoyColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                             else if (key == "SpectatorListColor") configSection.SpectatorListColor = ImVec4(value[0].get<float>(), value[1].get<float>(), value[2].get<float>(), value[3].get<float>());
                         }
                         else if constexpr (std::is_same_v<T, Structs::RadarConfig>)

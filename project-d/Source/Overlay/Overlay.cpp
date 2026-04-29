@@ -1974,6 +1974,23 @@ void Overlay::RenderMenu()
 							ImAdd::SeparatorText("World");
 							ImGui::BeginGroup();
 							{
+								ImAdd::CheckBox(Localization::Pick("Utility Entity ESP", "道具实体ESP"), &config.Visuals.GrenadeEntityEsp);
+								if (config.Visuals.GrenadeEntityEsp)
+								{
+									auto drawUtilityEntityOption = [&](const char* labelEn, const char* labelZh, bool& enabled, ImVec4& color, const char* colorId)
+									{
+										ImAdd::CheckBox(Localization::Pick(labelEn, labelZh), &enabled);
+										ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetFontSize() * 2 - style.WindowPadding.x * 2);
+										ImAdd::ColorEdit4(colorId, (float*)&color);
+									};
+
+									drawUtilityEntityOption("HE Grenade", "手雷", config.Visuals.GrenadeEntityEspHE, config.Visuals.GrenadeEntityEspHEColor, "##GrenadeEntityEspHEColor");
+									drawUtilityEntityOption("Fire", "火", config.Visuals.GrenadeEntityEspMolotov, config.Visuals.GrenadeEntityEspMolotovColor, "##GrenadeEntityEspMolotovColor");
+									drawUtilityEntityOption("Smoke", "烟", config.Visuals.GrenadeEntityEspSmoke, config.Visuals.GrenadeEntityEspSmokeColor, "##GrenadeEntityEspSmokeColor");
+									drawUtilityEntityOption("Flash", "闪", config.Visuals.GrenadeEntityEspFlash, config.Visuals.GrenadeEntityEspFlashColor, "##GrenadeEntityEspFlashColor");
+									drawUtilityEntityOption("Decoy", "诱饵弹", config.Visuals.GrenadeEntityEspDecoy, config.Visuals.GrenadeEntityEspDecoyColor, "##GrenadeEntityEspDecoyColor");
+								}
+
 								ImAdd::CheckBox("C4", &config.Visuals.C4);
 								if (config.Visuals.C4)
 								{

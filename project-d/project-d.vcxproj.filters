@@ -369,6 +369,9 @@
     <ClInclude Include="Source\Features\ESP\ESP.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Features\ESP\GrenadeEntityEspModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Features\ESP\SoundEsp.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

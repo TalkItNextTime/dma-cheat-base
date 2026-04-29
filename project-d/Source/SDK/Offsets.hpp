@@ -85,6 +85,7 @@ namespace Offsets
         inline std::uint32_t m_lifeState = 0;
         inline std::uint32_t m_pGameSceneNode = 0;
         inline std::uint32_t m_pWeaponServices = 0;
+        inline std::uint32_t m_pItemServices = 0;
         inline std::uint32_t m_pObserverServices = 0;
         inline std::uint32_t m_vecAbsOrigin = 0;
         inline std::uint32_t m_vOldOrigin = 0;
@@ -137,6 +138,19 @@ namespace Offsets
         inline std::uint32_t m_iszSoundName = 0;
         inline std::uint32_t m_flEmitSoundTime = 0;
         inline std::uint32_t m_nLastEmptySoundCmdNum = 0;
+        inline std::uint32_t m_pEntity = 0;
+        inline std::uint32_t m_designerName = 0;
+        inline std::uint32_t m_flDetonateTime = 0;
+        inline std::uint32_t m_flSpawnTime = 0;
+        inline std::uint32_t m_bExplodeEffectBegan = 0;
+        inline std::uint32_t m_nExplodeEffectTickBegin = 0;
+        inline std::uint32_t m_vecExplodeEffectOrigin = 0;
+        inline std::uint32_t m_bDidSmokeEffect = 0;
+        inline std::uint32_t m_nSmokeEffectTickBegin = 0;
+        inline std::uint32_t m_vSmokeDetonationPos = 0;
+        inline std::uint32_t m_bFireIsBurning = 0;
+        inline std::uint32_t m_fireCount = 0;
+        inline std::uint32_t m_firePositions = 0;
     }
 
     namespace Layout

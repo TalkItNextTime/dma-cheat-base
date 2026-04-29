@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../../../VisCheckCS2/VisCheck.h"
+#include "GrenadeEntityEspModel.hpp"
 #include "VisWorldDebugRender.hpp"
 
 struct BonePoint
@@ -84,6 +85,23 @@ struct C4Snapshot
     Vector3 Position{};
     Vector2 Screen{};
     bool OnScreen = false;
+};
+
+struct GrenadeEntitySnapshot
+{
+    bool Valid = false;
+    std::uint64_t Entity = 0;
+    GrenadeEntityEspModel::Type Type = GrenadeEntityEspModel::Type::Unknown;
+    std::string Id{};
+    std::string Team{};
+    Vector3 Position{};
+    Vector2 Screen{};
+    bool OnScreen = false;
+    float Countdown = -1.0f;
+    float DistanceMeters = 0.0f;
+    bool Exploded = false;
+    bool IsInferno = false;
+    std::vector<Vector3> FlamePositions{};
 };
 
 struct SpectatorListSnapshot
@@ -221,6 +239,7 @@ private:
     {
         std::vector<RadarPlayerFrameItem> Players{};
         C4Snapshot C4{};
+        std::vector<GrenadeEntitySnapshot> GrenadeEntities{};
         Vector3 LocalViewAngles{};
         std::string MapName{};
         int CtScore = 0;
@@ -235,6 +254,7 @@ private:
     {
         std::vector<PlayerEspSnapshot> Players{};
         C4Snapshot C4{};
+        std::vector<GrenadeEntitySnapshot> GrenadeEntities{};
         RadarPublishFrame Radar{};
         SpectatorListSnapshot SpectatorList{};
         GrenadeHelperSnapshot GrenadeHelper{};
@@ -280,6 +300,7 @@ private:
     void RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, ImU32 color) const;
     void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
+    void RenderGrenadeEntityEsp(ImDrawList* drawList, const GrenadeEntitySnapshot& grenade) const;
     void RenderSpectatorList(ImDrawList* drawList, const SpectatorListSnapshot& spectatorList) const;
     void RenderGrenadeHelper(ImDrawList* drawList, const GrenadeHelperSnapshot& helper) const;
     void RenderVisCheckDebug(ImDrawList* drawList) const;
@@ -297,6 +318,7 @@ private:
 
     bool BuildBoneData(uint64_t boneArray, PlayerEspSnapshot& inOutSnapshot) const;
     C4Snapshot ReadC4Snapshot() const;
+    void BuildGrenadeEntitySnapshots(RenderFrame& outFrame, const Vector3& localOrigin);
 
     bool IsAlive(int health, int lifeState) const;
     ImU32 GetBoxColor(bool isVisible) const;
@@ -370,6 +392,10 @@ private:
     std::unordered_map<uint64_t, int> m_RadarObserverSlots{};
     C4Snapshot m_C4Cache{};
     std::chrono::steady_clock::time_point m_LastC4Sample{};
+    std::vector<GrenadeEntitySnapshot> m_GrenadeEntityCache{};
+    std::chrono::steady_clock::time_point m_LastGrenadeEntitySample{};
+    std::chrono::steady_clock::time_point m_LastGrenadeEntityDiscovery{};
+    int m_NextGrenadeEntityScanIndex = 65;
     std::uint64_t m_RoundEpoch = 1;
     std::uint64_t m_LastRoundLocalPawn = 0;
     bool m_LastRoundLocalAlive = false;

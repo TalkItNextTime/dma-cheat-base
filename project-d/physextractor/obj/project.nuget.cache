@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "dgSpecHash": "1KU1i+txHDE=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Admin\\source\\repos\\physextractor\\PhysExtractor.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Admin\\.nuget\\packages\\k4os.compression.lz4\\1.3.8\\k4os.compression.lz4.1.3.8.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\keyvalues2\\0.8.0\\keyvalues2.0.8.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\sharpgltf.core\\1.0.4\\sharpgltf.core.1.0.4.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\sharpgltf.runtime\\1.0.4\\sharpgltf.runtime.1.0.4.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\sharpgltf.toolkit\\1.0.4\\sharpgltf.toolkit.1.0.4.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\skiasharp\\3.119.0\\skiasharp.3.119.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\skiasharp.nativeassets.linux.nodependencies\\3.119.0\\skiasharp.nativeassets.linux.nodependencies.3.119.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\skiasharp.nativeassets.macos\\3.119.0\\skiasharp.nativeassets.macos.3.119.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\skiasharp.nativeassets.win32\\3.119.0\\skiasharp.nativeassets.win32.3.119.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\system.io.hashing\\9.0.5\\system.io.hashing.9.0.5.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\tinybcsharp\\0.1.2\\tinybcsharp.0.1.2.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\tinyexr.net\\0.3.10\\tinyexr.net.0.3.10.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\valvekeyvalue\\0.13.1.398\\valvekeyvalue.0.13.1.398.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\valvepak\\2.0.1.107\\valvepak.2.0.1.107.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\valveresourceformat\\13.0.4499\\valveresourceformat.13.0.4499.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\zstdsharp.port\\0.8.5\\zstdsharp.port.0.8.5.nupkg.sha512"
+  ],
+  "logs": []
+}
