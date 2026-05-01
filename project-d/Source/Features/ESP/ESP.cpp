@@ -6775,14 +6775,17 @@ void ESP::Render(ImDrawList* drawList)
         config.Visuals.Enabled,
         config.Visuals.Legit
     );
+    const bool soundThreadNeeded = SoundEspModel::ShouldRunSoundThread(config.Visuals.SoundEsp, config.Visuals.Legit);
+    if (soundThreadNeeded)
+        soundEsp.EnsureStarted();
+    else
+        soundEsp.StopAndClear();
+
     if (!renderEsp && !renderGrenadeHelper && !renderVisDebug && !renderSoundRipples)
     {
         publishPerf();
         return;
     }
-
-    if (renderSoundRipples)
-        soundEsp.EnsureStarted();
 
     const RenderFramePtr frame = LoadRenderFrameSnapshot();
     if (!frame)
@@ -6810,9 +6813,9 @@ void ESP::Render(ImDrawList* drawList)
 
     resolvedControllers = frame->ResolvedControllers;
     drawnPlayers = static_cast<std::uint32_t>(frame->Players.size());
-    if (!renderSoundRipples)
-        soundEsp.EnsureStarted();
-    const SoundFrameSnapshot soundFrame = soundEsp.GetFrameSnapshot();
+    const SoundFrameSnapshot soundFrame = SoundEspModel::ShouldUseSoundFrameSnapshot(config.Visuals.SoundEsp, config.Visuals.Legit)
+        ? soundEsp.GetFrameSnapshot()
+        : SoundFrameSnapshot{};
     const Matrix renderViewMatrix = Globals::ViewMatrix;
 
     if (renderEsp)

@@ -12,8 +12,6 @@ namespace
     constexpr float kMaxSoundDistance = 2000.0f;
     constexpr float kMinEmitDelta = 0.0001f;
     constexpr float kPawnSoundOriginLift = 8.0f;
-    constexpr int kMaxControllerSlots = 64;
-    constexpr int kGroundCircleSegments = 64;
 }
 
 SoundEsp& SoundEsp::Get()
@@ -28,18 +26,28 @@ void SoundEsp::EnsureStarted()
     if (!m_Started.compare_exchange_strong(expected, true))
         return;
 
+    if (m_PollThread.joinable())
+        m_PollThread.join();
+
     m_PollThread = std::thread([this]()
     {
         PollLoop();
     });
 }
 
-void SoundEsp::Shutdown()
+void SoundEsp::StopAndClear()
 {
-    if (m_PollThread.joinable())
+    m_Started.store(false);
+    if (m_PollThread.joinable() && m_PollThread.get_id() != std::this_thread::get_id())
         m_PollThread.join();
 
-    m_Started.store(false);
+    std::lock_guard lock(m_Mutex);
+    ClearStateLocked();
+}
+
+void SoundEsp::Shutdown()
+{
+    StopAndClear();
 }
 
 std::vector<SoundRippleSnapshot> SoundEsp::GetRipplesSnapshot()
@@ -105,8 +113,14 @@ void SoundEsp::RenderRipples(ImDrawList* drawList, const std::vector<SoundRipple
     if (!drawList || !config.Visuals.SoundEsp)
         return;
 
-    for (const SoundRippleSnapshot& ripple : ripples)
+    const int renderCount = SoundEspModel::ClampRenderableRippleCount(static_cast<int>(ripples.size()));
+    const std::size_t startIndex = ripples.size() > static_cast<std::size_t>(renderCount)
+        ? ripples.size() - static_cast<std::size_t>(renderCount)
+        : 0;
+    std::array<ImVec2, SoundEspModel::MaxRippleSegments> points{};
+    for (std::size_t rippleIndex = startIndex; rippleIndex < ripples.size(); ++rippleIndex)
     {
+        const SoundRippleSnapshot& ripple = ripples[rippleIndex];
         const float lifetime = (std::max)(0.05f, ripple.Style.LifetimeSeconds);
         const float t = std::clamp(ripple.AgeSeconds / lifetime, 0.0f, 1.0f);
         const float alpha = (1.0f - t) * ripple.Style.Color.w * std::clamp(ripple.Volume, 0.35f, 1.4f);
@@ -119,29 +133,38 @@ void SoundEsp::RenderRipples(ImDrawList* drawList, const std::vector<SoundRipple
         const float radius = SoundEspModel::GroundRippleRadius(ripple.Style, ripple.AgeSeconds);
         const float verticalLift = ripple.Style.VerticalLiftPx * t;
         const Vector3 center = ripple.Origin + Vector3{ 0.0f, 0.0f, kPawnSoundOriginLift + verticalLift };
+        const int segmentCount = SoundEspModel::ResolveRippleSegmentCount(radius);
 
-        std::vector<ImVec2> points{};
-        points.reserve(kGroundCircleSegments);
-        for (int index = 0; index < kGroundCircleSegments; ++index)
+        int pointCount = 0;
+        for (int index = 0; index < segmentCount; ++index)
         {
-            const float angle = (static_cast<float>(index) / static_cast<float>(kGroundCircleSegments)) * 6.28318530718f;
+            const float angle = (static_cast<float>(index) / static_cast<float>(segmentCount)) * 6.28318530718f;
             const Vector3 worldPoint = center + Vector3{ std::cos(angle) * radius, std::sin(angle) * radius, 0.0f };
             Vector2 screenPoint{};
             if (sdk.WorldToScreen(worldPoint, screenPoint))
-                points.emplace_back(screenPoint.x, screenPoint.y);
+                points[static_cast<std::size_t>(pointCount++)] = ImVec2(screenPoint.x, screenPoint.y);
         }
 
-        if (points.size() >= 3)
-            drawList->AddPolyline(points.data(), static_cast<int>(points.size()), lineColor, ImDrawFlags_Closed, ripple.Style.Thickness);
+        if (pointCount >= 3)
+            drawList->AddPolyline(points.data(), pointCount, lineColor, ImDrawFlags_Closed, ripple.Style.Thickness);
     }
 }
 
 void SoundEsp::PollLoop()
 {
-    while (Globals::Running)
+    while (Globals::Running && m_Started.load(std::memory_order_relaxed))
     {
         if (SoundEspModel::ShouldPollPawnSoundsForVisualState(config.Visuals.SoundEsp, config.Visuals.Legit))
+        {
             PollPawnEmitSoundTimes();
+        }
+        else
+        {
+            std::lock_guard lock(m_Mutex);
+            ClearStateLocked();
+            m_Started.store(false, std::memory_order_relaxed);
+            break;
+        }
 
         std::this_thread::sleep_for(kPollInterval);
     }
@@ -185,8 +208,16 @@ void SoundEsp::PollPawnEmitSoundTimes()
     const Vector3 referenceOrigin = mem.Read<Vector3>(referencePawn + Offsets::Schema::m_vOldOrigin);
     const auto now = std::chrono::steady_clock::now();
 
-    for (int slot = 1; slot <= kMaxControllerSlots; ++slot)
+    const SoundEspModel::PawnSoundScanRange scanRange =
+        SoundEspModel::ResolvePawnSoundScanRange(
+            m_NextPawnSoundScanSlot,
+            SoundEspModel::MaxControllerSlots,
+            SoundEspModel::PawnSoundScanSlotsPerTick);
+    m_NextPawnSoundScanSlot = scanRange.NextSlot;
+
+    for (int slotOffset = 0; slotOffset < scanRange.Count; ++slotOffset)
     {
+        const int slot = scanRange.StartSlot + slotOffset;
         const std::uint64_t controller = sdk.ResolveEntityFromHandle(static_cast<std::uint32_t>(slot), core.EntityList);
         if (!IsLikelyUserAddress(controller))
             continue;
@@ -259,6 +290,13 @@ void SoundEsp::PushRipple(
     m_Ripples.push_back(std::move(ripple));
     if (m_Ripples.size() > 128)
         m_Ripples.erase(m_Ripples.begin(), m_Ripples.begin() + static_cast<std::ptrdiff_t>(m_Ripples.size() - 128));
+}
+
+void SoundEsp::ClearStateLocked()
+{
+    m_PawnSoundTimes.clear();
+    m_Ripples.clear();
+    m_NextPawnSoundScanSlot = 1;
 }
 
 float SoundEsp::Distance3D(const Vector3& a, const Vector3& b)

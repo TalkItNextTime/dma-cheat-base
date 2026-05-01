@@ -11,6 +11,12 @@
 
 namespace SoundEspModel
 {
+    inline constexpr int MaxControllerSlots = 64;
+    inline constexpr int PawnSoundScanSlotsPerTick = 8;
+    inline constexpr int MaxRenderableRipplesPerFrame = 32;
+    inline constexpr int MinRippleSegments = 16;
+    inline constexpr int MaxRippleSegments = 32;
+
     enum class SoundKind
     {
         Unknown,
@@ -32,6 +38,13 @@ namespace SoundEspModel
         float Thickness = 1.4f;
         float Strength = 0.65f;
         float VerticalLiftPx = 0.0f;
+    };
+
+    struct PawnSoundScanRange
+    {
+        int StartSlot = 1;
+        int Count = 0;
+        int NextSlot = 1;
     };
 
     inline std::string ToLowerAscii(std::string_view value)
@@ -98,6 +111,16 @@ namespace SoundEspModel
         return soundEspEnabled || legitMode;
     }
 
+    inline bool ShouldRunSoundThread(const bool soundEspEnabled, const bool legitMode)
+    {
+        return soundEspEnabled || legitMode;
+    }
+
+    inline bool ShouldUseSoundFrameSnapshot(const bool soundEspEnabled, const bool legitMode)
+    {
+        return soundEspEnabled || legitMode;
+    }
+
     inline bool ShouldRenderSoundRipples(const bool soundEspEnabled, const bool, const bool)
     {
         return soundEspEnabled;
@@ -116,5 +139,36 @@ namespace SoundEspModel
     inline bool ShouldPollPawnSoundsFromLocalState(const bool localStateReadOk, const int, const int)
     {
         return localStateReadOk;
+    }
+
+    inline PawnSoundScanRange ResolvePawnSoundScanRange(
+        const int requestedStartSlot,
+        const int maxSlots,
+        const int slotsPerTick)
+    {
+        const int safeMaxSlots = (std::max)(1, maxSlots);
+        const int safeSlotsPerTick = std::clamp(slotsPerTick, 1, safeMaxSlots);
+        const int startSlot = std::clamp(requestedStartSlot, 1, safeMaxSlots);
+        const int count = (std::min)(safeSlotsPerTick, safeMaxSlots - startSlot + 1);
+        const int nextSlot = startSlot + count > safeMaxSlots ? 1 : startSlot + count;
+        return {
+            startSlot,
+            count,
+            nextSlot
+        };
+    }
+
+    inline int ClampRenderableRippleCount(const int requestedCount)
+    {
+        return std::clamp(requestedCount, 0, MaxRenderableRipplesPerFrame);
+    }
+
+    inline int ResolveRippleSegmentCount(const float radius)
+    {
+        if (!std::isfinite(radius))
+            return MinRippleSegments;
+
+        const int scaledSegments = static_cast<int>(std::ceil((std::max)(0.0f, radius) / 7.5f));
+        return std::clamp(scaledSegments, MinRippleSegments, MaxRippleSegments);
     }
 }

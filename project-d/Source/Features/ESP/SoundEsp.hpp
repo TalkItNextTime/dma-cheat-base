@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <mutex>
@@ -37,6 +38,7 @@ public:
     static SoundEsp& Get();
 
     void EnsureStarted();
+    void StopAndClear();
     void Shutdown();
     std::vector<SoundRippleSnapshot> GetRipplesSnapshot();
     SoundFrameSnapshot GetFrameSnapshot();
@@ -63,6 +65,7 @@ private:
 
     void PollLoop();
     void PollPawnEmitSoundTimes();
+    void ClearStateLocked();
     void PushRipple(
         const Vector3& origin,
         std::string name,
@@ -80,6 +83,7 @@ private:
     mutable std::mutex m_Mutex{};
     std::unordered_map<std::uint64_t, TrackedPawnSound> m_PawnSoundTimes{};
     std::vector<ActiveRipple> m_Ripples{};
+    int m_NextPawnSoundScanSlot = 1;
 };
 
 inline SoundEsp& soundEsp = SoundEsp::Get();
