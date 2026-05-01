@@ -409,8 +409,10 @@ bool VisCheck::IntersectCacheBvh(
     bool hit = false;
     hitDistance = (std::min)(hitDistance, maxDistance);
 
-    std::vector<std::uint32_t> stack{};
-    stack.reserve(256);
+    thread_local std::vector<std::uint32_t> stack{};
+    stack.clear();
+    if (stack.capacity() < 256)
+        stack.reserve(256);
     stack.push_back(0);
 
     while (!stack.empty())
@@ -441,13 +443,17 @@ bool VisCheck::IntersectCacheBvh(
             }
         }
 
-        std::sort(
-            visits.begin(),
-            visits.begin() + static_cast<std::ptrdiff_t>(visitCount),
-            [](const ChildVisit& lhs, const ChildVisit& rhs)
+        for (std::uint32_t sortIndex = 1; sortIndex < visitCount; ++sortIndex)
+        {
+            const ChildVisit current = visits[sortIndex];
+            std::uint32_t insertIndex = sortIndex;
+            while (insertIndex > 0 && current.tNear < visits[insertIndex - 1].tNear)
             {
-                return lhs.tNear < rhs.tNear;
-            });
+                visits[insertIndex] = visits[insertIndex - 1];
+                --insertIndex;
+            }
+            visits[insertIndex] = current;
+        }
 
         for (std::uint32_t i = 0; i < visitCount; ++i)
         {
@@ -509,8 +515,10 @@ void VisCheck::CollectCacheIntersections(
         return;
 
     const RayCache ray = MakeRay(rayOrigin, rayDir);
-    std::vector<std::uint32_t> stack{};
-    stack.reserve(256);
+    thread_local std::vector<std::uint32_t> stack{};
+    stack.clear();
+    if (stack.capacity() < 256)
+        stack.reserve(256);
     stack.push_back(0);
 
     while (!stack.empty())
@@ -539,13 +547,17 @@ void VisCheck::CollectCacheIntersections(
                 visits[visitCount++] = { tNear, &child };
         }
 
-        std::sort(
-            visits.begin(),
-            visits.begin() + static_cast<std::ptrdiff_t>(visitCount),
-            [](const ChildVisit& lhs, const ChildVisit& rhs)
+        for (std::uint32_t sortIndex = 1; sortIndex < visitCount; ++sortIndex)
+        {
+            const ChildVisit current = visits[sortIndex];
+            std::uint32_t insertIndex = sortIndex;
+            while (insertIndex > 0 && current.tNear < visits[insertIndex - 1].tNear)
             {
-                return lhs.tNear < rhs.tNear;
-            });
+                visits[insertIndex] = visits[insertIndex - 1];
+                --insertIndex;
+            }
+            visits[insertIndex] = current;
+        }
 
         for (std::uint32_t i = 0; i < visitCount; ++i)
         {

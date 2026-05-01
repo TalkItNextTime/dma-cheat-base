@@ -4,6 +4,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <thread>
 #include <array>
@@ -13,6 +14,8 @@
 
 #include "../../../VisCheckCS2/VisCheck.h"
 #include "GrenadeEntityEspModel.hpp"
+#include "EspFrameSyncModel.hpp"
+#include "PlayerBoxModel.hpp"
 #include "VisWorldDebugRender.hpp"
 
 struct BonePoint
@@ -51,6 +54,7 @@ struct PlayerEspSnapshot
 
     std::string Name{};
     std::string WeaponName{};
+    std::string WeaponIconToken{};
 
     ImVec2 BoxMin{};
     ImVec2 BoxMax{};
@@ -252,6 +256,11 @@ private:
 
     struct RenderFrame
     {
+        std::uint64_t FrameId = 0;
+        std::chrono::steady_clock::time_point SampleStart{};
+        std::chrono::steady_clock::time_point SampleEnd{};
+        std::chrono::steady_clock::time_point PublishTime{};
+
         std::vector<PlayerEspSnapshot> Players{};
         C4Snapshot C4{};
         std::vector<GrenadeEntitySnapshot> GrenadeEntities{};
@@ -293,6 +302,7 @@ private:
     };
 
     using VisDebugScreenTriangle = WorldDebugScreenTriangle;
+    using RenderFramePtr = std::shared_ptr<const RenderFrame>;
 
     void Render(ImDrawList* drawList);
     void RenderWatermark(ImDrawList* drawList) const;
@@ -314,6 +324,8 @@ private:
     bool BuildRadarPublishFrameFromMemory(RadarPublishFrame& outFrame);
     std::string BuildRadarPayload(const RadarPublishFrame& frame);
     bool SampleFrame(RenderFrame& outFrame);
+    void PublishRenderFrame(RenderFrame&& frame);
+    RenderFramePtr LoadRenderFrameSnapshot() const;
     void UpdateRoundEpoch(uint64_t localPawn, bool localAlive);
 
     bool BuildBoneData(uint64_t boneArray, PlayerEspSnapshot& inOutSnapshot) const;
@@ -356,7 +368,7 @@ private:
 
 private:
     std::unique_ptr<VisCheck> m_VisCheck{};
-    mutable std::mutex m_VisCheckMutex{};
+    mutable std::shared_mutex m_VisCheckMutex{};
     std::vector<PendingMapLoad> m_PendingMapLoads{};
     uint64_t m_NextMapRequestId = 0;
     uint64_t m_ActiveMapRequestId = 0;
@@ -366,7 +378,9 @@ private:
     std::thread m_SamplerThread{};
     std::thread m_RadarPublisherThread{};
     mutable std::mutex m_RenderFrameMutex{};
-    RenderFrame m_RenderFrame{};
+    RenderFramePtr m_RenderFrameSnapshot{};
+    std::uint64_t m_NextRenderFrameId = 0;
+    EspFrameSyncModel::StaleFrameTracker m_RenderStaleTracker{};
     mutable std::mutex m_GrenadeMutex{};
     GrenadeMapData m_GrenadeMap{};
     std::string m_LoadedGrenadeMap{};
@@ -393,6 +407,7 @@ private:
     C4Snapshot m_C4Cache{};
     std::chrono::steady_clock::time_point m_LastC4Sample{};
     std::vector<GrenadeEntitySnapshot> m_GrenadeEntityCache{};
+    std::chrono::steady_clock::time_point m_LastGrenadeEntityFrameTick{};
     std::chrono::steady_clock::time_point m_LastGrenadeEntitySample{};
     std::chrono::steady_clock::time_point m_LastGrenadeEntityDiscovery{};
     int m_NextGrenadeEntityScanIndex = 65;
@@ -403,6 +418,8 @@ private:
     bool m_LastFreezePeriod = false;
     std::chrono::steady_clock::time_point m_LastFreezeEndTick{};
     std::chrono::steady_clock::time_point m_LastSpectatorDebugLog{};
+    std::chrono::steady_clock::time_point m_LastSpectatorSample{};
+    SpectatorListSnapshot m_SpectatorListCache{};
     std::chrono::steady_clock::time_point m_LastRadarScoreRead{};
     int m_RadarCtScore = 0;
     int m_RadarTScore = 0;

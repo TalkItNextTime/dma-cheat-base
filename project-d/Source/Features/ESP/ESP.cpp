@@ -4,8 +4,10 @@
 #include "ESP.hpp"
 #include "GrenadeEntityEspModel.hpp"
 #include "KeyIconsEmbedded.hpp"
+#include "PlayerBoxModel.hpp"
 #include "SoundEsp.hpp"
 #include "VisWorldDebugRender.hpp"
+#include "WeaponEspModel.hpp"
 #include "WeaponIconsEmbedded.hpp"
 #include <Aimbot/TriggerHitboxSchema.hpp>
 #include <Aimbot/Aimbot.hpp>
@@ -146,59 +148,6 @@ namespace
     bool IsLegalC4CountdownSeconds(const float value)
     {
         return std::isfinite(value) && value >= 0.0f && value <= 100.0f;
-    }
-
-    std::string WeaponIdToName(const int weaponId)
-    {
-        switch (weaponId)
-        {
-        case 1: return "Deagle";
-        case 2: return "Dual Berettas";
-        case 3: return "Five-Seven";
-        case 4: return "Glock-18";
-        case 7: return "AK-47";
-        case 8: return "AUG";
-        case 9: return "AWP";
-        case 10: return "FAMAS";
-        case 11: return "G3SG1";
-        case 13: return "Galil AR";
-        case 14: return "M249";
-        case 16: return "M4A4";
-        case 17: return "MAC-10";
-        case 19: return "P90";
-        case 23: return "MP5-SD";
-        case 24: return "UMP-45";
-        case 25: return "XM1014";
-        case 26: return "PP-Bizon";
-        case 27: return "MAG-7";
-        case 28: return "Negev";
-        case 29: return "Sawed-Off";
-        case 30: return "Tec-9";
-        case 31: return "Zeus x27";
-        case 32: return "P2000";
-        case 33: return "MP7";
-        case 34: return "MP9";
-        case 35: return "Nova";
-        case 36: return "P250";
-        case 38: return "SCAR-20";
-        case 39: return "SG 553";
-        case 40: return "SSG 08";
-        case 42: return "Knife";
-        case 43: return "Flashbang";
-        case 44: return "HE Grenade";
-        case 45: return "Smoke";
-        case 46: return "Molotov";
-        case 47: return "Decoy";
-        case 48: return "Incendiary";
-        case 49: return "C4";
-        case 57: return "Healthshot";
-        case 59: return "Knife (T)";
-        case 60: return "M4A1-S";
-        case 61: return "USP-S";
-        case 63: return "CZ75 Auto";
-        case 64: return "R8 Revolver";
-        default: return {};
-        }
     }
 
     std::string ToLowerAscii(std::string text)
@@ -833,63 +782,6 @@ namespace
         }
 
         return normalized;
-    }
-
-    std::string WeaponNameToIconToken(const std::string& weaponName)
-    {
-        if (weaponName.empty())
-            return {};
-
-        if (weaponName == "Deagle") return "deagle";
-        if (weaponName == "Dual Berettas") return "elite";
-        if (weaponName == "Five-Seven") return "fiveseven";
-        if (weaponName == "Glock-18") return "glock";
-        if (weaponName == "AK-47") return "ak47";
-        if (weaponName == "AUG") return "aug";
-        if (weaponName == "AWP") return "awp";
-        if (weaponName == "FAMAS") return "famas";
-        if (weaponName == "G3SG1") return "g3sg1";
-        if (weaponName == "Galil AR") return "galilar";
-        if (weaponName == "M249") return "m249";
-        if (weaponName == "M4A4") return "m4a1";
-        if (weaponName == "MAC-10") return "mac10";
-        if (weaponName == "P90") return "p90";
-        if (weaponName == "MP5-SD") return "mp5sd";
-        if (weaponName == "UMP-45") return "ump45";
-        if (weaponName == "XM1014") return "xm1014";
-        if (weaponName == "PP-Bizon") return "bizon";
-        if (weaponName == "MAG-7") return "mag7";
-        if (weaponName == "Negev") return "negev";
-        if (weaponName == "Sawed-Off") return "sawedoff";
-        if (weaponName == "Tec-9") return "tec9";
-        if (weaponName == "Zeus x27") return "taser";
-        if (weaponName == "P2000") return "p2000";
-        if (weaponName == "MP7") return "mp7";
-        if (weaponName == "MP9") return "mp9";
-        if (weaponName == "Nova") return "nova";
-        if (weaponName == "P250") return "p250";
-        if (weaponName == "SCAR-20") return "scar20";
-        if (weaponName == "SG 553") return "sg556";
-        if (weaponName == "SSG 08") return "ssg08";
-        if (weaponName == "Knife") return "knife";
-        if (weaponName == "Knife (T)") return "knife_t";
-        if (weaponName == "Flashbang") return "flashbang";
-        if (weaponName == "HE Grenade") return "hegrenade";
-        if (weaponName == "Smoke") return "smokegrenade";
-        if (weaponName == "Molotov") return "molotov";
-        if (weaponName == "Decoy") return "decoy";
-        if (weaponName == "Incendiary") return "incgrenade";
-        if (weaponName == "C4") return "c4";
-        if (weaponName == "Healthshot") return "healthshot";
-        if (weaponName == "M4A1-S") return "m4a1_silencer";
-        if (weaponName == "USP-S") return "usp_silencer";
-        if (weaponName == "CZ75 Auto") return "cz75a";
-        if (weaponName == "R8 Revolver") return "revolver";
-
-        std::string fallback = NormalizeWeaponIconTokenName(weaponName);
-        if (fallback.rfind("weapon_", 0) == 0)
-            fallback = fallback.substr(7);
-        return fallback;
     }
 
     std::string RepairMalformedGrenadeJsonText(const std::string& sourceText)
@@ -1567,33 +1459,6 @@ namespace
         return "SPECTATOR";
     }
 
-    std::string ToGsiWeaponName(const std::string& rawName)
-    {
-        if (rawName.empty())
-            return "weapon_knife";
-
-        std::string normalized = ToLowerAscii(rawName);
-        if (normalized == "c4")
-            return "weapon_c4";
-
-        std::string token{};
-        token.reserve(normalized.size() + 8);
-        for (const char ch : normalized)
-        {
-            const unsigned char value = static_cast<unsigned char>(ch);
-            if (std::isalnum(value))
-                token.push_back(ch);
-            else if (ch == ' ' || ch == '-' || ch == '/')
-                token.push_back('_');
-        }
-
-        if (token.empty())
-            token = "knife";
-        if (token.rfind("weapon_", 0) != 0)
-            token = "weapon_" + token;
-        return token;
-    }
-
     std::string GsiPlayerIdFromController(const std::uint64_t controller)
     {
         return std::to_string(static_cast<unsigned long long>(controller));
@@ -1941,11 +1806,14 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         const float boxHeight = player.BoxMax.y - player.BoxMin.y;
         const float targetIconHeight = std::clamp(boxHeight * 0.16f, 14.0f, 24.0f);
         const float iconSpacing = 3.0f;
-        std::vector<TopIconItem> topIcons{};
-        topIcons.reserve(2);
+        std::array<TopIconItem, 2> topIcons{};
+        std::size_t topIconCount = 0;
 
         auto appendTopIcon = [&](const std::string& token, const bool isDefuser, const bool isArmor)
         {
+            if (topIconCount >= topIcons.size())
+                return;
+
             const KeyIconTexture* icon = GetWeaponEspIconTexture(token, Overlay::device);
             if (!icon || !icon->Srv || icon->Width <= 0 || icon->Height <= 0)
                 return;
@@ -1956,7 +1824,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
             item.IsArmor = isArmor;
             item.Size.y = targetIconHeight;
             item.Size.x = targetIconHeight * static_cast<float>(icon->Width) / static_cast<float>(icon->Height);
-            topIcons.push_back(std::move(item));
+            topIcons[topIconCount++] = item;
         };
 
         if (ctTopDefuserExpected)
@@ -1965,12 +1833,13 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         if (topArmorExpected)
             appendTopIcon(player.HasHelmet ? "armor_helmet" : "armor", false, true);
 
-        if (!topIcons.empty())
+        if (topIconCount > 0)
         {
             float rowWidth = 0.0f;
             float rowHeight = 0.0f;
-            for (const TopIconItem& item : topIcons)
+            for (std::size_t i = 0; i < topIconCount; ++i)
             {
+                const TopIconItem& item = topIcons[i];
                 if (rowWidth > 0.0f)
                     rowWidth += iconSpacing;
                 rowWidth += item.Size.x;
@@ -1981,8 +1850,9 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
             const float rowY = topAnchorY - rowHeight - 2.0f;
 
             float cursorX = rowX;
-            for (const TopIconItem& item : topIcons)
+            for (std::size_t i = 0; i < topIconCount; ++i)
             {
+                const TopIconItem& item = topIcons[i];
                 const float drawY = rowY + (rowHeight - item.Size.y) * 0.5f;
                 drawList->AddImage(
                     reinterpret_cast<ImTextureID>(item.Icon->Srv),
@@ -2005,7 +1875,9 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Visuals.Weapon && !player.WeaponName.empty())
     {
-        const std::string iconToken = WeaponNameToIconToken(player.WeaponName);
+        const std::string iconToken = player.WeaponIconToken.empty()
+            ? WeaponEspModel::IconTokenFromName(player.WeaponName)
+            : player.WeaponIconToken;
         const KeyIconTexture* weaponIcon = GetWeaponEspIconTexture(iconToken, Overlay::device);
         if (weaponIcon && weaponIcon->Srv && weaponIcon->Width > 0 && weaponIcon->Height > 0)
         {
@@ -2064,24 +1936,31 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
         ImU32 Color = IM_COL32(220, 220, 220, 255);
     };
 
-    std::vector<StatusLine> statusLines{};
-    statusLines.reserve(4);
+    std::array<StatusLine, 4> statusLines{};
+    std::size_t statusLineCount = 0;
+
+    auto appendStatusLine = [&](StatusLine line)
+    {
+        if (statusLineCount < statusLines.size())
+            statusLines[statusLineCount++] = std::move(line);
+    };
 
     if (player.IsScoped)
-        statusLines.push_back({ {}, "scoped", IM_COL32(255, 255, 255, 255) });
+        appendStatusLine({ {}, "scoped", IM_COL32(255, 255, 255, 255) });
 
     if (IsFlashedForStatus(player.FlashDuration, player.FlashOverlayAlpha, player.FlashMaxAlpha))
-        statusLines.push_back({ {}, "blind", IM_COL32(255, 255, 255, 255) });
+        appendStatusLine({ {}, "blind", IM_COL32(255, 255, 255, 255) });
 
     if (config.Visuals.Money && player.ShowMoney)
-        statusLines.push_back({ "$" + std::to_string(player.Money), {}, ToImColor(config.Visuals.MoneyColor) });
+        appendStatusLine({ "$" + std::to_string(player.Money), {}, ToImColor(config.Visuals.MoneyColor) });
 
     if (config.Visuals.Defuser && player.HasDefuser && (!ctTopDefuserExpected || !ctTopDefuserDrawn))
-        statusLines.push_back({ {}, "defuser", IM_COL32(255, 255, 255, 255) });
+        appendStatusLine({ {}, "defuser", IM_COL32(255, 255, 255, 255) });
 
     float lineOffset = 0.0f;
-    for (const StatusLine& line : statusLines)
+    for (std::size_t i = 0; i < statusLineCount; ++i)
     {
+        const StatusLine& line = statusLines[i];
         const ImVec2 pos(player.BoxMax.x + 4.0f, player.BoxMin.y + lineOffset);
         if (!line.IconToken.empty() && Overlay::device)
         {
@@ -2941,13 +2820,8 @@ bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapsh
     inOutSnapshot.Bones.clear();
     inOutSnapshot.Bones.reserve(kTrackedBones.size());
 
-    float minX = FLT_MAX;
-    float minY = FLT_MAX;
-    float maxX = -FLT_MAX;
-    float maxY = -FLT_MAX;
-
     bool hasHead = false;
-    bool anyOnScreen = false;
+    std::array<PlayerBoxModel::ScreenBone, kTrackedBones.size()> screenBones{};
 
     for (size_t i = 0; i < kTrackedBones.size(); ++i)
     {
@@ -2965,14 +2839,11 @@ bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapsh
             hasHead = true;
         }
 
-        if (point.OnScreen)
-        {
-            anyOnScreen = true;
-            minX = (std::min)(minX, point.Screen.x);
-            minY = (std::min)(minY, point.Screen.y);
-            maxX = (std::max)(maxX, point.Screen.x);
-            maxY = (std::max)(maxY, point.Screen.y);
-        }
+        screenBones[i] = PlayerBoxModel::ScreenBone{
+            boneIndex,
+            point.Screen,
+            point.OnScreen
+        };
 
         inOutSnapshot.Bones.push_back(point);
     }
@@ -2982,19 +2853,12 @@ bool ESP::BuildBoneData(const uint64_t boneArray, PlayerEspSnapshot& inOutSnapsh
         inOutSnapshot.HeadPosition = inOutSnapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
     }
 
-    if (!anyOnScreen)
+    PlayerBoxModel::Box2D box{};
+    if (!PlayerBoxModel::BuildBoxFromBones(screenBones, Screen.x, Screen.y, box))
         return false;
 
-    const float width = maxX - minX;
-    const float height = maxY - minY;
-    if (width < 3.0f || height < 3.0f)
-        return false;
-
-    const float paddingX = (std::max)(width * 0.08f, 3.0f);
-    const float paddingY = (std::max)(height * 0.06f, 3.0f);
-
-    inOutSnapshot.BoxMin = ImVec2(minX - paddingX, minY - paddingY);
-    inOutSnapshot.BoxMax = ImVec2(maxX + paddingX, maxY + paddingY);
+    inOutSnapshot.BoxMin = box.Min.ToImVec2();
+    inOutSnapshot.BoxMax = box.Max.ToImVec2();
 
     return true;
 }
@@ -3662,7 +3526,7 @@ std::string ESP::ReadWeaponName(const uint64_t pawn) const
     if (weaponId <= 0)
         return {};
 
-    const std::string resolvedName = WeaponIdToName(weaponId);
+    const std::string resolvedName = WeaponEspModel::NameFromDefinitionId(weaponId);
     if (!resolvedName.empty())
         return resolvedName;
 
@@ -3703,7 +3567,7 @@ void ESP::UpdateVisCheckState()
     if (mapName.empty())
     {
         {
-            std::lock_guard visLock(m_VisCheckMutex);
+            std::unique_lock visLock(m_VisCheckMutex);
             m_VisCheck.reset();
         }
         ClearMapDebugCache();
@@ -3715,7 +3579,7 @@ void ESP::UpdateVisCheckState()
 
     bool hasVisCheck = false;
     {
-        std::lock_guard visLock(m_VisCheckMutex);
+        std::shared_lock visLock(m_VisCheckMutex);
         hasVisCheck = m_VisCheck != nullptr;
     }
 
@@ -3741,7 +3605,7 @@ void ESP::UpdateVisCheckState()
     if (cachePath.empty())
     {
         {
-            std::lock_guard visLock(m_VisCheckMutex);
+            std::unique_lock visLock(m_VisCheckMutex);
             m_VisCheck.reset();
         }
         ClearMapDebugCache();
@@ -3799,7 +3663,7 @@ void ESP::ConsumeMapLoadResult()
             if (loadedVisCheck)
             {
                 {
-                    std::lock_guard visLock(m_VisCheckMutex);
+                    std::unique_lock visLock(m_VisCheckMutex);
                     m_VisCheck = std::move(loadedVisCheck);
                     if (m_VisCheck)
                         UpdateMapDebugCacheFromVisCheck(*m_VisCheck);
@@ -3811,7 +3675,7 @@ void ESP::ConsumeMapLoadResult()
             else
             {
                 {
-                    std::lock_guard visLock(m_VisCheckMutex);
+                    std::unique_lock visLock(m_VisCheckMutex);
                     m_VisCheck.reset();
                 }
                 ClearMapDebugCache();
@@ -4549,7 +4413,7 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
     bool isVisible = false;
     const auto start = std::chrono::steady_clock::now();
     {
-        std::lock_guard visLock(m_VisCheckMutex);
+        std::shared_lock visLock(m_VisCheckMutex);
         if (!m_VisCheck)
             return false;
         isVisible = m_VisCheck->IsPointVisible(src, dst);
@@ -4567,7 +4431,7 @@ bool ESP::CheckVisibility(const Vector3& src, const Vector3& dst) const
 bool ESP::QueryPenetrationSegments(const Vector3& src, const Vector3& dst, std::vector<VisCheck::PenetrationSegment>& outSegments) const
 {
     outSegments.clear();
-    std::lock_guard visLock(m_VisCheckMutex);
+    std::shared_lock visLock(m_VisCheckMutex);
     if (!m_VisCheck)
         return false;
 
@@ -4579,8 +4443,11 @@ bool ESP::IsPawnVisibleCached(const uint64_t pawn) const
     if (!pawn)
         return false;
 
-    std::lock_guard lock(m_RenderFrameMutex);
-    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    if (!frame)
+        return false;
+
+    for (const PlayerEspSnapshot& player : frame->Players)
     {
         if (player.Pawn == pawn)
             return player.IsVisible;
@@ -4593,9 +4460,12 @@ std::unordered_set<uint64_t> ESP::GetVisiblePawnSetSnapshot() const
 {
     std::unordered_set<uint64_t> visiblePawns{};
 
-    std::lock_guard lock(m_RenderFrameMutex);
-    visiblePawns.reserve(m_RenderFrame.Players.size());
-    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    if (!frame)
+        return visiblePawns;
+
+    visiblePawns.reserve(frame->Players.size());
+    for (const PlayerEspSnapshot& player : frame->Players)
     {
         if (player.Pawn != 0 && player.IsVisible)
             visiblePawns.insert(player.Pawn);
@@ -4619,10 +4489,13 @@ std::vector<TriggerBoneSnapshot> ESP::GetTriggerBoneSnapshots() const
         return -1;
     };
 
-    std::lock_guard lock(m_RenderFrameMutex);
-    snapshots.reserve(m_RenderFrame.Players.size());
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    if (!frame)
+        return snapshots;
 
-    for (const PlayerEspSnapshot& player : m_RenderFrame.Players)
+    snapshots.reserve(frame->Players.size());
+
+    for (const PlayerEspSnapshot& player : frame->Players)
     {
         TriggerBoneSnapshot snapshot{};
         snapshot.Pawn = player.Pawn;
@@ -4915,8 +4788,8 @@ bool ESP::DetectCurrentGrenadeTypeIndex(int& outTypeIndex) const
 
 int ESP::GetCurrentGrenadeFocusedSpotId() const
 {
-    std::lock_guard lock(m_RenderFrameMutex);
-    return m_RenderFrame.GrenadeHelper.SelectedSpotId;
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    return frame ? frame->GrenadeHelper.SelectedSpotId : 0;
 }
 
 void ESP::EnsureSamplerStarted()
@@ -4958,8 +4831,11 @@ void ESP::Shutdown()
 
 bool ESP::BuildRadarPublishFrameFromMemory(RadarPublishFrame& outFrame)
 {
-    std::lock_guard lock(m_RenderFrameMutex);
-    outFrame = m_RenderFrame.Radar;
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    if (!frame)
+        return false;
+
+    outFrame = frame->Radar;
     return !outFrame.Players.empty();
 }
 
@@ -5273,19 +5149,32 @@ void ESP::SamplerLoop()
     constexpr auto kHelperHotInterval = std::chrono::microseconds(7000);    // ~144Hz
     constexpr auto kSampleBackpressureCap = std::chrono::microseconds(17000); // ~60Hz minimum under overload
     constexpr auto kOverrunYield = std::chrono::microseconds(1000);
+    constexpr auto kVisDebugOverlayInterval = std::chrono::milliseconds(33);
+    auto lastVisDebugOverlayBuild = std::chrono::steady_clock::now() - kVisDebugOverlayInterval;
 
     while (Globals::Running)
     {
         const auto cycleStart = std::chrono::steady_clock::now();
 
         RenderFrame sampledFrame{};
+        sampledFrame.FrameId = ++m_NextRenderFrameId;
+        sampledFrame.SampleStart = cycleStart;
         sampledFrame.MapStatus = m_MapStatus;
         SampleFrame(sampledFrame);
-
+        sampledFrame.SampleEnd = std::chrono::steady_clock::now();
+        const bool visDebugEnabled = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
+        const auto afterSample = sampledFrame.SampleEnd;
+        if (visDebugEnabled && afterSample - lastVisDebugOverlayBuild >= kVisDebugOverlayInterval)
         {
-            std::lock_guard lock(m_RenderFrameMutex);
-            std::swap(m_RenderFrame, sampledFrame);
+            BuildVisCheckDebugOverlaySnapshot();
+            lastVisDebugOverlayBuild = afterSample;
         }
+        else if (!visDebugEnabled)
+        {
+            ClearVisCheckDebugOverlaySnapshot();
+        }
+
+        PublishRenderFrame(std::move(sampledFrame));
 
         const auto sampleUs = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - cycleStart
@@ -5321,6 +5210,20 @@ void ESP::SamplerLoop()
         else
             std::this_thread::sleep_for(kOverrunYield);
     }
+}
+
+void ESP::PublishRenderFrame(RenderFrame&& frame)
+{
+    frame.PublishTime = std::chrono::steady_clock::now();
+    auto snapshot = std::make_shared<RenderFrame>(std::move(frame));
+    std::lock_guard lock(m_RenderFrameMutex);
+    m_RenderFrameSnapshot = std::move(snapshot);
+}
+
+ESP::RenderFramePtr ESP::LoadRenderFrameSnapshot() const
+{
+    std::lock_guard lock(m_RenderFrameMutex);
+    return m_RenderFrameSnapshot;
 }
 
 bool ESP::SampleFrame(RenderFrame& outFrame)
@@ -5466,6 +5369,40 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
 
     UpdateRoundEpoch(core.LocalPawn, IsAlive(local.Health, local.LifeState));
     const auto now = std::chrono::steady_clock::now();
+    EspFrameSyncModel::ColdBudget coldBudget{ std::chrono::microseconds(2500) };
+    const auto runColdTask = [&](std::chrono::steady_clock::time_point& lastRun,
+        const std::chrono::steady_clock::duration interval,
+        const std::chrono::microseconds estimatedCost,
+        auto&& task) -> bool
+    {
+        EspFrameSyncModel::ColdTaskState state{};
+        state.LastRun = lastRun;
+        state.Interval = interval;
+        state.EstimatedCost = estimatedCost;
+
+        const bool due =
+            state.LastRun.time_since_epoch().count() == 0 ||
+            interval <= std::chrono::steady_clock::duration::zero() ||
+            now - state.LastRun >= interval;
+        if (!due)
+            return false;
+
+        if (!EspFrameSyncModel::ShouldRunColdTask(state, coldBudget, now))
+        {
+            PerfDebug::RecordEspColdTaskSkip();
+            return false;
+        }
+
+        const auto coldStart = std::chrono::steady_clock::now();
+        task();
+        const auto actualCost = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - coldStart
+        );
+        EspFrameSyncModel::MarkColdTaskRun(state, coldBudget, now, actualCost);
+        lastRun = state.LastRun;
+        PerfDebug::RecordEspColdTask(static_cast<std::uint64_t>((std::max)(actualCost.count(), 0LL)));
+        return true;
+    };
 
     bool freezePeriod = false;
     bool freezeValid = false;
@@ -5675,8 +5612,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         Offsets::Schema::m_hPawn &&
         Offsets::Schema::m_pObserverServices &&
         Offsets::Schema::m_hObserverTarget;
+    const bool sampleSpectatorThisFrame = needSpectatorObserverSampling &&
+        runColdTask(
+            m_LastSpectatorSample,
+            std::chrono::milliseconds(100),
+            std::chrono::microseconds(900),
+            []() {}
+        );
 
-    if (needSpectatorObserverSampling)
+    if (sampleSpectatorThisFrame)
     {
         if (const auto observerServiceScatter = mem.CreateScatterHandle())
         {
@@ -5906,6 +5850,118 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         }
     }
 
+    const bool needAnyBoneData =
+        (config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) ||
+        needTriggerBoneSampling;
+    std::vector<SampledEntityData*> renderBoneEntities{};
+    if (needAnyBoneData)
+    {
+        renderBoneEntities.reserve(activeEntities.size());
+        for (SampledEntityData* entity : activeEntities)
+        {
+            if (!entity || !IsLikelyUserAddress(entity->BoneArray))
+                continue;
+            if (!IsAlive(entity->Health, entity->LifeState))
+                continue;
+            if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
+                continue;
+            renderBoneEntities.push_back(entity);
+        }
+    }
+
+    struct BoneBatchRead
+    {
+        std::uint64_t Pawn = 0;
+        std::uint64_t BoneArray = 0;
+        std::array<BoneDataRaw, kTrackedBones.size()> RawBones{};
+    };
+    std::vector<BoneBatchRead> batchedBoneReads{};
+    std::unordered_map<std::uint64_t, std::size_t> boneBatchByPawn{};
+    if (!renderBoneEntities.empty())
+    {
+        batchedBoneReads.reserve(renderBoneEntities.size());
+        boneBatchByPawn.reserve(renderBoneEntities.size());
+        for (const SampledEntityData* entity : renderBoneEntities)
+        {
+            if (!entity || !IsLikelyUserAddress(entity->Pawn) || !IsLikelyUserAddress(entity->BoneArray))
+                continue;
+            if (boneBatchByPawn.find(entity->Pawn) != boneBatchByPawn.end())
+                continue;
+
+            const std::size_t batchIndex = batchedBoneReads.size();
+            batchedBoneReads.push_back(BoneBatchRead{
+                entity->Pawn,
+                entity->BoneArray,
+                {}
+            });
+            boneBatchByPawn.emplace(entity->Pawn, batchIndex);
+        }
+
+        if (!batchedBoneReads.empty())
+        {
+            if (const auto boneScatter = mem.CreateScatterHandle())
+            {
+                for (BoneBatchRead& batch : batchedBoneReads)
+                {
+                    for (size_t boneIndex = 0; boneIndex < kTrackedBones.size(); ++boneIndex)
+                    {
+                        const uint64_t boneAddress = batch.BoneArray + static_cast<uint64_t>(kTrackedBones[boneIndex]) * Offsets::Layout::BoneStride;
+                        mem.AddScatterReadRequest(boneScatter, boneAddress, &batch.RawBones[boneIndex], sizeof(BoneDataRaw));
+                    }
+                }
+
+                mem.ExecuteReadScatter(boneScatter);
+                mem.CloseScatterHandle(boneScatter);
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
+    const auto applyRawBoneData = [&](const std::array<BoneDataRaw, kTrackedBones.size()>& rawBones, PlayerEspSnapshot& inOutSnapshot) -> bool
+    {
+        inOutSnapshot.Bones.clear();
+        inOutSnapshot.Bones.reserve(kTrackedBones.size());
+
+        bool hasHead = false;
+        std::array<PlayerBoxModel::ScreenBone, kTrackedBones.size()> screenBones{};
+
+        for (size_t boneSlot = 0; boneSlot < kTrackedBones.size(); ++boneSlot)
+        {
+            const int boneIndex = kTrackedBones[boneSlot];
+            BonePoint point{};
+            point.Index = boneIndex;
+            point.World = rawBones[boneSlot].Position;
+            point.OnScreen = sdk.WorldToScreen(point.World, point.Screen);
+
+            if (boneIndex == kHeadBone)
+            {
+                inOutSnapshot.HeadPosition = point.World;
+                hasHead = true;
+            }
+
+            screenBones[boneSlot] = PlayerBoxModel::ScreenBone{
+                boneIndex,
+                point.Screen,
+                point.OnScreen
+            };
+
+            inOutSnapshot.Bones.push_back(point);
+        }
+
+        if (!hasHead)
+            inOutSnapshot.HeadPosition = inOutSnapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
+        PlayerBoxModel::Box2D box{};
+        if (!PlayerBoxModel::BuildBoxFromBones(screenBones, Screen.x, Screen.y, box))
+            return false;
+
+        inOutSnapshot.BoxMin = box.Min.ToImVec2();
+        inOutSnapshot.BoxMax = box.Max.ToImVec2();
+        return true;
+    };
+
     outFrame.Players.clear();
     outFrame.Players.reserve(activeEntities.size());
 
@@ -5974,7 +6030,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         RadarInventoryData inventory{};
         if (!pawn)
         {
-            inventory.ActiveWeapon = ToGsiWeaponName(ReadWeaponName(pawn));
+            inventory.ActiveWeapon = WeaponEspModel::GsiNameFromName(ReadWeaponName(pawn));
             return inventory;
         }
 
@@ -5991,13 +6047,13 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 static_cast<std::uint64_t>(Offsets::Schema::m_Item) +
                 static_cast<std::uint64_t>(Offsets::Schema::m_iItemDefinitionIndex);
 
-            return mem.Read<int>(itemDefinitionIndexAddress);
+            return static_cast<int>(mem.Read<std::uint16_t>(itemDefinitionIndexAddress));
         };
 
         const std::uint64_t activeWeaponEntity = sdk.ResolveActiveWeaponFromPawn(pawn, core.EntityList);
         const int activeWeaponId = readWeaponIdFromEntity(activeWeaponEntity);
         if (activeWeaponId > 0)
-            inventory.ActiveWeapon = ToGsiWeaponName(WeaponIdToName(activeWeaponId));
+            inventory.ActiveWeapon = WeaponEspModel::GsiNameFromName(WeaponEspModel::NameFromDefinitionId(activeWeaponId));
 
         if (Offsets::Schema::m_hMyWeapons && Offsets::Schema::m_pWeaponServices)
         {
@@ -6016,7 +6072,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                     if (weaponId <= 0)
                         continue;
 
-                    const std::string weaponToken = ToGsiWeaponName(WeaponIdToName(weaponId));
+                    const std::string weaponToken = WeaponEspModel::GsiNameFromName(WeaponEspModel::NameFromDefinitionId(weaponId));
                     if (weaponId == 49 || weaponToken == "weapon_c4")
                     {
                         inventory.HasBomb = true;
@@ -6051,7 +6107,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         }
 
         if (inventory.ActiveWeapon.empty())
-            inventory.ActiveWeapon = ToGsiWeaponName(ReadWeaponName(pawn));
+            inventory.ActiveWeapon = WeaponEspModel::GsiNameFromName(ReadWeaponName(pawn));
 
         if (activeWeaponId == 49 || inventory.ActiveWeapon == "weapon_c4")
             inventory.HasBomb = true;
@@ -6074,20 +6130,20 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         if (!needRadarSampling || !pawn)
             return;
 
-        if (!runtimeCache.RadarActiveWeapon.empty() &&
-            runtimeCache.LastInventoryRead.time_since_epoch().count() != 0 &&
-            now - runtimeCache.LastInventoryRead < std::chrono::milliseconds(500))
-        {
-            return;
-        }
-
-        const RadarInventoryData inventory = buildInventory(pawn);
-        runtimeCache.RadarActiveWeapon = inventory.ActiveWeapon;
-        runtimeCache.RadarPrimaryWeapon = inventory.PrimaryWeapon;
-        runtimeCache.RadarSecondaryWeapon = inventory.SecondaryWeapon;
-        runtimeCache.RadarUtilities = inventory.Utilities;
-        runtimeCache.RadarHasBomb = inventory.HasBomb;
-        runtimeCache.LastInventoryRead = now;
+        runColdTask(
+            runtimeCache.LastInventoryRead,
+            std::chrono::milliseconds(500),
+            std::chrono::microseconds(700),
+            [&]()
+            {
+                const RadarInventoryData inventory = buildInventory(pawn);
+                runtimeCache.RadarActiveWeapon = inventory.ActiveWeapon;
+                runtimeCache.RadarPrimaryWeapon = inventory.PrimaryWeapon;
+                runtimeCache.RadarSecondaryWeapon = inventory.SecondaryWeapon;
+                runtimeCache.RadarUtilities = inventory.Utilities;
+                runtimeCache.RadarHasBomb = inventory.HasBomb;
+            }
+        );
     };
 
     if (needRadarSampling)
@@ -6100,45 +6156,64 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         outFrame.Radar.CanBuy = false;
 
         constexpr auto kScorePollInterval = std::chrono::seconds(1);
-        if (m_LastRadarScoreRead.time_since_epoch().count() == 0 || now - m_LastRadarScoreRead >= kScorePollInterval)
-        {
-            int nextCtScore = m_RadarCtScore;
-            int nextTScore = m_RadarTScore;
-            if (Offsets::Schema::m_iScore && Offsets::Schema::m_szTeamname)
+        runColdTask(
+            m_LastRadarScoreRead,
+            kScorePollInterval,
+            std::chrono::microseconds(1000),
+            [&]()
             {
-                for (std::uint32_t index = 1; index <= 255; ++index)
+                int nextCtScore = m_RadarCtScore;
+                int nextTScore = m_RadarTScore;
+                if (Offsets::Schema::m_iScore && Offsets::Schema::m_szTeamname)
                 {
-                    const std::uint64_t entity = ResolveEntityIndexPointer(core.EntityList, index);
-                    if (!IsLikelyUserAddress(entity))
-                        continue;
+                    for (std::uint32_t index = 1; index <= 255; ++index)
+                    {
+                        const std::uint64_t entity = ResolveEntityIndexPointer(core.EntityList, index);
+                        if (!IsLikelyUserAddress(entity))
+                            continue;
 
-                    char teamNameBuffer[64]{};
-                    if (!mem.Read(entity + Offsets::Schema::m_szTeamname, teamNameBuffer, sizeof(teamNameBuffer)))
-                        continue;
+                        char teamNameBuffer[64]{};
+                        if (!mem.Read(entity + Offsets::Schema::m_szTeamname, teamNameBuffer, sizeof(teamNameBuffer)))
+                            continue;
 
-                    const std::string teamName = ToLowerAscii(teamNameBuffer);
-                    const int score = mem.Read<int>(entity + Offsets::Schema::m_iScore);
-                    if (score < 0 || score > 200)
-                        continue;
+                        const std::string teamName = ToLowerAscii(teamNameBuffer);
+                        const int score = mem.Read<int>(entity + Offsets::Schema::m_iScore);
+                        if (score < 0 || score > 200)
+                            continue;
 
-                    if (teamName.find("terrorist") != std::string::npos)
-                        nextTScore = score;
-                    else if (teamName.find("counter") != std::string::npos || teamName == "ct")
-                        nextCtScore = score;
+                        if (teamName.find("terrorist") != std::string::npos)
+                            nextTScore = score;
+                        else if (teamName.find("counter") != std::string::npos || teamName == "ct")
+                            nextCtScore = score;
+                    }
                 }
-            }
 
-            m_RadarCtScore = nextCtScore;
-            m_RadarTScore = nextTScore;
-            m_LastRadarScoreRead = now;
-        }
+                m_RadarCtScore = nextCtScore;
+                m_RadarTScore = nextTScore;
+            }
+        );
 
         outFrame.Radar.CtScore = m_RadarCtScore;
         outFrame.Radar.TScore = m_RadarTScore;
     }
 
     if (needGrenadeEntitySampling)
-        BuildGrenadeEntitySnapshots(outFrame, local.Origin);
+    {
+        const bool sampledGrenades = runColdTask(
+            m_LastGrenadeEntityFrameTick,
+            std::chrono::milliseconds(16),
+            std::chrono::microseconds(800),
+            [&]()
+            {
+                BuildGrenadeEntitySnapshots(outFrame, local.Origin);
+            }
+        );
+        if (!sampledGrenades)
+        {
+            outFrame.GrenadeEntities = m_GrenadeEntityCache;
+            outFrame.Radar.GrenadeEntities = outFrame.GrenadeEntities;
+        }
+    }
 
     ControllerIdentityCache& localIdentityCache = m_ControllerIdentityCache[core.LocalController];
     if (needPlayerNames && localIdentityCache.RoundEpoch != m_RoundEpoch)
@@ -6154,8 +6229,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         (localIdentityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
             now - localIdentityCache.LastMoneyRead >= kMoneyPollInterval))
     {
-        localIdentityCache.Money = local.Money;
-        localIdentityCache.LastMoneyRead = now;
+        runColdTask(
+            localIdentityCache.LastMoneyRead,
+            kMoneyPollInterval,
+            std::chrono::microseconds(200),
+            [&]()
+            {
+                localIdentityCache.Money = local.Money;
+            }
+        );
     }
 
     if (IsLikelyUserAddress(core.LocalPawn))
@@ -6175,8 +6257,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 localRuntimeCache.LastWeaponRead.time_since_epoch().count() == 0 ||
                 now - localRuntimeCache.LastWeaponRead >= std::chrono::milliseconds(500)))
         {
-            localRuntimeCache.WeaponName = ReadWeaponName(core.LocalPawn);
-            localRuntimeCache.LastWeaponRead = now;
+            runColdTask(
+                localRuntimeCache.LastWeaponRead,
+                std::chrono::milliseconds(500),
+                std::chrono::microseconds(500),
+                [&]()
+                {
+                    localRuntimeCache.WeaponName = ReadWeaponName(core.LocalPawn);
+                }
+            );
         }
         refreshRadarInventory(core.LocalPawn, localRuntimeCache);
     }
@@ -6199,8 +6288,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             (identityCache.LastMoneyRead.time_since_epoch().count() == 0 ||
                 now - identityCache.LastMoneyRead >= kMoneyPollInterval))
         {
-            identityCache.Money = ReadMoney(entity->Controller);
-            identityCache.LastMoneyRead = now;
+            runColdTask(
+                identityCache.LastMoneyRead,
+                kMoneyPollInterval,
+                std::chrono::microseconds(300),
+                [&]()
+                {
+                    identityCache.Money = ReadMoney(entity->Controller);
+                }
+            );
         }
 
         PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
@@ -6209,8 +6305,15 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
                 runtimeCache.LastWeaponRead.time_since_epoch().count() == 0 ||
                 now - runtimeCache.LastWeaponRead >= std::chrono::milliseconds(500)))
         {
-            runtimeCache.WeaponName = ReadWeaponName(entity->Pawn);
-            runtimeCache.LastWeaponRead = now;
+            runColdTask(
+                runtimeCache.LastWeaponRead,
+                std::chrono::milliseconds(500),
+                std::chrono::microseconds(500),
+                [&]()
+                {
+                    runtimeCache.WeaponName = ReadWeaponName(entity->Pawn);
+                }
+            );
         }
         refreshRadarInventory(entity->Pawn, runtimeCache);
 
@@ -6240,7 +6343,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             radarItem.Position = entityOrigin;
             radarItem.EyeAngles = entity->EyeAngles;
             radarItem.Name = identityCache.Name;
-            radarItem.WeaponName = runtimeCache.RadarActiveWeapon.empty() ? ToGsiWeaponName(runtimeCache.WeaponName) : runtimeCache.RadarActiveWeapon;
+            radarItem.WeaponName = runtimeCache.RadarActiveWeapon.empty() ? WeaponEspModel::GsiNameFromName(runtimeCache.WeaponName) : runtimeCache.RadarActiveWeapon;
             radarItem.PrimaryWeaponName = runtimeCache.RadarPrimaryWeapon;
             radarItem.SecondaryWeaponName = runtimeCache.RadarSecondaryWeapon;
             radarItem.UtilityNames = runtimeCache.RadarUtilities;
@@ -6290,11 +6393,18 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         snapshot.Money = identityCache.Money;
         snapshot.ShowMoney = moneyWindowActive;
         snapshot.WeaponName = runtimeCache.WeaponName;
+        snapshot.WeaponIconToken = WeaponEspModel::IconTokenFromName(snapshot.WeaponName);
 
         bool hasBoxData = false;
-        const bool needBoneData = (config.Visuals.Bones || config.Aim.TriggerHitboxDebug || needTriggerBoneSampling) && snapshot.BoneArray;
+        const bool needBoneData =
+            ((config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) || needTriggerBoneSampling) &&
+            snapshot.BoneArray;
         if (needBoneData)
-            hasBoxData = BuildBoneData(snapshot.BoneArray, snapshot);
+        {
+            const auto batchIt = boneBatchByPawn.find(snapshot.Pawn);
+            if (batchIt != boneBatchByPawn.end() && batchIt->second < batchedBoneReads.size())
+                hasBoxData = applyRawBoneData(batchedBoneReads[batchIt->second].RawBones, snapshot);
+        }
 
         if (!hasBoxData)
         {
@@ -6348,7 +6458,7 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         localRadar.Position = local.Origin;
         localRadar.EyeAngles = localViewAngles;
         localRadar.Name = localIdentityCache.Name;
-        localRadar.WeaponName = localRuntimeCache.RadarActiveWeapon.empty() ? ToGsiWeaponName(localRuntimeCache.WeaponName) : localRuntimeCache.RadarActiveWeapon;
+        localRadar.WeaponName = localRuntimeCache.RadarActiveWeapon.empty() ? WeaponEspModel::GsiNameFromName(localRuntimeCache.WeaponName) : localRuntimeCache.RadarActiveWeapon;
         localRadar.PrimaryWeaponName = localRuntimeCache.RadarPrimaryWeapon;
         localRadar.SecondaryWeaponName = localRuntimeCache.RadarSecondaryWeapon;
         localRadar.UtilityNames = localRuntimeCache.RadarUtilities;
@@ -6381,12 +6491,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             ++it;
     }
 
-    outFrame.SpectatorList = {};
-    if (config.Visuals.SpectatorList &&
-        IsLikelyUserAddress(core.LocalController) &&
-        Offsets::Schema::m_hPawn &&
-        Offsets::Schema::m_pObserverServices &&
-        Offsets::Schema::m_hObserverTarget)
+    outFrame.SpectatorList = config.Visuals.SpectatorList ? m_SpectatorListCache : SpectatorListSnapshot{};
+    if (sampleSpectatorThisFrame)
     {
         SpectatorListSnapshot spectatorSnapshot{};
         spectatorSnapshot.Valid = true;
@@ -6508,8 +6614,8 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             }
         }
 
-        if (!spectatorSnapshot.WatcherNames.empty())
-            outFrame.SpectatorList = std::move(spectatorSnapshot);
+        m_SpectatorListCache = spectatorSnapshot.WatcherNames.empty() ? SpectatorListSnapshot{} : std::move(spectatorSnapshot);
+        outFrame.SpectatorList = m_SpectatorListCache;
     }
 
     if (config.Visuals.C4 || needRadarSampling)
@@ -6573,23 +6679,49 @@ void ESP::Render(ImDrawList* drawList)
     const bool renderEsp = config.Visuals.Enabled;
     const bool renderGrenadeHelper = config.Visuals.GrenadeHelper;
     const bool renderVisDebug = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
-    if (!renderEsp && !renderGrenadeHelper && !renderVisDebug)
+    const bool renderSoundRipples = SoundEspModel::ShouldRenderSoundRipples(
+        config.Visuals.SoundEsp,
+        config.Visuals.Enabled,
+        config.Visuals.Legit
+    );
+    if (!renderEsp && !renderGrenadeHelper && !renderVisDebug && !renderSoundRipples)
     {
         publishPerf();
         return;
     }
 
-    if (renderVisDebug && (!config.DebugEnabled || !config.DebugVisCheck))
-        BuildVisCheckDebugOverlaySnapshot();
+    if (renderSoundRipples)
+        soundEsp.EnsureStarted();
 
-    RenderFrame frame{};
+    const RenderFramePtr frame = LoadRenderFrameSnapshot();
+    if (!frame)
     {
-        std::lock_guard lock(m_RenderFrameMutex);
-        frame = m_RenderFrame;
+        publishPerf();
+        return;
     }
 
-    resolvedControllers = frame.ResolvedControllers;
-    drawnPlayers = static_cast<std::uint32_t>(frame.Players.size());
+    const EspFrameSyncModel::FrameTiming timing{
+        frame->FrameId,
+        frame->SampleStart,
+        frame->SampleEnd,
+        frame->PublishTime
+    };
+    const EspFrameSyncModel::FrameTimingStats timingStats =
+        EspFrameSyncModel::EvaluateFrameTiming(timing, std::chrono::steady_clock::now());
+    const EspFrameSyncModel::StaleFrameUpdate staleUpdate =
+        EspFrameSyncModel::UpdateStaleFrameTracker(m_RenderStaleTracker, frame->FrameId);
+    PerfDebug::RecordEspFrameTiming(
+        timingStats.FrameAgeUs,
+        timingStats.PublishLatencyUs,
+        staleUpdate.ReusedPreviousFrame,
+        staleUpdate.ConsecutiveReuseCount
+    );
+
+    resolvedControllers = frame->ResolvedControllers;
+    drawnPlayers = static_cast<std::uint32_t>(frame->Players.size());
+    if (!renderSoundRipples)
+        soundEsp.EnsureStarted();
+    const SoundFrameSnapshot soundFrame = soundEsp.GetFrameSnapshot();
 
     if (renderEsp)
     {
@@ -6597,7 +6729,7 @@ void ESP::Render(ImDrawList* drawList)
         float leftHudY = config.Visuals.Watermark ? 34.0f : 12.0f;
 
     const ImVec2 statusPos(12.0f, leftHudY);
-    const char* mapStatus = frame.MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态：（等待中）") : frame.MapStatus.c_str();
+    const char* mapStatus = frame->MapStatus.empty() ? Localization::Pick("Map Status: (Waiting)", "地图状态：（等待中）") : frame->MapStatus.c_str();
     drawList->AddText(statusPos, IM_COL32(210, 210, 210, 255), mapStatus);
     leftHudY += ImGui::GetFontSize() + 2.0f;
 
@@ -6732,34 +6864,34 @@ void ESP::Render(ImDrawList* drawList)
         leftHudY += ImGui::GetFontSize() + 2.0f;
     }
 
-        for (const PlayerEspSnapshot& player : frame.Players)
+        for (const PlayerEspSnapshot& player : frame->Players)
         {
-            if (!SoundEspModel::ShouldRenderPlayerInfo(config.Visuals.Legit, soundEsp.HasRecentSound(player.Pawn), player.IsVisible))
+            const bool hasRecentSound = soundFrame.RecentSoundPawns.find(player.Pawn) != soundFrame.RecentSoundPawns.end();
+            if (!SoundEspModel::ShouldRenderPlayerInfo(config.Visuals.Legit, hasRecentSound, player.IsVisible))
                 continue;
             RenderPlayer(drawList, player);
         }
 
         if (config.Visuals.C4)
-            RenderC4(drawList, frame.C4);
+            RenderC4(drawList, frame->C4);
 
         if (config.Visuals.GrenadeEntityEsp)
         {
-            for (const GrenadeEntitySnapshot& grenade : frame.GrenadeEntities)
+            for (const GrenadeEntitySnapshot& grenade : frame->GrenadeEntities)
                 RenderGrenadeEntityEsp(drawList, grenade);
         }
 
         if (config.Visuals.SpectatorList)
-            RenderSpectatorList(drawList, frame.SpectatorList);
+            RenderSpectatorList(drawList, frame->SpectatorList);
     }
 
     if (renderVisDebug)
         RenderVisCheckDebug(drawList);
 
-    soundEsp.EnsureStarted();
-    soundEsp.RenderRipples(drawList, soundEsp.GetRipplesSnapshot());
+    soundEsp.RenderRipples(drawList, soundFrame.Ripples);
 
     if (renderGrenadeHelper)
-        RenderGrenadeHelper(drawList, frame.GrenadeHelper);
+        RenderGrenadeHelper(drawList, frame->GrenadeHelper);
 
     publishPerf();
 }

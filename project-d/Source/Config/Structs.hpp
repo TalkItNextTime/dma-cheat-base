@@ -330,6 +330,7 @@ namespace Structs
     {
         bool Enabled = false;
         bool VSync = false;
+        int OverlayMaxFps = 165;
         bool TeamCheck = false;
         bool VisibleCheck = false;
         bool VisCheckDebug = false;

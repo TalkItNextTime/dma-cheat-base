@@ -10,9 +10,12 @@ C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Dma\DMA.cpp;C:\Users
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Aimbot\Aimbot.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Aimbot.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Aimbot\AutowallEngine.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\AutowallEngine.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\C4CardModel.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\C4CardModel.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\EspFrameSyncModel.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\EspFrameSyncModel.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\ESP.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\ESP.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\PlayerBoxModel.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\PlayerBoxModel.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\SoundEsp.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\SoundEsp.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\VisWorldDebugRender.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\VisWorldDebugRender.obj
+C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\ESP\WeaponEspModel.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\WeaponEspModel.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Radar\ObservRadarProtocol.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\ObservRadarProtocol.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\Source\Features\Radar\Radar.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Radar.obj
 C:\Users\Admin\source\repos\dma-cheat-base\project-d\VisCheckCS2\Parser.cpp;C:\Users\Admin\source\repos\dma-cheat-base\Build\obj\project-d\Debug\Parser.obj

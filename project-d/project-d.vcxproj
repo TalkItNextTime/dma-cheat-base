@@ -135,11 +135,14 @@
     <ClInclude Include="Source\Config\Config.hpp" />
     <ClInclude Include="Source\Config\Structs.hpp" />
     <ClInclude Include="Source\Features\ESP\C4CardModel.hpp" />
+    <ClInclude Include="Source\Features\ESP\EspFrameSyncModel.hpp" />
     <ClInclude Include="Source\Features\ESP\ESP.hpp" />
     <ClInclude Include="Source\Features\ESP\GrenadeEntityEspModel.hpp" />
+    <ClInclude Include="Source\Features\ESP\PlayerBoxModel.hpp" />
     <ClInclude Include="Source\Features\ESP\SoundEsp.hpp" />
     <ClInclude Include="Source\Features\ESP\SoundEspModel.hpp" />
     <ClInclude Include="Source\Features\ESP\VisWorldDebugRender.hpp" />
+    <ClInclude Include="Source\Features\ESP\WeaponEspModel.hpp" />
     <ClInclude Include="Source\Features\Features.hpp" />
     <ClInclude Include="Source\Features\Radar\ObservRadarProtocol.hpp" />
     <ClInclude Include="Source\Misc\Animation\Animation.hpp" />
@@ -298,9 +301,18 @@
     <ClCompile Include="Source\Features\ESP\C4CardModel.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Source\Features\ESP\EspFrameSyncModel.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Source\Features\ESP\ESP.cpp" />
+    <ClCompile Include="Source\Features\ESP\PlayerBoxModel.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Source\Features\ESP\SoundEsp.cpp" />
     <ClCompile Include="Source\Features\ESP\VisWorldDebugRender.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="Source\Features\ESP\WeaponEspModel.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Features\Radar\ObservRadarProtocol.cpp" />

@@ -211,6 +211,8 @@ namespace Config
             j["Kmbox"]["Uuid"] = Kmbox.Uuid;
 
             j["Visuals"]["Enabled"] = Visuals.Enabled;
+            j["Visuals"]["VSync"] = Visuals.VSync;
+            j["Visuals"]["OverlayMaxFps"] = Visuals.OverlayMaxFps;
             j["Visuals"]["TeamCheck"] = Visuals.TeamCheck;
             j["Visuals"]["VisibleCheck"] = Visuals.VisibleCheck;
             j["Visuals"]["VisCheckDebug"] = Visuals.VisCheckDebug;
@@ -679,6 +681,8 @@ namespace Config
                 j["Aim"]["TriggerSpecialProfiles"]["R8Revolver"]["BoneMask"] = Structs::AimAllBoneMask;
 
                 j["Visuals"]["Enabled"] = false;
+                j["Visuals"]["VSync"] = false;
+                j["Visuals"]["OverlayMaxFps"] = 165;
                 j["Visuals"]["TeamCheck"] = false;
                 j["Visuals"]["VisibleCheck"] = false;
                 j["Visuals"]["VisCheckDebug"] = false;
@@ -1258,6 +1262,8 @@ namespace Config
                         else if constexpr (std::is_same_v<T, Structs::VisualsConfig>)
                         {
                             if (key == "Enabled") configSection.Enabled = value.get<bool>();
+                            else if (key == "VSync") configSection.VSync = value.get<bool>();
+                            else if (key == "OverlayMaxFps") configSection.OverlayMaxFps = value.get<int>();
                             else if (key == "TeamCheck") configSection.TeamCheck = value.get<bool>();
                             else if (key == "VisibleCheck") configSection.VisibleCheck = value.get<bool>();
                             else if (key == "VisCheckDebug") configSection.VisCheckDebug = value.get<bool>();

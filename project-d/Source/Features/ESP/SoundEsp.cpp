@@ -3,6 +3,8 @@
 
 #include "SoundEsp.hpp"
 
+#include <cmath>
+
 namespace
 {
     constexpr auto kPollInterval = std::chrono::milliseconds(12);
@@ -42,10 +44,17 @@ void SoundEsp::Shutdown()
 
 std::vector<SoundRippleSnapshot> SoundEsp::GetRipplesSnapshot()
 {
+    return GetFrameSnapshot().Ripples;
+}
+
+SoundFrameSnapshot SoundEsp::GetFrameSnapshot()
+{
     const auto now = std::chrono::steady_clock::now();
-    std::vector<SoundRippleSnapshot> snapshots{};
+    SoundFrameSnapshot snapshotFrame{};
 
     std::lock_guard lock(m_Mutex);
+    snapshotFrame.Ripples.reserve(m_Ripples.size());
+    snapshotFrame.RecentSoundPawns.reserve(m_Ripples.size());
     for (auto it = m_Ripples.begin(); it != m_Ripples.end();)
     {
         const float age = std::chrono::duration<float>(now - it->CreatedAt).count();
@@ -63,11 +72,12 @@ std::vector<SoundRippleSnapshot> SoundEsp::GetRipplesSnapshot()
         snapshot.Volume = it->Volume;
         snapshot.AgeSeconds = age;
         snapshot.Style = it->Style;
-        snapshots.push_back(std::move(snapshot));
+        snapshotFrame.RecentSoundPawns.insert(snapshot.Pawn);
+        snapshotFrame.Ripples.push_back(std::move(snapshot));
         ++it;
     }
 
-    return snapshots;
+    return snapshotFrame;
 }
 
 bool SoundEsp::HasRecentSound(const std::uint64_t pawn) const
@@ -130,7 +140,7 @@ void SoundEsp::PollLoop()
 {
     while (Globals::Running)
     {
-        if (config.Visuals.SoundEsp)
+        if (SoundEspModel::ShouldPollPawnSoundsForVisualState(config.Visuals.SoundEsp, config.Visuals.Legit))
             PollPawnEmitSoundTimes();
 
         std::this_thread::sleep_for(kPollInterval);
@@ -155,7 +165,24 @@ void SoundEsp::PollPawnEmitSoundTimes()
         return;
     }
 
-    const Vector3 localOrigin = mem.Read<Vector3>(core.LocalPawn + Offsets::Schema::m_vOldOrigin);
+    std::uint64_t observerTargetPawn = 0;
+    if (Offsets::Schema::m_pObserverServices && Offsets::Schema::m_hObserverTarget)
+    {
+        const std::uint64_t observerServices = mem.Read<std::uint64_t>(core.LocalPawn + Offsets::Schema::m_pObserverServices);
+        if (IsLikelyUserAddress(observerServices))
+        {
+            const std::uint32_t observerTargetHandle = mem.Read<std::uint32_t>(observerServices + Offsets::Schema::m_hObserverTarget);
+            if (observerTargetHandle & Offsets::EntityList::HandleMask)
+            {
+                const std::uint64_t resolvedObserverTargetPawn = sdk.ResolveEntityFromHandle(observerTargetHandle, core.EntityList);
+                if (IsLikelyUserAddress(resolvedObserverTargetPawn))
+                    observerTargetPawn = resolvedObserverTargetPawn;
+            }
+        }
+    }
+
+    const std::uint64_t referencePawn = SoundEspModel::ResolveSoundReferencePawn(core.LocalPawn, observerTargetPawn);
+    const Vector3 referenceOrigin = mem.Read<Vector3>(referencePawn + Offsets::Schema::m_vOldOrigin);
     const auto now = std::chrono::steady_clock::now();
 
     for (int slot = 1; slot <= kMaxControllerSlots; ++slot)
@@ -165,7 +192,7 @@ void SoundEsp::PollPawnEmitSoundTimes()
             continue;
 
         const std::uint64_t pawn = sdk.ResolvePawnFromController(controller);
-        if (!IsLikelyUserAddress(pawn) || pawn == core.LocalPawn)
+        if (!IsLikelyUserAddress(pawn) || pawn == referencePawn)
             continue;
 
         int health = 0;
@@ -178,7 +205,7 @@ void SoundEsp::PollPawnEmitSoundTimes()
             continue;
 
         const Vector3 origin = mem.Read<Vector3>(pawn + Offsets::Schema::m_vOldOrigin);
-        const float distance = Distance3D(localOrigin, origin);
+        const float distance = Distance3D(referenceOrigin, origin);
         if (!SoundEspModel::ShouldAcceptDistance(distance, kMaxSoundDistance))
             continue;
 

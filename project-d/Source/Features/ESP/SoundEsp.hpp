@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Math/Vector.hpp"
@@ -24,6 +25,12 @@ struct SoundRippleSnapshot
     SoundEspModel::RippleStyle Style{};
 };
 
+struct SoundFrameSnapshot
+{
+    std::vector<SoundRippleSnapshot> Ripples{};
+    std::unordered_set<std::uint64_t> RecentSoundPawns{};
+};
+
 class SoundEsp
 {
 public:
@@ -32,6 +39,7 @@ public:
     void EnsureStarted();
     void Shutdown();
     std::vector<SoundRippleSnapshot> GetRipplesSnapshot();
+    SoundFrameSnapshot GetFrameSnapshot();
     bool HasRecentSound(std::uint64_t pawn) const;
     void RenderRipples(ImDrawList* drawList, const std::vector<SoundRippleSnapshot>& ripples) const;
 

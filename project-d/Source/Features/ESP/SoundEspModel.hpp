@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -88,7 +89,23 @@ namespace SoundEspModel
 
     inline float GroundRippleRadius(const RippleStyle& style, const float ageSeconds)
     {
-        return 5.0f + (std::max)(0.0f, ageSeconds) * (std::max)(0.0f, style.SpeedPxPerSecond);
+        constexpr float kReducedRippleRadiusScale = 0.55f;
+        return 5.0f + (std::max)(0.0f, ageSeconds) * (std::max)(0.0f, style.SpeedPxPerSecond) * kReducedRippleRadiusScale;
+    }
+
+    inline bool ShouldPollPawnSoundsForVisualState(const bool soundEspEnabled, const bool legitMode)
+    {
+        return soundEspEnabled || legitMode;
+    }
+
+    inline bool ShouldRenderSoundRipples(const bool soundEspEnabled, const bool, const bool)
+    {
+        return soundEspEnabled;
+    }
+
+    inline std::uint64_t ResolveSoundReferencePawn(const std::uint64_t localPawn, const std::uint64_t observerTargetPawn)
+    {
+        return observerTargetPawn ? observerTargetPawn : localPawn;
     }
 
     inline bool ShouldRenderPlayerInfo(const bool legitMode, const bool pawnHasActiveSoundRipple, const bool pawnIsVisible)

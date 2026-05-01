@@ -38,6 +38,20 @@ namespace PerfDebug
         std::atomic<std::uint64_t> EspSampleFrames{ 0 };
         std::atomic<std::uint64_t> EspSampleUsSum{ 0 };
         std::atomic<std::uint64_t> EspSampleUsMax{ 0 };
+        std::atomic<std::uint64_t> EspFrameAgeSamples{ 0 };
+        std::atomic<std::uint64_t> EspFrameAgeUsSum{ 0 };
+        std::atomic<std::uint64_t> EspFrameAgeUsMax{ 0 };
+        std::atomic<std::uint64_t> EspSamplePublishUsSum{ 0 };
+        std::atomic<std::uint64_t> EspSamplePublishUsMax{ 0 };
+        std::atomic<std::uint64_t> EspStaleFrameReuses{ 0 };
+        std::atomic<std::uint64_t> EspStaleFrameReuseMax{ 0 };
+        std::atomic<std::uint64_t> EspColdTaskRuns{ 0 };
+        std::atomic<std::uint64_t> EspColdTaskUsSum{ 0 };
+        std::atomic<std::uint64_t> EspColdTaskUsMax{ 0 };
+        std::atomic<std::uint64_t> EspColdTaskSkips{ 0 };
+        std::atomic<std::uint64_t> OverlayFrameCapWaits{ 0 };
+        std::atomic<std::uint64_t> OverlayFrameCapWaitUsSum{ 0 };
+        std::atomic<std::uint64_t> OverlayFrameCapWaitUsMax{ 0 };
 
         std::atomic<std::uint64_t> VisChecks{ 0 };
         std::atomic<std::uint64_t> VisHits{ 0 };
@@ -146,6 +160,56 @@ namespace PerfDebug
         Counters.EspSampleFrames.fetch_add(1, std::memory_order_relaxed);
         Counters.EspSampleUsSum.fetch_add(frameUs, std::memory_order_relaxed);
         detail::UpdateMax(Counters.EspSampleUsMax, frameUs);
+    }
+
+    inline void RecordEspFrameTiming(
+        const std::uint64_t frameAgeUs,
+        const std::uint64_t sampleToPublishUs,
+        const bool reusedPreviousFrame,
+        const std::uint64_t consecutiveReuseCount)
+    {
+        if (!IsPerfCollectionEnabled())
+            return;
+
+        Counters.EspFrameAgeSamples.fetch_add(1, std::memory_order_relaxed);
+        Counters.EspFrameAgeUsSum.fetch_add(frameAgeUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.EspFrameAgeUsMax, frameAgeUs);
+        Counters.EspSamplePublishUsSum.fetch_add(sampleToPublishUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.EspSamplePublishUsMax, sampleToPublishUs);
+
+        if (reusedPreviousFrame)
+        {
+            Counters.EspStaleFrameReuses.fetch_add(1, std::memory_order_relaxed);
+            detail::UpdateMax(Counters.EspStaleFrameReuseMax, consecutiveReuseCount);
+        }
+    }
+
+    inline void RecordEspColdTask(const std::uint64_t durationUs)
+    {
+        if (!IsPerfCollectionEnabled())
+            return;
+
+        Counters.EspColdTaskRuns.fetch_add(1, std::memory_order_relaxed);
+        Counters.EspColdTaskUsSum.fetch_add(durationUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.EspColdTaskUsMax, durationUs);
+    }
+
+    inline void RecordEspColdTaskSkip()
+    {
+        if (!IsPerfCollectionEnabled())
+            return;
+
+        Counters.EspColdTaskSkips.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    inline void RecordOverlayFrameCapWait(const std::uint64_t waitUs)
+    {
+        if (!IsPerfCollectionEnabled())
+            return;
+
+        Counters.OverlayFrameCapWaits.fetch_add(1, std::memory_order_relaxed);
+        Counters.OverlayFrameCapWaitUsSum.fetch_add(waitUs, std::memory_order_relaxed);
+        detail::UpdateMax(Counters.OverlayFrameCapWaitUsMax, waitUs);
     }
 
     inline void RecordVisCheck(const std::uint64_t durationUs, const bool isVisible)
@@ -426,6 +490,20 @@ namespace PerfDebug
         const std::uint64_t espSampleFrames = Counters.EspSampleFrames.exchange(0, std::memory_order_relaxed);
         const std::uint64_t espSampleUsSum = Counters.EspSampleUsSum.exchange(0, std::memory_order_relaxed);
         const std::uint64_t espSampleUsMax = Counters.EspSampleUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espFrameAgeSamples = Counters.EspFrameAgeSamples.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espFrameAgeUsSum = Counters.EspFrameAgeUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espFrameAgeUsMax = Counters.EspFrameAgeUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espSamplePublishUsSum = Counters.EspSamplePublishUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espSamplePublishUsMax = Counters.EspSamplePublishUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espStaleFrameReuses = Counters.EspStaleFrameReuses.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espStaleFrameReuseMax = Counters.EspStaleFrameReuseMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espColdTaskRuns = Counters.EspColdTaskRuns.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espColdTaskUsSum = Counters.EspColdTaskUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espColdTaskUsMax = Counters.EspColdTaskUsMax.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t espColdTaskSkips = Counters.EspColdTaskSkips.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t overlayFrameCapWaits = Counters.OverlayFrameCapWaits.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t overlayFrameCapWaitUsSum = Counters.OverlayFrameCapWaitUsSum.exchange(0, std::memory_order_relaxed);
+        const std::uint64_t overlayFrameCapWaitUsMax = Counters.OverlayFrameCapWaitUsMax.exchange(0, std::memory_order_relaxed);
 
         const std::uint64_t visChecks = Counters.VisChecks.exchange(0, std::memory_order_relaxed);
         const std::uint64_t visHits = Counters.VisHits.exchange(0, std::memory_order_relaxed);
@@ -470,7 +548,9 @@ namespace PerfDebug
         const std::uint64_t flickAutowallRequirementMilliSum = Counters.FlickAutowallRequirementMilliSum.exchange(0, std::memory_order_relaxed);
         const std::uint64_t flickAutowallRequirementMilliMax = Counters.FlickAutowallRequirementMilliMax.exchange(0, std::memory_order_relaxed);
 
-        if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && visChecks == 0 && mapPolls == 0 &&
+        if (overlayFrames == 0 && espFrames == 0 && espSampleFrames == 0 && espFrameAgeSamples == 0 &&
+            overlayFrameCapWaits == 0 && espColdTaskRuns == 0 && espColdTaskSkips == 0 &&
+            visChecks == 0 && mapPolls == 0 &&
             triggerHotkeyDowns == 0 && triggerTimeoutChecks == 0 && triggerScans == 0 && triggerFires == 0 &&
             triggerSnapshotFrames == 0 && triggerFallbackScans == 0 && triggerPreFireGateHits == 0 &&
             flickAutowallChecks == 0)
@@ -486,6 +566,14 @@ namespace PerfDebug
         const double playersPerFrame = espFrames ? static_cast<double>(espPlayersDrawn) / static_cast<double>(espFrames) : 0.0;
         const double sampleAvgMs = espSampleFrames ? (static_cast<double>(espSampleUsSum) / static_cast<double>(espSampleFrames)) / 1000.0 : 0.0;
         const double sampleMaxMs = static_cast<double>(espSampleUsMax) / 1000.0;
+        const double frameAgeAvgMs = espFrameAgeSamples ? (static_cast<double>(espFrameAgeUsSum) / static_cast<double>(espFrameAgeSamples)) / 1000.0 : 0.0;
+        const double frameAgeMaxMs = static_cast<double>(espFrameAgeUsMax) / 1000.0;
+        const double samplePublishAvgMs = espFrameAgeSamples ? (static_cast<double>(espSamplePublishUsSum) / static_cast<double>(espFrameAgeSamples)) / 1000.0 : 0.0;
+        const double samplePublishMaxMs = static_cast<double>(espSamplePublishUsMax) / 1000.0;
+        const double coldTaskAvgMs = espColdTaskRuns ? (static_cast<double>(espColdTaskUsSum) / static_cast<double>(espColdTaskRuns)) / 1000.0 : 0.0;
+        const double coldTaskMaxMs = static_cast<double>(espColdTaskUsMax) / 1000.0;
+        const double overlayWaitAvgMs = overlayFrameCapWaits ? (static_cast<double>(overlayFrameCapWaitUsSum) / static_cast<double>(overlayFrameCapWaits)) / 1000.0 : 0.0;
+        const double overlayWaitMaxMs = static_cast<double>(overlayFrameCapWaitUsMax) / 1000.0;
 
         const double visAvgMs = visChecks ? (static_cast<double>(visCheckUsSum) / static_cast<double>(visChecks)) / 1000.0 : 0.0;
         const double visMaxMs = static_cast<double>(visCheckUsMax) / 1000.0;
@@ -520,16 +608,28 @@ namespace PerfDebug
         if (logPerf)
         {
             LOG_INFO(
-                "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
+                "[perf dbg] overlay fps={:.1f} frame={:.2f}/{:.2f}ms cap_wait={:.2f}/{:.2f}ms | esp draw={:.2f}/{:.2f}ms ctr={:.1f} draw={:.1f} | esp sample={:.2f}/{:.2f}ms age={:.2f}/{:.2f}ms pub={:.2f}/{:.2f}ms stale={}/{} | cold run/skip={}/{} time={:.2f}/{:.2f}ms | vis hit={}/{} time={:.2f}/{:.2f}ms | map={}/{}",
                 overlayFps,
                 overlayAvgMs,
                 overlayMaxMs,
+                overlayWaitAvgMs,
+                overlayWaitMaxMs,
                 espAvgMs,
                 espMaxMs,
                 controllersPerFrame,
                 playersPerFrame,
                 sampleAvgMs,
                 sampleMaxMs,
+                frameAgeAvgMs,
+                frameAgeMaxMs,
+                samplePublishAvgMs,
+                samplePublishMaxMs,
+                espStaleFrameReuses,
+                espStaleFrameReuseMax,
+                espColdTaskRuns,
+                espColdTaskSkips,
+                coldTaskAvgMs,
+                coldTaskMaxMs,
                 visHits,
                 visChecks,
                 visAvgMs,

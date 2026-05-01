@@ -1,8 +1,9 @@
-﻿#include <Pch.hpp>
+#include <Pch.hpp>
 #include <SDK.hpp>
 #include <ESP/ESP.hpp>
 #include <Radar/Radar.hpp>
 #include <array>
+#include <mmsystem.h>
 #include <wincrypt.h>
 #include <wincodec.h>
 
@@ -13,6 +14,7 @@
 #include "StartupStatus.hpp"
 
 #pragma comment(lib, "Crypt32.lib")
+#pragma comment(lib, "Winmm.lib")
 
 ID3D11Device* Overlay::device = nullptr;
 
@@ -29,6 +31,60 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace
 {
+	constexpr int kOverlayMinFrameCapFps = 30;
+	constexpr int kOverlayMaxFrameCapFps = 1000;
+	bool g_TimerResolutionRaised = false;
+
+	void EnableHighResolutionFrameTimer()
+	{
+		if (!g_TimerResolutionRaised && timeBeginPeriod(1) == TIMERR_NOERROR)
+			g_TimerResolutionRaised = true;
+	}
+
+	void DisableHighResolutionFrameTimer()
+	{
+		if (g_TimerResolutionRaised)
+		{
+			timeEndPeriod(1);
+			g_TimerResolutionRaised = false;
+		}
+	}
+
+	void WaitUntilFrameCap(const std::chrono::steady_clock::time_point targetTime)
+	{
+		for (;;)
+		{
+			const auto now = std::chrono::steady_clock::now();
+			if (now >= targetTime)
+				break;
+
+			const auto remaining = targetTime - now;
+			if (remaining > std::chrono::milliseconds(2))
+			{
+				std::this_thread::sleep_for(remaining - std::chrono::milliseconds(1));
+				continue;
+			}
+
+			if (remaining > std::chrono::microseconds(300))
+			{
+				std::this_thread::yield();
+				continue;
+			}
+		}
+	}
+
+	std::chrono::microseconds ResolveOverlayFrameCapInterval()
+	{
+		config.Visuals.OverlayMaxFps = std::clamp(
+			config.Visuals.OverlayMaxFps,
+			kOverlayMinFrameCapFps,
+			kOverlayMaxFrameCapFps
+		);
+
+		const double intervalUs = 1000000.0 / static_cast<double>(config.Visuals.OverlayMaxFps);
+		return std::chrono::microseconds(static_cast<std::int64_t>(intervalUs + 0.5));
+	}
+
 	void SyncLanguageFromConfig()
 	{
 		config.Language = std::clamp(config.Language, 0, 1);
@@ -1321,12 +1377,28 @@ void Overlay::EndRender()
 
 	if (m_FrameStart.time_since_epoch().count() != 0)
 	{
+		const auto frameEnd = std::chrono::steady_clock::now();
 		const auto frameUs = std::chrono::duration_cast<std::chrono::microseconds>(
-			std::chrono::steady_clock::now() - m_FrameStart
+			frameEnd - m_FrameStart
 		).count();
 
 		if (frameUs >= 0)
 			PerfDebug::RecordOverlayFrame(static_cast<std::uint64_t>(frameUs));
+
+		if (!config.Visuals.VSync)
+		{
+			const auto targetFrameEnd = m_FrameStart + ResolveOverlayFrameCapInterval();
+			if (frameEnd < targetFrameEnd)
+			{
+				const auto waitStart = std::chrono::steady_clock::now();
+				WaitUntilFrameCap(targetFrameEnd);
+				const auto waitUs = std::chrono::duration_cast<std::chrono::microseconds>(
+					std::chrono::steady_clock::now() - waitStart
+				).count();
+				if (waitUs >= 0)
+					PerfDebug::RecordOverlayFrameCapWait(static_cast<std::uint64_t>(waitUs));
+			}
+		}
 	}
 }
 
@@ -1417,6 +1489,8 @@ void Overlay::StyleMenu(ImGuiIO& IO, ImGuiStyle& style)
 
 bool Overlay::Create()
 {
+	EnableHighResolutionFrameTimer();
+
 	shouldRun = true;
 	shouldRenderMenu = false;
 	m_InsertHeld = false;
@@ -1425,13 +1499,22 @@ bool Overlay::Create()
 	m_Tabs.clear();
 
 	if (!CreateOverlay())
+	{
+		DisableHighResolutionFrameTimer();
 		return false;
+	}
 
 	if (!CreateDevice())
+	{
+		DisableHighResolutionFrameTimer();
 		return false;
+	}
 
 	if (!CreateImGui())
+	{
+		DisableHighResolutionFrameTimer();
 		return false;
+	}
 
 	SetForeground(GetConsoleWindow());
 	return true;
@@ -1442,6 +1525,7 @@ void Overlay::Destroy()
 	DestroyImGui();
 	DestroyDevice();
 	DestroyOverlay();
+	DisableHighResolutionFrameTimer();
 }
 
 void Overlay::RenderMenu()
@@ -1867,6 +1951,22 @@ void Overlay::RenderMenu()
 					{
 						if (ImGui::BeginTabItem(Localization::Pick("ESP", "透视")))
 						{
+							ImAdd::SeparatorText("Overlay");
+							ImAdd::CheckBox("VSync", &config.Visuals.VSync);
+							if (!config.Visuals.VSync)
+							{
+								config.Visuals.OverlayMaxFps = std::clamp(
+									config.Visuals.OverlayMaxFps,
+									kOverlayMinFrameCapFps,
+									kOverlayMaxFrameCapFps
+								);
+								ImAdd::SliderInt("Max FPS", &config.Visuals.OverlayMaxFps, kOverlayMinFrameCapFps, kOverlayMaxFrameCapFps);
+							}
+							ImGui::TextDisabled("%s", "VSync ON: sync to monitor refresh. OFF: use Max FPS cap.");
+							ImGui::Spacing();
+							ImGui::Separator();
+							ImGui::Spacing();
+
 							ImAdd::CheckBox(Localization::Pick("ESP", "透视"), &config.Visuals.Enabled);
 							ImGui::Spacing();
 							ImGui::Separator();
@@ -1891,7 +1991,6 @@ void Overlay::RenderMenu()
 							ImAdd::CheckBox("Background", &config.Visuals.Background);
 
 							ImAdd::SeparatorText("Visual");
-							ImAdd::CheckBox("VSync", &config.Visuals.VSync);
 							ImAdd::CheckBox("Team Check", &config.Visuals.TeamCheck);
 							ImAdd::CheckBox("Visible Check", &config.Visuals.VisibleCheck);
 							ImAdd::CheckBox(Localization::Pick("Legit Mode", "合法模式"), &config.Visuals.Legit);
@@ -2693,6 +2792,8 @@ void Overlay::RenderMenu()
 					ImAdd::SeparatorText(Localization::Pick("Cheat", "功能"));
 
 					ImGui::Text(Localization::Pick("Overlay FPS: %.2f", "叠加层 FPS: %.2f"), OverlayFps);
+					ImGui::Text("VSync: %s", config.Visuals.VSync ? "ON" : "OFF");
+					ImGui::Text("Max FPS: %d", config.Visuals.OverlayMaxFps);
 					ImGui::Text(
 						Localization::Pick("Host INSERT: %s", "主机 INSERT: %s"),
 						IsHostKeyDown(VK_INSERT) ? Localization::Pick("Down", "按下") : Localization::Pick("Up", "抬起")

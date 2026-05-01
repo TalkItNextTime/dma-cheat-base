@@ -366,16 +366,25 @@
     <ClInclude Include="Source\Features\ESP\C4CardModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Features\ESP\EspFrameSyncModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Features\ESP\ESP.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Features\ESP\GrenadeEntityEspModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Features\ESP\PlayerBoxModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Features\ESP\SoundEsp.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Features\ESP\SoundEspModel.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Features\ESP\WeaponEspModel.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Features\Radar\ObservRadarProtocol.hpp">
@@ -470,10 +479,19 @@
     <ClCompile Include="Source\Features\ESP\C4CardModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Features\ESP\EspFrameSyncModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Features\ESP\ESP.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Features\ESP\PlayerBoxModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Features\ESP\SoundEsp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Features\ESP\WeaponEspModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\Features\Radar\ObservRadarProtocol.cpp">
