@@ -48,6 +48,23 @@ namespace EspFrameSyncModel
         std::chrono::microseconds EstimatedCost{ 0 };
     };
 
+    struct SamplerTimingPolicy
+    {
+        std::chrono::microseconds IdleInterval{ 0 };
+        std::chrono::microseconds HotInterval{ 0 };
+        std::chrono::microseconds HelperIdleInterval{ 0 };
+        std::chrono::microseconds HelperHotInterval{ 0 };
+        std::chrono::microseconds BackpressureCap{ 0 };
+    };
+
+    struct SamplerTimingInput
+    {
+        bool HelperOnlyMode = false;
+        bool HelperHoldingUtility = false;
+        bool HighRateAimSampling = false;
+        std::chrono::microseconds SampleDuration{ 0 };
+    };
+
     FrameTimingStats EvaluateFrameTiming(const FrameTiming& timing, Clock::time_point renderTime);
     StaleFrameUpdate UpdateStaleFrameTracker(StaleFrameTracker& tracker, std::uint64_t frameId);
     bool ShouldRunColdTask(const ColdTaskState& task, const ColdBudget& budget, Clock::time_point now);
@@ -56,4 +73,12 @@ namespace EspFrameSyncModel
         ColdBudget& budget,
         Clock::time_point now,
         std::chrono::microseconds actualCost);
+    std::chrono::microseconds ResolveSamplerInterval(
+        const SamplerTimingInput& input,
+        const SamplerTimingPolicy& policy);
+    bool ShouldBuildVisDebugInSampler(
+        bool visualVisDebugEnabled,
+        bool debugEnabled,
+        bool debugVisCheckEnabled);
+    int ClampVisDebugMaxItems(int requestedItems);
 }

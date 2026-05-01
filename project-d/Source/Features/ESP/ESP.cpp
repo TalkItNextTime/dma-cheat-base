@@ -5,6 +5,7 @@
 #include "GrenadeEntityEspModel.hpp"
 #include "KeyIconsEmbedded.hpp"
 #include "PlayerBoxModel.hpp"
+#include "PlayerRenderProjectionModel.hpp"
 #include "SoundEsp.hpp"
 #include "VisWorldDebugRender.hpp"
 #include "WeaponEspModel.hpp"
@@ -1225,6 +1226,78 @@ namespace
             std::abs(position.z) > 0.01f;
     }
 
+    bool BuildRenderProjectedPlayerSnapshot(
+        const PlayerEspSnapshot& player,
+        const Matrix& viewMatrix,
+        PlayerEspSnapshot& outPlayer)
+    {
+        outPlayer = player;
+
+        if (!player.Bones.empty())
+        {
+            std::vector<PlayerRenderProjectionModel::WorldBone> worldBones{};
+            worldBones.reserve(player.Bones.size());
+            for (const BonePoint& bone : player.Bones)
+            {
+                worldBones.push_back(PlayerRenderProjectionModel::WorldBone{
+                    bone.Index,
+                    bone.World
+                });
+            }
+
+            const PlayerRenderProjectionModel::Projection projection =
+                PlayerRenderProjectionModel::BuildProjection(
+                    worldBones,
+                    viewMatrix,
+                    Screen.x,
+                    Screen.y,
+                    kHeadBone);
+
+            outPlayer.Bones.clear();
+            outPlayer.Bones.reserve(projection.Bones.size());
+            for (const PlayerRenderProjectionModel::ProjectedBone& bone : projection.Bones)
+            {
+                outPlayer.Bones.push_back(BonePoint{
+                    bone.Index,
+                    bone.World,
+                    bone.Screen,
+                    bone.OnScreen
+                });
+            }
+
+            if (projection.HasHead)
+                outPlayer.HeadPosition = projection.HeadWorld;
+
+            if (projection.HasBox)
+            {
+                outPlayer.BoxMin = projection.Box.Min.ToImVec2();
+                outPlayer.BoxMax = projection.Box.Max.ToImVec2();
+                return true;
+            }
+        }
+
+        const Vector3 headPosition = IsNonZeroPosition(outPlayer.HeadPosition)
+            ? outPlayer.HeadPosition
+            : outPlayer.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
+        Vector2 screenHead{};
+        Vector2 screenFeet{};
+        if (!PlayerRenderProjectionModel::ProjectWorldToScreen(headPosition, screenHead, viewMatrix, Screen.x, Screen.y) ||
+            !PlayerRenderProjectionModel::ProjectWorldToScreen(outPlayer.Origin, screenFeet, viewMatrix, Screen.x, Screen.y))
+        {
+            return false;
+        }
+
+        const float boxHeight = std::abs(screenFeet.y - screenHead.y);
+        if (boxHeight < 4.0f)
+            return false;
+
+        const float boxWidth = boxHeight * 0.45f;
+        outPlayer.HeadPosition = headPosition;
+        outPlayer.BoxMin = ImVec2(screenFeet.x - boxWidth * 0.5f, screenHead.y);
+        outPlayer.BoxMax = ImVec2(screenFeet.x + boxWidth * 0.5f, screenFeet.y);
+        return true;
+    }
+
     float ComputeFlashOverlayNormalized(const float overlayAlphaRaw, const float maxAlphaRaw)
     {
         const float overlayAlpha = (std::max)(0.0f, overlayAlphaRaw);
@@ -1735,7 +1808,7 @@ void ESP::RenderWatermark(ImDrawList* drawList) const
     drawList->AddText(basePos, ToImColor(config.Visuals.WatermarkColor), text.c_str());
 }
 
-void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) const
+void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player, const Matrix& viewMatrix) const
 {
     const ImU32 boxColor = GetBoxColor(player.IsVisible);
 
@@ -1926,7 +1999,7 @@ void ESP::RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) co
 
     if (config.Aim.TriggerHitboxDebug)
     {
-        RenderTriggerHitboxDebug(drawList, player);
+        RenderTriggerHitboxDebug(drawList, player, viewMatrix);
     }
 
     struct StatusLine
@@ -2017,7 +2090,7 @@ void ESP::RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, 
     }
 }
 
-void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const
+void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player, const Matrix& viewMatrix) const
 {
     if (!drawList || player.Bones.empty())
         return;
@@ -2097,7 +2170,6 @@ void ESP::RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot
         std::pair{ 0, 4 }, std::pair{ 1, 5 }, std::pair{ 2, 6 }, std::pair{ 3, 7 }
     };
 
-    const Matrix viewMatrix = Globals::ViewMatrix;
     for (const TriggerHitboxSchema::BoneLink& link : kDebugBoneLinks)
     {
         const bool endpointSelected =
@@ -2687,7 +2759,7 @@ void ESP::BuildVisCheckDebugOverlaySnapshot()
 
     const float maxDistance = std::clamp(config.Visuals.VisCheckDebugMaxDistance, 300.0f, 12000.0f);
     const float maxDistanceSqr = maxDistance * maxDistance;
-    const int maxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
+    const int maxItems = EspFrameSyncModel::ClampVisDebugMaxItems(config.Visuals.VisCheckDebugMaxItems);
     const ImVec4 debugColor = config.Visuals.VisCheckDebugColor;
     auto withinDebugDistance = [&](const Vector3& point)
     {
@@ -5163,8 +5235,13 @@ void ESP::SamplerLoop()
         SampleFrame(sampledFrame);
         sampledFrame.SampleEnd = std::chrono::steady_clock::now();
         const bool visDebugEnabled = (config.DebugEnabled && config.DebugVisCheck) || config.Visuals.VisCheckDebug;
+        const bool buildVisDebugInSampler = EspFrameSyncModel::ShouldBuildVisDebugInSampler(
+            config.Visuals.VisCheckDebug,
+            config.DebugEnabled,
+            config.DebugVisCheck
+        );
         const auto afterSample = sampledFrame.SampleEnd;
-        if (visDebugEnabled && afterSample - lastVisDebugOverlayBuild >= kVisDebugOverlayInterval)
+        if (buildVisDebugInSampler && afterSample - lastVisDebugOverlayBuild >= kVisDebugOverlayInterval)
         {
             BuildVisCheckDebugOverlaySnapshot();
             lastVisDebugOverlayBuild = afterSample;
@@ -5191,18 +5268,20 @@ void ESP::SamplerLoop()
         const bool highRateAimSampling = aimbotHot || boneTriggerHot || flickHot;
         const bool helperOnlyMode = m_GrenadeHelperOnlyMode.load(std::memory_order_relaxed);
         const bool helperHoldingUtility = m_GrenadeHelperHoldingUtility.load(std::memory_order_relaxed);
-        auto targetInterval = helperOnlyMode
-            ? (helperHoldingUtility ? kHelperHotInterval : kHelperIdleInterval)
-            : (highRateAimSampling ? kSampleIntervalHot : kSampleIntervalIdle);
-
-        // Apply soft backpressure when sampling is overloaded to avoid DMA contention spikes.
-        if (!highRateAimSampling && sampleUs > 0)
-        {
-            const auto sampleDuration = std::chrono::microseconds(sampleUs);
-            const auto adaptiveInterval = sampleDuration + sampleDuration / 4; // keep ~25% headroom
-            if (adaptiveInterval > targetInterval)
-                targetInterval = (std::min)(adaptiveInterval, kSampleBackpressureCap);
-        }
+        const EspFrameSyncModel::SamplerTimingPolicy samplerPolicy{
+            kSampleIntervalIdle,
+            kSampleIntervalHot,
+            kHelperIdleInterval,
+            kHelperHotInterval,
+            kSampleBackpressureCap
+        };
+        const EspFrameSyncModel::SamplerTimingInput samplerInput{
+            helperOnlyMode,
+            helperHoldingUtility,
+            highRateAimSampling,
+            sampleUs > 0 ? std::chrono::microseconds(sampleUs) : std::chrono::microseconds::zero()
+        };
+        const auto targetInterval = EspFrameSyncModel::ResolveSamplerInterval(samplerInput, samplerPolicy);
 
         const auto elapsed = std::chrono::steady_clock::now() - cycleStart;
         if (elapsed < targetInterval)
@@ -5850,118 +5929,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
         }
     }
 
-    const bool needAnyBoneData =
-        (config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) ||
-        needTriggerBoneSampling;
-    std::vector<SampledEntityData*> renderBoneEntities{};
-    if (needAnyBoneData)
-    {
-        renderBoneEntities.reserve(activeEntities.size());
-        for (SampledEntityData* entity : activeEntities)
-        {
-            if (!entity || !IsLikelyUserAddress(entity->BoneArray))
-                continue;
-            if (!IsAlive(entity->Health, entity->LifeState))
-                continue;
-            if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
-                continue;
-            renderBoneEntities.push_back(entity);
-        }
-    }
-
-    struct BoneBatchRead
-    {
-        std::uint64_t Pawn = 0;
-        std::uint64_t BoneArray = 0;
-        std::array<BoneDataRaw, kTrackedBones.size()> RawBones{};
-    };
-    std::vector<BoneBatchRead> batchedBoneReads{};
-    std::unordered_map<std::uint64_t, std::size_t> boneBatchByPawn{};
-    if (!renderBoneEntities.empty())
-    {
-        batchedBoneReads.reserve(renderBoneEntities.size());
-        boneBatchByPawn.reserve(renderBoneEntities.size());
-        for (const SampledEntityData* entity : renderBoneEntities)
-        {
-            if (!entity || !IsLikelyUserAddress(entity->Pawn) || !IsLikelyUserAddress(entity->BoneArray))
-                continue;
-            if (boneBatchByPawn.find(entity->Pawn) != boneBatchByPawn.end())
-                continue;
-
-            const std::size_t batchIndex = batchedBoneReads.size();
-            batchedBoneReads.push_back(BoneBatchRead{
-                entity->Pawn,
-                entity->BoneArray,
-                {}
-            });
-            boneBatchByPawn.emplace(entity->Pawn, batchIndex);
-        }
-
-        if (!batchedBoneReads.empty())
-        {
-            if (const auto boneScatter = mem.CreateScatterHandle())
-            {
-                for (BoneBatchRead& batch : batchedBoneReads)
-                {
-                    for (size_t boneIndex = 0; boneIndex < kTrackedBones.size(); ++boneIndex)
-                    {
-                        const uint64_t boneAddress = batch.BoneArray + static_cast<uint64_t>(kTrackedBones[boneIndex]) * Offsets::Layout::BoneStride;
-                        mem.AddScatterReadRequest(boneScatter, boneAddress, &batch.RawBones[boneIndex], sizeof(BoneDataRaw));
-                    }
-                }
-
-                mem.ExecuteReadScatter(boneScatter);
-                mem.CloseScatterHandle(boneScatter);
-            }
-            else
-            {
-                return false;
-            }
-        }
-    }
-
-    const auto applyRawBoneData = [&](const std::array<BoneDataRaw, kTrackedBones.size()>& rawBones, PlayerEspSnapshot& inOutSnapshot) -> bool
-    {
-        inOutSnapshot.Bones.clear();
-        inOutSnapshot.Bones.reserve(kTrackedBones.size());
-
-        bool hasHead = false;
-        std::array<PlayerBoxModel::ScreenBone, kTrackedBones.size()> screenBones{};
-
-        for (size_t boneSlot = 0; boneSlot < kTrackedBones.size(); ++boneSlot)
-        {
-            const int boneIndex = kTrackedBones[boneSlot];
-            BonePoint point{};
-            point.Index = boneIndex;
-            point.World = rawBones[boneSlot].Position;
-            point.OnScreen = sdk.WorldToScreen(point.World, point.Screen);
-
-            if (boneIndex == kHeadBone)
-            {
-                inOutSnapshot.HeadPosition = point.World;
-                hasHead = true;
-            }
-
-            screenBones[boneSlot] = PlayerBoxModel::ScreenBone{
-                boneIndex,
-                point.Screen,
-                point.OnScreen
-            };
-
-            inOutSnapshot.Bones.push_back(point);
-        }
-
-        if (!hasHead)
-            inOutSnapshot.HeadPosition = inOutSnapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
-        PlayerBoxModel::Box2D box{};
-        if (!PlayerBoxModel::BuildBoxFromBones(screenBones, Screen.x, Screen.y, box))
-            return false;
-
-        inOutSnapshot.BoxMin = box.Min.ToImVec2();
-        inOutSnapshot.BoxMax = box.Max.ToImVec2();
-        return true;
-    };
-
     outFrame.Players.clear();
     outFrame.Players.reserve(activeEntities.size());
 
@@ -6360,74 +6327,6 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
             outFrame.Radar.Players.push_back(std::move(radarItem));
         }
 
-        if (!entityAlive)
-            continue;
-
-        if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
-            continue;
-
-        PlayerEspSnapshot snapshot{};
-        snapshot.Controller = entity->Controller;
-        snapshot.Pawn = entity->Pawn;
-        snapshot.SceneNode = entity->SceneNode;
-        snapshot.BoneArray = IsLikelyUserAddress(entity->BoneArray) ? entity->BoneArray : 0;
-        snapshot.IsVisible = true;
-
-        snapshot.Health = entity->Health;
-        snapshot.MaxHealth = entity->MaxHealth > 0 ? entity->MaxHealth : 100;
-        snapshot.Team = entity->Team;
-        snapshot.LifeState = entity->LifeState;
-
-        snapshot.Armor = runtimeCache.Armor;
-        snapshot.IsScoped = runtimeCache.IsScoped;
-        snapshot.HasDefuser = runtimeCache.HasDefuser;
-        snapshot.HasHelmet = runtimeCache.HasHelmet;
-        snapshot.FlashDuration = runtimeCache.FlashDuration;
-        snapshot.FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
-        snapshot.FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
-
-        snapshot.Origin = entityOrigin;
-        snapshot.EyePosition = snapshot.Origin + entity->ViewOffset;
-
-        snapshot.Name = identityCache.Name;
-        snapshot.Money = identityCache.Money;
-        snapshot.ShowMoney = moneyWindowActive;
-        snapshot.WeaponName = runtimeCache.WeaponName;
-        snapshot.WeaponIconToken = WeaponEspModel::IconTokenFromName(snapshot.WeaponName);
-
-        bool hasBoxData = false;
-        const bool needBoneData =
-            ((config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) || needTriggerBoneSampling) &&
-            snapshot.BoneArray;
-        if (needBoneData)
-        {
-            const auto batchIt = boneBatchByPawn.find(snapshot.Pawn);
-            if (batchIt != boneBatchByPawn.end() && batchIt->second < batchedBoneReads.size())
-                hasBoxData = applyRawBoneData(batchedBoneReads[batchIt->second].RawBones, snapshot);
-        }
-
-        if (!hasBoxData)
-        {
-            Vector2 screenHead{};
-            Vector2 screenFeet{};
-            snapshot.HeadPosition = snapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
-
-            if (!sdk.WorldToScreen(snapshot.HeadPosition, screenHead) || !sdk.WorldToScreen(snapshot.Origin, screenFeet))
-                continue;
-
-            const float boxHeight = std::abs(screenFeet.y - screenHead.y);
-            if (boxHeight < 4.0f)
-                continue;
-
-            const float boxWidth = boxHeight * 0.45f;
-            snapshot.BoxMin = ImVec2(screenFeet.x - boxWidth * 0.5f, screenHead.y);
-            snapshot.BoxMax = ImVec2(screenFeet.x + boxWidth * 0.5f, screenFeet.y);
-        }
-
-        if (needVisibilityChecks && m_VisCheckEnabled)
-            snapshot.IsVisible = CheckVisibility(localEyePosition, snapshot.HeadPosition);
-
-        outFrame.Players.push_back(std::move(snapshot));
     }
 
     if (needRadarSampling &&
@@ -6644,6 +6543,198 @@ bool ESP::SampleFrame(RenderFrame& outFrame)
     if (needRadarSampling)
         outFrame.Radar.C4 = outFrame.C4;
 
+    const bool needAnyBoneData =
+        (config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) ||
+        needTriggerBoneSampling;
+    std::vector<SampledEntityData*> renderBoneEntities{};
+    if (needAnyBoneData)
+    {
+        renderBoneEntities.reserve(activeEntities.size());
+        for (SampledEntityData* entity : activeEntities)
+        {
+            if (!entity || !IsLikelyUserAddress(entity->BoneArray))
+                continue;
+            if (!IsAlive(entity->Health, entity->LifeState))
+                continue;
+            if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
+                continue;
+            renderBoneEntities.push_back(entity);
+        }
+    }
+
+    struct BoneBatchRead
+    {
+        std::uint64_t Pawn = 0;
+        std::uint64_t BoneArray = 0;
+        std::array<BoneDataRaw, kTrackedBones.size()> RawBones{};
+    };
+    std::vector<BoneBatchRead> batchedBoneReads{};
+    std::unordered_map<std::uint64_t, std::size_t> boneBatchByPawn{};
+    if (!renderBoneEntities.empty())
+    {
+        batchedBoneReads.reserve(renderBoneEntities.size());
+        boneBatchByPawn.reserve(renderBoneEntities.size());
+        for (const SampledEntityData* entity : renderBoneEntities)
+        {
+            if (!entity || !IsLikelyUserAddress(entity->Pawn) || !IsLikelyUserAddress(entity->BoneArray))
+                continue;
+            if (boneBatchByPawn.find(entity->Pawn) != boneBatchByPawn.end())
+                continue;
+
+            const std::size_t batchIndex = batchedBoneReads.size();
+            batchedBoneReads.push_back(BoneBatchRead{
+                entity->Pawn,
+                entity->BoneArray,
+                {}
+            });
+            boneBatchByPawn.emplace(entity->Pawn, batchIndex);
+        }
+
+        if (!batchedBoneReads.empty())
+        {
+            if (const auto boneScatter = mem.CreateScatterHandle())
+            {
+                for (BoneBatchRead& batch : batchedBoneReads)
+                {
+                    for (size_t boneIndex = 0; boneIndex < kTrackedBones.size(); ++boneIndex)
+                    {
+                        const uint64_t boneAddress = batch.BoneArray + static_cast<uint64_t>(kTrackedBones[boneIndex]) * Offsets::Layout::BoneStride;
+                        mem.AddScatterReadRequest(boneScatter, boneAddress, &batch.RawBones[boneIndex], sizeof(BoneDataRaw));
+                    }
+                }
+
+                mem.ExecuteReadScatter(boneScatter);
+                mem.CloseScatterHandle(boneScatter);
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
+    const auto applyRawBoneData = [&](const std::array<BoneDataRaw, kTrackedBones.size()>& rawBones, PlayerEspSnapshot& inOutSnapshot) -> bool
+    {
+        inOutSnapshot.Bones.clear();
+        inOutSnapshot.Bones.reserve(kTrackedBones.size());
+
+        bool hasHead = false;
+        std::array<PlayerBoxModel::ScreenBone, kTrackedBones.size()> screenBones{};
+
+        for (size_t boneSlot = 0; boneSlot < kTrackedBones.size(); ++boneSlot)
+        {
+            const int boneIndex = kTrackedBones[boneSlot];
+            BonePoint point{};
+            point.Index = boneIndex;
+            point.World = rawBones[boneSlot].Position;
+            point.OnScreen = sdk.WorldToScreen(point.World, point.Screen);
+
+            if (boneIndex == kHeadBone)
+            {
+                inOutSnapshot.HeadPosition = point.World;
+                hasHead = true;
+            }
+
+            screenBones[boneSlot] = PlayerBoxModel::ScreenBone{
+                boneIndex,
+                point.Screen,
+                point.OnScreen
+            };
+
+            inOutSnapshot.Bones.push_back(point);
+        }
+
+        if (!hasHead)
+            inOutSnapshot.HeadPosition = inOutSnapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
+        PlayerBoxModel::Box2D box{};
+        if (!PlayerBoxModel::BuildBoxFromBones(screenBones, Screen.x, Screen.y, box))
+            return false;
+
+        inOutSnapshot.BoxMin = box.Min.ToImVec2();
+        inOutSnapshot.BoxMax = box.Max.ToImVec2();
+        return true;
+    };
+
+    for (SampledEntityData* entity : activeEntities)
+    {
+        if (!entity)
+            continue;
+
+        const bool entityAlive = IsAlive(entity->Health, entity->LifeState);
+        if (!entityAlive)
+            continue;
+
+        if (config.Visuals.TeamCheck && !config.Aim.AimFriendly && localTeam > 0 && entity->Team == localTeam)
+            continue;
+
+        ControllerIdentityCache& identityCache = m_ControllerIdentityCache[entity->Controller];
+        PawnRuntimeCache& runtimeCache = m_PawnRuntimeCache[entity->Pawn];
+        const Vector3 entityOrigin = entity->HasAbsOrigin ? entity->AbsOrigin : entity->OldOrigin;
+
+        PlayerEspSnapshot snapshot{};
+        snapshot.Controller = entity->Controller;
+        snapshot.Pawn = entity->Pawn;
+        snapshot.SceneNode = entity->SceneNode;
+        snapshot.BoneArray = IsLikelyUserAddress(entity->BoneArray) ? entity->BoneArray : 0;
+        snapshot.IsVisible = true;
+
+        snapshot.Health = entity->Health;
+        snapshot.MaxHealth = entity->MaxHealth > 0 ? entity->MaxHealth : 100;
+        snapshot.Team = entity->Team;
+        snapshot.LifeState = entity->LifeState;
+
+        snapshot.Armor = runtimeCache.Armor;
+        snapshot.IsScoped = runtimeCache.IsScoped;
+        snapshot.HasDefuser = runtimeCache.HasDefuser;
+        snapshot.HasHelmet = runtimeCache.HasHelmet;
+        snapshot.FlashDuration = runtimeCache.FlashDuration;
+        snapshot.FlashOverlayAlpha = runtimeCache.FlashOverlayAlpha;
+        snapshot.FlashMaxAlpha = runtimeCache.FlashMaxAlpha;
+
+        snapshot.Origin = entityOrigin;
+        snapshot.EyePosition = snapshot.Origin + entity->ViewOffset;
+
+        snapshot.Name = identityCache.Name;
+        snapshot.Money = identityCache.Money;
+        snapshot.ShowMoney = moneyWindowActive;
+        snapshot.WeaponName = runtimeCache.WeaponName;
+        snapshot.WeaponIconToken = WeaponEspModel::IconTokenFromName(snapshot.WeaponName);
+
+        bool hasBoxData = false;
+        const bool needBoneData =
+            ((config.Visuals.Enabled && (config.Visuals.Bones || config.Aim.TriggerHitboxDebug)) || needTriggerBoneSampling) &&
+            snapshot.BoneArray;
+        if (needBoneData)
+        {
+            const auto batchIt = boneBatchByPawn.find(snapshot.Pawn);
+            if (batchIt != boneBatchByPawn.end() && batchIt->second < batchedBoneReads.size())
+                hasBoxData = applyRawBoneData(batchedBoneReads[batchIt->second].RawBones, snapshot);
+        }
+
+        if (!hasBoxData)
+        {
+            Vector2 screenHead{};
+            Vector2 screenFeet{};
+            snapshot.HeadPosition = snapshot.Origin + Vector3{ 0.0f, 0.0f, 72.0f };
+
+            if (!sdk.WorldToScreen(snapshot.HeadPosition, screenHead) || !sdk.WorldToScreen(snapshot.Origin, screenFeet))
+                continue;
+
+            const float boxHeight = std::abs(screenFeet.y - screenHead.y);
+            if (boxHeight < 4.0f)
+                continue;
+
+            const float boxWidth = boxHeight * 0.45f;
+            snapshot.BoxMin = ImVec2(screenFeet.x - boxWidth * 0.5f, screenHead.y);
+            snapshot.BoxMax = ImVec2(screenFeet.x + boxWidth * 0.5f, screenFeet.y);
+        }
+
+        if (needVisibilityChecks && m_VisCheckEnabled)
+            snapshot.IsVisible = CheckVisibility(localEyePosition, snapshot.HeadPosition);
+
+        outFrame.Players.push_back(std::move(snapshot));
+    }
+
     return true;
 }
 
@@ -6722,6 +6813,7 @@ void ESP::Render(ImDrawList* drawList)
     if (!renderSoundRipples)
         soundEsp.EnsureStarted();
     const SoundFrameSnapshot soundFrame = soundEsp.GetFrameSnapshot();
+    const Matrix renderViewMatrix = Globals::ViewMatrix;
 
     if (renderEsp)
     {
@@ -6869,7 +6961,11 @@ void ESP::Render(ImDrawList* drawList)
             const bool hasRecentSound = soundFrame.RecentSoundPawns.find(player.Pawn) != soundFrame.RecentSoundPawns.end();
             if (!SoundEspModel::ShouldRenderPlayerInfo(config.Visuals.Legit, hasRecentSound, player.IsVisible))
                 continue;
-            RenderPlayer(drawList, player);
+
+            PlayerEspSnapshot renderPlayer{};
+            if (!BuildRenderProjectedPlayerSnapshot(player, renderViewMatrix, renderPlayer))
+                continue;
+            RenderPlayer(drawList, renderPlayer, renderViewMatrix);
         }
 
         if (config.Visuals.C4)

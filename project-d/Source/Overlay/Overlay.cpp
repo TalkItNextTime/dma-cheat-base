@@ -2773,12 +2773,12 @@ void Overlay::RenderMenu()
 								300.0f,
 								12000.0f);
 
-							config.Visuals.VisCheckDebugMaxItems = std::clamp(config.Visuals.VisCheckDebugMaxItems, 32, 5000);
+							config.Visuals.VisCheckDebugMaxItems = EspFrameSyncModel::ClampVisDebugMaxItems(config.Visuals.VisCheckDebugMaxItems);
 							ImAdd::SliderInt(
 								Localization::Pick("Render World Max Triangles", "世界渲染最大三角形数量"),
 								&config.Visuals.VisCheckDebugMaxItems,
 								32,
-								5000);
+								1000);
 
 							ImAdd::ColorEdit4(
 								Localization::Pick("Render World Color", "世界渲染颜色"),

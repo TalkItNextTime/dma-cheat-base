@@ -69,4 +69,45 @@ namespace EspFrameSyncModel
         if (actualCost > std::chrono::microseconds::zero())
             budget.Used += actualCost;
     }
+
+    std::chrono::microseconds ResolveSamplerInterval(
+        const SamplerTimingInput& input,
+        const SamplerTimingPolicy& policy)
+    {
+        std::chrono::microseconds targetInterval = input.HelperOnlyMode
+            ? (input.HelperHoldingUtility ? policy.HelperHotInterval : policy.HelperIdleInterval)
+            : (input.HighRateAimSampling ? policy.HotInterval : policy.IdleInterval);
+
+        if (input.SampleDuration > std::chrono::microseconds::zero())
+        {
+            const auto adaptiveInterval = input.SampleDuration + input.SampleDuration / 4;
+            if (adaptiveInterval > targetInterval)
+            {
+                targetInterval = policy.BackpressureCap > std::chrono::microseconds::zero()
+                    ? std::min(adaptiveInterval, policy.BackpressureCap)
+                    : adaptiveInterval;
+            }
+        }
+
+        return targetInterval;
+    }
+
+    bool ShouldBuildVisDebugInSampler(
+        const bool visualVisDebugEnabled,
+        const bool debugEnabled,
+        const bool debugVisCheckEnabled)
+    {
+        if (debugEnabled && debugVisCheckEnabled)
+            return false;
+
+        if (visualVisDebugEnabled)
+            return true;
+
+        return debugVisCheckEnabled;
+    }
+
+    int ClampVisDebugMaxItems(const int requestedItems)
+    {
+        return std::clamp(requestedItems, 32, 1000);
+    }
 }

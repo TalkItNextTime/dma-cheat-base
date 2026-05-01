@@ -689,7 +689,7 @@ namespace Config
                 j["Visuals"]["Legit"] = false;
                 j["Visuals"]["VisCheckDebugMode"] = 1;
                 j["Visuals"]["VisCheckDebugMaxDistance"] = 3200.0f;
-                j["Visuals"]["VisCheckDebugMaxItems"] = 1400;
+                j["Visuals"]["VisCheckDebugMaxItems"] = 1000;
                 j["Visuals"]["VisCheckDebugColor"] = { 0.25f, 0.85f, 1.0f, 0.65f };
 
                 j["Visuals"]["Background"] = false;

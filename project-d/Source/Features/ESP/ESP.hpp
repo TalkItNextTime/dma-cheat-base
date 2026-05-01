@@ -306,9 +306,9 @@ private:
 
     void Render(ImDrawList* drawList);
     void RenderWatermark(ImDrawList* drawList) const;
-    void RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
+    void RenderPlayer(ImDrawList* drawList, const PlayerEspSnapshot& player, const Matrix& viewMatrix) const;
     void RenderSkeleton(ImDrawList* drawList, const PlayerEspSnapshot& player, ImU32 color) const;
-    void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player) const;
+    void RenderTriggerHitboxDebug(ImDrawList* drawList, const PlayerEspSnapshot& player, const Matrix& viewMatrix) const;
     void RenderC4(ImDrawList* drawList, const C4Snapshot& c4) const;
     void RenderGrenadeEntityEsp(ImDrawList* drawList, const GrenadeEntitySnapshot& grenade) const;
     void RenderSpectatorList(ImDrawList* drawList, const SpectatorListSnapshot& spectatorList) const;
