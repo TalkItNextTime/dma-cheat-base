@@ -58,6 +58,19 @@ int main()
         ResolveRecoilPunch(zeroPunch).Zero(),
         "resolver should preserve a zero recoil state");
 
+    const Vector2 excessiveSprayMove{ -14.25f, -33.21f };
+    const Vector2 clampedSprayMove = ClampSprayAxisMove(excessiveSprayMove, 6.0f, 8.0f);
+    ok &= ExpectNear(
+        clampedSprayMove.x,
+        -6.0f,
+        0.0001f,
+        "spray recoil control should clamp horizontal movement to the configured max step");
+    ok &= ExpectNear(
+        clampedSprayMove.y,
+        -8.0f,
+        0.0001f,
+        "spray recoil control should clamp vertical movement to the configured max step");
+
     if (!ok)
         return 1;
 

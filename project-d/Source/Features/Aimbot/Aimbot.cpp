@@ -1729,6 +1729,14 @@ void Aimbot::UpdateAimbot()
         move.y = 0.0f;
     }
 
+    if (sprayConstraintActive)
+    {
+        const float maxStepX = (std::max)(1.0f, profile.SprayAxisMaxStepX);
+        const float maxStepY = (std::max)(1.0f, profile.SprayAxisMaxStepY);
+        move.x = std::clamp(move.x, -maxStepX, maxStepX);
+        move.y = std::clamp(move.y, -maxStepY, maxStepY);
+    }
+
     int moveX = QuantizeMouseStep(move.x);
     int moveY = QuantizeMouseStep(move.y);
     if (moveX == 0 && moveY == 0 && rawDistance > deadzone)
